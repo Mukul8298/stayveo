@@ -1,0 +1,51 @@
+.pc-page { min-height: 100vh; background: var(--neutral-50); }
+
+.pc-date-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4) var(--space-5); background: white;
+}
+.pc-nav-btn {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--neutral-100);
+  display: flex; align-items: center; justify-content: center; color: var(--neutral-600);
+}
+.pc-date-display { text-align: center; }
+.pc-date-display h2 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; }
+.pc-date-display p { font-size: var(--text-xs); color: var(--neutral-500); }
+
+.pc-date-pills {
+  display: flex; gap: var(--space-2); padding: var(--space-3) var(--space-5);
+  background: white; border-bottom: 1px solid var(--neutral-100);
+  justify-content: center;
+}
+.pc-pill {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg);
+  border: 1.5px solid var(--neutral-200); transition: all var(--duration-fast);
+}
+.pc-pill.active { background: var(--primary-500); border-color: var(--primary-500); color: white; }
+.pc-pill-day { font-size: 10px; font-weight: 500; }
+.pc-pill-num { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; }
+.pc-pill.active .pc-pill-day,
+.pc-pill.active .pc-pill-num { color: white; }
+
+.pc-slots { padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+.pc-slot {
+  display: flex; gap: var(--space-4); padding: var(--space-4);
+  background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+  border-left: 4px solid transparent;
+  animation: fadeInUp 0.3s var(--ease-out) both;
+}
+.pc-slot-confirmed { border-left-color: var(--accent-500); }
+.pc-slot-pending { border-left-color: #F59E0B; }
+.pc-slot-available { border-left-color: var(--neutral-200); }
+
+.pc-slot-time {
+  font-family: var(--font-display); font-size: var(--text-sm); font-weight: 600;
+  color: var(--neutral-500); min-width: 50px;
+}
+.pc-slot-content { flex: 1; }
+.pc-slot-content h3 { font-size: var(--text-sm); font-weight: 600; margin-bottom: 2px; }
+.pc-slot-badge { font-size: 11px; font-weight: 500; }
+.pc-badge-confirmed { color: var(--accent-600); }
+.pc-badge-pending { color: #92400E; }
+.pc-slot-available { font-size: var(--text-sm); color: var(--neutral-400); font-style: italic; }

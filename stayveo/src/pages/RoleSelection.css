@@ -1,0 +1,119 @@
+.role-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-10) var(--space-6);
+  background: white;
+}
+
+.role-header {
+  margin-bottom: var(--space-10);
+  animation: fadeInUp 0.5s var(--ease-out);
+}
+
+.role-header h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: var(--space-2);
+}
+
+.role-header h1 span {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.role-header p {
+  font-size: var(--text-base);
+  color: var(--neutral-500);
+}
+
+.role-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1.5px solid var(--neutral-200);
+  background: white;
+  text-align: left;
+  transition: all var(--duration-normal) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s var(--ease-out) both;
+}
+
+.role-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.role-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.role-card:hover {
+  border-color: var(--primary-300);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.role-card:active {
+  transform: translateY(0);
+}
+
+.role-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+
+.role-icon-student {
+  background: var(--primary-50);
+  color: var(--primary-500);
+}
+
+.role-icon-broker {
+  background: var(--accent-50);
+  color: var(--accent-600);
+}
+
+.role-card h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.role-card p {
+  font-size: var(--text-sm);
+  color: var(--neutral-500);
+}
+
+.role-arrow {
+  position: absolute;
+  right: var(--space-5);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--text-2xl);
+  color: var(--neutral-300);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.role-card:hover .role-arrow {
+  color: var(--primary-500);
+  transform: translateY(-50%) translateX(4px);
+}

@@ -1,0 +1,37 @@
+.booking-page { min-height: 100vh; background: white; }
+.booking-room-preview {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--neutral-100);
+}
+.booking-room-preview img { width: 64px; height: 64px; border-radius: var(--radius-md); object-fit: cover; }
+.booking-room-preview h3 { font-family: var(--font-display); font-size: var(--text-sm); font-weight: 600; }
+.booking-room-preview p { font-size: var(--text-sm); color: var(--primary-500); font-weight: 600; }
+.booking-step { padding: var(--space-6) var(--space-5); animation: fadeInUp 0.3s var(--ease-out); }
+.booking-step h2 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600; margin-bottom: var(--space-5); }
+.booking-date-input {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4);
+  border: 1.5px solid var(--neutral-200); border-radius: var(--radius-md);
+  margin-bottom: var(--space-6); color: var(--neutral-500);
+}
+.booking-date-input input { flex: 1; font-size: var(--text-base); color: var(--neutral-900); }
+.booking-breakdown { padding: var(--space-5); background: var(--neutral-50); border-radius: var(--radius-lg); margin-bottom: var(--space-6); }
+.bb-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; font-size: var(--text-sm); color: var(--neutral-600); }
+.bb-row span:last-child { font-weight: 600; color: var(--neutral-800); }
+.bb-divider { height: 1px; background: var(--neutral-200); margin: var(--space-3) 0; }
+.bb-total span { font-size: var(--text-base); font-weight: 700 !important; color: var(--neutral-900) !important; }
+
+.booking-success {
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: var(--space-8);
+  text-align: center; background: white; animation: scaleIn 0.5s var(--ease-spring);
+}
+.booking-success-icon { color: var(--accent-500); margin-bottom: var(--space-5); animation: heartbeat 1s ease-in-out; }
+.booking-success h1 { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-2); }
+.booking-success > p { color: var(--neutral-500); margin-bottom: var(--space-6); }
+.booking-success-details {
+  width: 100%; padding: var(--space-5); background: var(--neutral-50);
+  border-radius: var(--radius-lg); margin-bottom: var(--space-6);
+}
+.bsd-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; font-size: var(--text-sm); }
+.bsd-row span { color: var(--neutral-500); }
+.bsd-row strong { color: var(--neutral-800); }

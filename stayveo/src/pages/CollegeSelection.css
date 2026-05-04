@@ -1,0 +1,34 @@
+.college-page { min-height: 100vh; padding: var(--space-6); background: white; }
+.college-heading { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; margin-bottom: var(--space-1); animation: fadeInUp 0.4s var(--ease-out); }
+.college-sub { color: var(--neutral-500); font-size: var(--text-sm); margin-bottom: var(--space-6); }
+.college-search {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-lg); margin-bottom: var(--space-4); transition: all var(--duration-fast);
+  color: var(--neutral-400);
+}
+.college-search:focus-within { border-color: var(--primary-400); box-shadow: 0 0 0 3px rgba(99,102,241,0.08); }
+.college-search input { flex: 1; font-size: var(--text-base); }
+.college-gps {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3);
+  color: var(--primary-500); font-size: var(--text-sm); font-weight: 500;
+  margin-bottom: var(--space-6);
+}
+.college-gps:hover { color: var(--primary-600); }
+.college-section h3 { font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; margin-bottom: var(--space-3); color: var(--neutral-500); }
+.college-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.college-item {
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md); transition: all var(--duration-fast); text-align: left; width: 100%;
+  animation: fadeInUp 0.3s var(--ease-out) both;
+}
+.college-item:nth-child(1) { animation-delay: 0s; }
+.college-item:nth-child(2) { animation-delay: 0.05s; }
+.college-item:nth-child(3) { animation-delay: 0.1s; }
+.college-item:nth-child(4) { animation-delay: 0.15s; }
+.college-item:nth-child(5) { animation-delay: 0.2s; }
+.college-item:hover { background: var(--neutral-50); }
+.college-item-icon { font-size: 28px; width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--primary-50); display: flex; align-items: center; justify-content: center; }
+.college-item-info { display: flex; flex-direction: column; }
+.college-item-name { font-weight: 600; font-size: var(--text-sm); }
+.college-item-city { font-size: var(--text-xs); color: var(--neutral-400); }

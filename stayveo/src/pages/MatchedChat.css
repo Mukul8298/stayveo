@@ -1,0 +1,36 @@
+.chat-page { display: flex; flex-direction: column; height: 100vh; background: white; }
+.chat-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--neutral-100);
+  background: white; position: sticky; top: 0; z-index: 10;
+}
+.chat-match-info { display: flex; align-items: center; gap: var(--space-3); flex: 1; }
+.chat-avatar { font-size: 32px; }
+.chat-match-info h3 { font-family: var(--font-display); font-size: var(--text-base); font-weight: 600; }
+.chat-compat { font-size: var(--text-xs); color: var(--primary-500); font-weight: 500; }
+.chat-header-actions { display: flex; gap: var(--space-3); color: var(--neutral-500); }
+.chat-messages { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.chat-bubble { max-width: 80%; padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); position: relative; animation: fadeInUp 0.2s var(--ease-out); }
+.chat-bubble.me {
+  align-self: flex-end; background: var(--primary-500); color: white;
+  border-bottom-right-radius: var(--radius-xs);
+}
+.chat-bubble.them {
+  align-self: flex-start; background: var(--neutral-100); color: var(--neutral-800);
+  border-bottom-left-radius: var(--radius-xs);
+}
+.chat-bubble p { font-size: var(--text-sm); line-height: 1.4; }
+.chat-time { font-size: 10px; opacity: 0.6; display: block; text-align: right; margin-top: 4px; }
+.chat-input-bar {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--neutral-100); background: white;
+}
+.chat-input-bar input {
+  flex: 1; padding: var(--space-3) var(--space-4); background: var(--neutral-50);
+  border-radius: var(--radius-full); font-size: var(--text-sm); border: 1px solid var(--neutral-200);
+}
+.chat-send {
+  width: 40px; height: 40px; border-radius: 50%; background: var(--primary-500);
+  color: white; display: flex; align-items: center; justify-content: center;
+}

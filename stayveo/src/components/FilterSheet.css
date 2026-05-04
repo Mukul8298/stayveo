@@ -1,0 +1,44 @@
+.filter-sheet {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px; max-height: 85vh;
+  background: white; border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  z-index: var(--z-modal); animation: slideUp 0.3s var(--ease-out);
+  display: flex; flex-direction: column;
+}
+.filter-sheet-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-5); border-bottom: 1px solid var(--neutral-100);
+}
+.filter-sheet-header h2 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 600; }
+.filter-close {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--neutral-100);
+  display: flex; align-items: center; justify-content: center;
+}
+.filter-sheet-body { padding: var(--space-5); overflow-y: auto; flex: 1; }
+.filter-group { margin-bottom: var(--space-6); }
+.filter-label { font-size: var(--text-sm); font-weight: 600; color: var(--neutral-800); display: block; margin-bottom: var(--space-3); }
+.filter-range-labels { display: flex; justify-content: space-between; font-size: var(--text-sm); color: var(--primary-500); font-weight: 600; margin-bottom: var(--space-2); }
+.filter-slider {
+  width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
+  background: var(--neutral-200); border-radius: var(--radius-full); outline: none;
+}
+.filter-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--primary-500); box-shadow: var(--shadow-primary); cursor: pointer;
+}
+.filter-options { display: flex; gap: var(--space-2); }
+.filter-option {
+  flex: 1; padding: var(--space-3); border-radius: var(--radius-md);
+  background: var(--neutral-50); border: 1.5px solid var(--neutral-200);
+  font-size: var(--text-sm); font-weight: 500; text-align: center;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.filter-option.active { background: var(--primary-50); border-color: var(--primary-400); color: var(--primary-600); }
+.filter-toggles { display: flex; flex-direction: column; gap: var(--space-3); }
+.filter-toggle-row { display: flex; align-items: center; justify-content: space-between; }
+.filter-toggle-label { font-size: var(--text-sm); color: var(--neutral-700); }
+.filter-sheet-footer {
+  padding: var(--space-4) var(--space-5); padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--neutral-100); display: flex; gap: var(--space-3);
+}
+.filter-sheet-footer .btn { flex: 1; }

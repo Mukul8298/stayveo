@@ -1,0 +1,278 @@
+// ─── StayVeo Prisma Schema ──────────────────────────────────────────────
+// Mapped to the EXISTING PostgreSQL database on Supabase.
+// All models match the real DB tables. Enums use PascalCase names with
+// @map() to preserve the actual lowercase Postgres enum values.
+// ────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────────
+// PascalCase in code → lowercase in Postgres via @map on enum name
+
+enum UserRole {
+  STUDENT  @map("student")
+  PROVIDER @map("provider")
+
+  @@map("user_role")
+}
+
+enum GenderType {
+  MALE             @map("male")
+  FEMALE           @map("female")
+  OTHER            @map("other")
+  PREFER_NOT_TO_SAY @map("prefer_not_to_say")
+
+  @@map("gender_type")
+}
+
+enum FoodPreference {
+  VEG           @map("veg")
+  NONVEG        @map("nonveg")
+  JAIN          @map("jain")
+  VEGAN         @map("vegan")
+  NO_PREFERENCE @map("no_preference")
+
+  @@map("food_pref")
+}
+
+enum LifestyleType {
+  EARLY_BIRD @map("early_bird")
+  NIGHT_OWL  @map("night_owl")
+  FLEXIBLE   @map("flexible")
+
+  @@map("lifestyle_type")
+}
+
+enum StudyHabit {
+  QUIET    @map("quiet")
+  FLEXIBLE @map("flexible")
+  NORMAL   @map("normal")
+
+  @@map("study_habit")
+}
+
+enum SocialLevel {
+  INTROVERT @map("introvert")
+  EXTROVERT @map("extrovert")
+  AMBIVERT  @map("ambivert")
+
+  @@map("social_level")
+}
+
+enum ServiceCategory {
+  PG       @map("pg")
+  TIFFIN   @map("tiffin")
+  LAUNDRY  @map("laundry")
+  CLEANING @map("cleaning")
+
+  @@map("service_category")
+}
+
+enum FoodType {
+  VEG    @map("veg")
+  NONVEG @map("nonveg")
+  JAIN   @map("jain")
+  VEGAN  @map("vegan")
+
+  @@map("food_type")
+}
+
+enum PricingModel {
+  PER_KG   @map("per_kg")
+  PER_ITEM @map("per_item")
+
+  @@map("pricing_model")
+}
+
+enum CleanType {
+  BASIC      @map("basic")
+  DEEP_CLEAN @map("deep_clean")
+
+  @@map("clean_type")
+}
+
+enum DocType {
+  ID_PROOF       @map("id_proof")
+  BUSINESS_PROOF @map("business_proof")
+
+  @@map("doc_type")
+}
+
+// ─── USERS ──────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone_number String   @unique @db.VarChar(15)
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  studentProfile StudentProfile?
+  provider       Provider?
+
+  @@map("users")
+}
+
+// ─── STUDENT PROFILES ───────────────────────────────────────────────────
+
+model StudentProfile {
+  id                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String          @unique @map("user_id") @db.Uuid
+  fullName           String          @map("name")
+  college            String
+  year               Int?
+  gender             GenderType?
+  foodPreference     FoodPreference? @map("food_preference")
+  sleepSchedule      LifestyleType?  @map("lifestyle")
+  cleanlinessLevel   Int?            @map("cleanliness_level")
+  studyHabits        StudyHabit?     @map("study_habits")
+  personalityType    SocialLevel?    @map("personality_type")
+  locationPreference String?         @map("location_preference")
+  budget             String?
+  profileImageUrl    String?         @map("profile_image_url")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("student_profiles")
+}
+
+// ─── PROVIDERS ──────────────────────────────────────────────────────────
+
+model Provider {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String   @unique @map("user_id") @db.Uuid
+  name              String
+  businessName      String   @map("business_name")
+  phone_number      String   @db.VarChar(15)
+  location          String?
+  latitude          Decimal  @db.Decimal(9, 6)
+  longitude         Decimal  @db.Decimal(9, 6)
+  service_radius_km Decimal? @db.Decimal(5, 2)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services     Service[]
+  mediaUploads MediaUpload[]
+  documents    Document[]
+
+  @@map("providers")
+}
+
+// ─── SERVICES (junction: provider ↔ service types) ──────────────────────
+
+model Service {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String          @map("provider_id") @db.Uuid
+  serviceType ServiceCategory @map("service_type")
+
+  // Relations
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, serviceType])
+  @@map("services")
+}
+
+// ─── PG ROOMS ───────────────────────────────────────────────────────────
+
+model PGRoom {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider_id String   @db.Uuid
+  pg_name     String
+  address     String
+  room_types  Json?
+  min_price   Decimal? @db.Decimal(10, 2)
+  max_price   Decimal? @db.Decimal(10, 2)
+  amenities   Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("pg_rooms")
+}
+
+// ─── TIFFIN SERVICES ────────────────────────────────────────────────────
+
+model TiffinService {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider_id       String    @db.Uuid
+  kitchen_name      String
+  foodType          FoodType? @map("food_type")
+  meal_options      Json?
+  monthly_price     Decimal?  @db.Decimal(10, 2)
+  delivery_range_km Decimal?  @db.Decimal(5, 2)
+  delivery_timing   String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("tiffin_services")
+}
+
+// ─── LAUNDRY SERVICES ───────────────────────────────────────────────────
+
+model LaundryService {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider_id       String        @db.Uuid
+  pricing_model     PricingModel?
+  price             Decimal?      @db.Decimal(10, 2)
+  pickup_frequency  String?
+  delivery_time     String?
+  service_radius_km Decimal?      @db.Decimal(5, 2)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("laundry_services")
+}
+
+// ─── CLEANING SERVICES ──────────────────────────────────────────────────
+
+model CleaningService {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider_id       String     @db.Uuid
+  service_type      CleanType?
+  basic_price       Decimal?   @db.Decimal(10, 2)
+  deep_clean_price  Decimal?   @db.Decimal(10, 2)
+  staff_available   Int?
+  available_slots   Json?
+  service_radius_km Decimal?   @db.Decimal(5, 2)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("cleaning_services")
+}
+
+// ─── MEDIA UPLOADS ──────────────────────────────────────────────────────
+
+model MediaUpload {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String          @map("provider_id") @db.Uuid
+  serviceType ServiceCategory @map("service_type")
+  fileUrl     String          @map("file_url")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("media_uploads")
+}
+
+// ─── DOCUMENTS ──────────────────────────────────────────────────────────
+
+model Document {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String   @map("provider_id") @db.Uuid
+  docType    DocType  @map("doc_type")
+  fileUrl    String   @map("file_url")
+  verified   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}

@@ -1,0 +1,224 @@
+/* ========================================
+   HINGE-STYLE SWIPE CARD
+   ======================================== */
+.hinge-card {
+  width: 100%;
+  max-width: 380px;
+  background: white;
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: scaleIn 0.4s var(--ease-spring) both;
+  will-change: transform;
+}
+.hinge-card:active {
+  cursor: grabbing;
+}
+
+/* ---- Swipe Labels ---- */
+.hinge-label {
+  position: absolute;
+  top: var(--space-6);
+  z-index: 5;
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s var(--ease-spring);
+  pointer-events: none;
+}
+.hinge-label.show {
+  opacity: 1;
+  transform: scale(1);
+}
+.hinge-label-like {
+  right: var(--space-5);
+  background: rgba(34, 197, 94, 0.15);
+  color: #16A34A;
+  border: 2px solid #22C55E;
+}
+.hinge-label-nope {
+  left: var(--space-5);
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+  border: 2px solid #EF4444;
+}
+
+/* ---- Photo ---- */
+.hinge-photo {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+}
+.hinge-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.hinge-photo-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent);
+  pointer-events: none;
+}
+
+/* ---- Compatibility Badge ---- */
+.hinge-compat-badge {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+.hinge-compat-num {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--primary-600);
+}
+.hinge-compat-text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary-400);
+  text-transform: uppercase;
+}
+
+/* ---- Info Section ---- */
+.hinge-info {
+  padding: var(--space-5);
+  padding-bottom: var(--space-2);
+}
+.hinge-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+.hinge-name-row h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--neutral-900);
+}
+.hinge-verified {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-500);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hinge-subtitle {
+  font-size: var(--text-sm);
+  color: var(--neutral-500);
+  margin-bottom: var(--space-3);
+}
+.hinge-bio {
+  font-size: var(--text-sm);
+  color: var(--neutral-600);
+  line-height: 1.5;
+  margin-bottom: var(--space-4);
+}
+
+/* ---- Trait Tags ---- */
+.hinge-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+}
+.hinge-tag {
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-200);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--neutral-700);
+}
+
+/* ---- Interests ---- */
+.hinge-interests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+.hinge-interest {
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--primary-50);
+  color: var(--primary-600);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---- Action Buttons ---- */
+.hinge-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-3) var(--space-5) var(--space-6);
+}
+.hinge-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  transition: all 0.25s var(--ease-spring);
+  cursor: pointer;
+}
+.hinge-btn:active {
+  transform: scale(0.88);
+}
+
+.hinge-btn-skip {
+  background: white;
+  border: 2px solid var(--neutral-200);
+  color: var(--neutral-500);
+  box-shadow: var(--shadow-sm);
+}
+.hinge-btn-skip:hover {
+  border-color: #EF4444;
+  color: #EF4444;
+  background: #FEF2F2;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.2);
+  transform: scale(1.08);
+}
+
+.hinge-btn-like {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: var(--shadow-primary);
+  border: none;
+}
+.hinge-btn-like:hover {
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+  transform: scale(1.08);
+}

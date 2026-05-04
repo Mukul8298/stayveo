@@ -1,0 +1,5 @@
+.rating { display: inline-flex; align-items: center; gap: 4px; }
+.rating-value { font-weight: 600; color: var(--neutral-800); }
+.rating-count { color: var(--neutral-400); font-weight: 400; }
+.rating-sm { font-size: var(--text-xs); }
+.rating-md { font-size: var(--text-sm); }
