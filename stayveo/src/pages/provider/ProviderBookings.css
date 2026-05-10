@@ -67,3 +67,84 @@
   font-size: var(--text-xs); font-weight: 600;
 }
 .pb-done-badge { font-size: var(--text-xs); color: var(--accent-600); font-weight: 600; }
+
+/* Visit Button */
+.pb-visit-btn {
+  display: flex; align-items: center; gap: 4px; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full); background: #EEF2FF; color: var(--primary-600);
+  font-size: var(--text-xs); font-weight: 600; transition: all var(--duration-fast);
+}
+.pb-visit-btn:hover { background: var(--primary-100); }
+
+/* Visit Modal */
+.pb-visit-modal {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: var(--max-width); max-height: 85vh;
+  background: white; border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  z-index: var(--z-modal); animation: slideUp 0.3s var(--ease-out);
+  overflow-y: auto; padding: var(--space-5);
+}
+.pb-visit-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+.pb-visit-modal-header h2 { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; }
+.pb-visit-modal-info {
+  background: var(--neutral-50); border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+}
+.pb-visit-modal-info p { font-size: var(--text-sm); color: var(--neutral-600); margin-bottom: var(--space-1); }
+.pb-visit-modal-info strong { color: var(--neutral-800); }
+
+.pb-visit-field { margin-bottom: var(--space-4); }
+.pb-visit-field label {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-sm); font-weight: 600; color: var(--neutral-700);
+  margin-bottom: var(--space-2);
+}
+
+.pb-visit-time-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);
+}
+.pb-visit-time-slot {
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  border: 1.5px solid var(--neutral-200); font-size: var(--text-xs);
+  font-weight: 500; color: var(--neutral-600); text-align: center;
+  transition: all var(--duration-fast);
+}
+.pb-visit-time-slot:hover { border-color: var(--primary-300); }
+.pb-visit-time-slot.active {
+  background: var(--primary-500); color: white; border-color: var(--primary-500);
+}
+
+.pb-visit-instructions {
+  background: #FFFBEB; border-radius: var(--radius-md); padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+.pb-visit-instructions h3 {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-sm); font-weight: 600; color: var(--neutral-800);
+  margin-bottom: var(--space-3);
+}
+.pb-visit-instructions ul { display: flex; flex-direction: column; gap: var(--space-2); }
+.pb-visit-instructions li { font-size: var(--text-xs); color: var(--neutral-600); }
+
+.pb-visit-submit {
+  width: 100%; padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-lg); background: var(--gradient-primary);
+  color: white; font-weight: 600; font-size: var(--text-base);
+  box-shadow: var(--shadow-primary); transition: all var(--duration-fast);
+}
+.pb-visit-submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.4); }
+.pb-visit-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Stat badge on dashboard */
+.pd-stat-badge {
+  margin-top: 4px; font-size: 10px; font-weight: 600; color: white;
+  background: var(--danger-500); padding: 1px 6px; border-radius: var(--radius-full);
+}
+.pd-stat { cursor: pointer; transition: transform var(--duration-fast); }
+.pd-stat:hover { transform: translateY(-2px); }
+
+/* Spinner */
+.spinning { animation: spin 1s linear infinite; }

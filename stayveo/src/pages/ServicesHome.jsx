@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { WashingMachine, UtensilsCrossed, Sparkles } from 'lucide-react';
+import { Loader } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
-import { services } from '../data/mockData';
+import { services as mockServices } from '../data/mockData';
+import { fetchAllServices } from '../api/supabaseApi';
 import './ServicesHome.css';
 
 const categories = [
@@ -15,7 +16,32 @@ const categories = [
 export default function ServicesHome() {
   const navigate = useNavigate();
   const [active, setActive] = useState('all');
-  const filtered = active === 'all' ? services : services.filter(s => s.category === active);
+  const [services, setServices] = useState(mockServices);
+  const [loading, setLoading] = useState(true);
+
+  // ── Fetch real services from Supabase ─────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await fetchAllServices();
+        if (error) {
+          console.error('ServicesHome: fetch error:', error);
+          // Keep mock data as fallback
+          return;
+        }
+        if (data?.length > 0) {
+          setServices(data);
+        }
+        // If no data from DB, keep mock services
+      } catch (err) {
+        console.error('ServicesHome: unexpected error:', err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const filtered = active === 'all' ? services : services.filter(s => s?.category === active);
 
   return (
     <div className="page" id="services-home">
@@ -33,6 +59,23 @@ export default function ServicesHome() {
           </button>
         ))}
       </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div className="home-loading">
+          <Loader size={24} className="spinning" />
+          <span>Loading services...</span>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && filtered.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-state-icon">📦</div>
+          <h3>No services yet</h3>
+          <p>Services will appear here when providers add them</p>
+        </div>
+      )}
 
       <div className="services-list">
         {filtered.map(s => (

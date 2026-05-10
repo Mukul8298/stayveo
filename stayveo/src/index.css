@@ -89,6 +89,7 @@ ul, ol { list-style: none; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spinning { animation: spin 1s linear infinite; }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 @keyframes swipeRight { to { transform: translateX(150%) rotate(20deg); opacity: 0; } }
 @keyframes swipeLeft { to { transform: translateX(-150%) rotate(-20deg); opacity: 0; } }

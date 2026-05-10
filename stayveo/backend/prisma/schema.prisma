@@ -76,6 +76,15 @@ enum ServiceCategory {
   @@map("service_category")
 }
 
+enum ServiceType {
+  PG
+  TIFFIN
+  LAUNDRY
+  CLEANING
+
+  @@map("provider_service_type")
+}
+
 enum FoodType {
   VEG    @map("veg")
   NONVEG @map("nonveg")
@@ -118,6 +127,7 @@ model User {
   // Relations
   studentProfile StudentProfile?
   provider       Provider?
+  providerProfile ProviderProfile?
 
   @@map("users")
 }
@@ -167,6 +177,103 @@ model Provider {
   documents    Document[]
 
   @@map("providers")
+}
+
+// ─── PROVIDER ONBOARDING PROFILE ───────────────────────────────────────
+
+model ProviderProfile {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @unique @map("user_id") @db.Uuid
+  phone      String   @unique @db.VarChar(15)
+  name       String?
+  email      String?
+  isVerified Boolean  @default(false) @map("is_verified")
+  otpVerified Boolean @default(false) @map("otp_verified")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services      ProviderService[]
+  verifications ProviderVerification[]
+
+  @@map("provider_profiles")
+}
+
+model ProviderService {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String      @map("provider_id") @db.Uuid
+  type       ServiceType
+
+  provider        ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  pgDetails       PGDetails?
+  tiffinDetails   TiffinDetails?
+  laundryDetails  LaundryDetails?
+  cleaningDetails CleaningDetails?
+
+  @@unique([providerId, type])
+  @@map("provider_services")
+}
+
+model PGDetails {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId String   @unique @map("service_id") @db.Uuid
+  pgName    String   @map("pg_name")
+  address   String
+  roomType  String   @map("room_type")
+  minPrice  Float    @map("min_price")
+  amenities String[]
+  photos    String[]
+
+  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("pg_details")
+}
+
+model TiffinDetails {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId   String   @unique @map("service_id") @db.Uuid
+  name        String
+  price       Float
+  mealsPerDay Int      @map("meals_per_day")
+  photos      String[]
+
+  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_details")
+}
+
+model LaundryDetails {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId String   @unique @map("service_id") @db.Uuid
+  pricing   String
+  photos    String[]
+
+  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("laundry_details")
+}
+
+model CleaningDetails {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId String   @unique @map("service_id") @db.Uuid
+  pricing   String
+  photos    String[]
+
+  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("cleaning_details")
+}
+
+model ProviderVerification {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String  @map("provider_id") @db.Uuid
+  idType     String  @map("id_type")
+  idNumber   String  @map("id_number")
+  isVerified Boolean @default(false) @map("is_verified")
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, idType])
+  @@map("provider_verifications")
 }
 
 // ─── SERVICES (junction: provider ↔ service types) ──────────────────────
@@ -275,4 +382,114 @@ model Document {
   provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@map("documents")
+}
+
+// ─── BOOKING ENUMS ──────────────────────────────────────────────────────
+
+enum BookingStatus {
+  NEW          @map("new")
+  ACCEPTED     @map("accepted")
+  IN_PROGRESS  @map("in_progress")
+  COMPLETED    @map("completed")
+  REJECTED     @map("rejected")
+
+  @@map("booking_status")
+}
+
+enum VisitStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  COMPLETED @map("completed")
+
+  @@map("visit_status")
+}
+
+enum PaymentType {
+  RENT     @map("rent")
+  LAUNDRY  @map("laundry")
+  CLEANING @map("cleaning")
+  TIFFIN   @map("tiffin")
+
+  @@map("payment_type")
+}
+
+enum PaymentStatus {
+  PAID    @map("paid")
+  PENDING @map("pending")
+
+  @@map("payment_status")
+}
+
+// ─── BOOKINGS ───────────────────────────────────────────────────────────
+
+model Booking {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  providerId   String        @map("provider_id") @db.Uuid
+  roomId       String?       @map("room_id") @db.Uuid
+  serviceType  String?       @map("service_type")
+  roomType     String?       @map("room_type")
+  status       BookingStatus @default(NEW)
+  bookingDate  DateTime      @map("booking_date") @db.Date
+  bookingTime  String        @map("booking_time")
+  price        Decimal       @db.Decimal(10, 2)
+  studentName  String?       @map("student_name")
+  studentPhone String?       @map("student_phone") @db.VarChar(15)
+  notes        String?
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  visitRequests VisitRequest[]
+  payments      Payment[]
+
+  @@map("bookings")
+}
+
+// ─── VISIT REQUESTS ─────────────────────────────────────────────────────
+
+model VisitRequest {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId    String      @map("booking_id") @db.Uuid
+  userId       String      @map("user_id") @db.Uuid
+  providerId   String      @map("provider_id") @db.Uuid
+  visitDate    DateTime    @map("visit_date") @db.Date
+  visitTime    String      @map("visit_time")
+  status       VisitStatus @default(PENDING)
+  instructions String?
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("visit_requests")
+}
+
+// ─── PROFILE VIEWS ──────────────────────────────────────────────────────
+
+model ProfileView {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String   @map("provider_id") @db.Uuid
+  viewerId   String?  @map("viewer_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("profile_views")
+}
+
+// ─── PAYMENTS ───────────────────────────────────────────────────────────
+
+model Payment {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId  String?       @map("booking_id") @db.Uuid
+  userId     String        @map("user_id") @db.Uuid
+  providerId String        @map("provider_id") @db.Uuid
+  amount     Decimal       @db.Decimal(10, 2)
+  type       PaymentType
+  status     PaymentStatus @default(PENDING)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relations
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
 }

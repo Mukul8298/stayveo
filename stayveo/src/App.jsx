@@ -26,6 +26,7 @@ import NotificationsScreen from './pages/NotificationsScreen';
 import SavedListings from './pages/SavedListings';
 
 // Provider pages
+import ProviderLogin from './pages/provider/ProviderLogin';
 import ProviderTypeSelect from './pages/provider/ProviderTypeSelect';
 import ProviderOnboarding from './pages/provider/ProviderOnboarding';
 import ProviderVerification from './pages/provider/ProviderVerification';
@@ -84,6 +85,7 @@ function AppContent() {
         <Route path="/broker/bookings" element={<BookingsManagement />} />
 
         {/* Provider System */}
+        <Route path="/provider/login" element={<ProviderLogin />} />
         <Route path="/provider/select" element={<ProviderTypeSelect />} />
         <Route path="/provider/onboarding" element={<ProviderOnboarding />} />
         <Route path="/provider/verify" element={<ProviderVerification />} />

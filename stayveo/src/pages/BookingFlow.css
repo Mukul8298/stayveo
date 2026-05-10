@@ -35,3 +35,23 @@
 .bsd-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; font-size: var(--text-sm); }
 .bsd-row span { color: var(--neutral-500); }
 .bsd-row strong { color: var(--neutral-800); }
+
+/* Time slot grid */
+.booking-time-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+.booking-time-slot {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  border: 1.5px solid var(--neutral-200); font-size: var(--text-xs);
+  font-weight: 500; color: var(--neutral-600); text-align: center;
+  transition: all var(--duration-fast); cursor: pointer;
+}
+.booking-time-slot:hover { border-color: var(--primary-300); }
+.booking-time-slot.active {
+  background: var(--primary-500); color: white; border-color: var(--primary-500);
+}
+
+/* Spin animation for loader */
+.spin { animation: spin 1s linear infinite; }

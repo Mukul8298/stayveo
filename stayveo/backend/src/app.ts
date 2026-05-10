@@ -17,7 +17,7 @@ import { globalErrorHandler } from './errors/handler.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import userRoutes from './modules/users/user.routes.js';
 import studentRoutes from './modules/student/student.routes.js';
-import providerRoutes from './modules/provider/provider.routes.js';
+import providerRoutes, { providerOnboardingRoutes } from './modules/provider/provider.routes.js';
 import serviceRoutes from './modules/services/service.routes.js';
 import pgRoutes from './modules/pg/pg.routes.js';
 import tiffinRoutes from './modules/tiffin/tiffin.routes.js';
@@ -25,6 +25,10 @@ import laundryRoutes from './modules/laundry/laundry.routes.js';
 import cleaningRoutes from './modules/cleaning/cleaning.routes.js';
 import mediaRoutes from './modules/media/media.routes.js';
 import documentRoutes from './modules/documents/document.routes.js';
+import bookingRoutes from './modules/bookings/booking.routes.js';
+import visitRoutes from './modules/visits/visit.routes.js';
+import paymentRoutes from './modules/payments/payment.routes.js';
+import profileViewRoutes from './modules/profile-views/profile-view.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -42,9 +46,20 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ── Core Plugins ──────────────────────────────────────────────────
   await app.register(cors, {
-    origin: 'http://localhost:5173',
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, mobile apps, server-to-server)
+      if (!origin) return cb(null, true);
+      // Always allow localhost
+      if (origin.includes('localhost')) return cb(null, true);
+      // Allow all Cloudflare tunnel URLs
+      if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
+      // Allow all ngrok URLs
+      if (origin.endsWith('.ngrok-free.dev') || origin.endsWith('.ngrok.io')) return cb(null, true);
+      // Block everything else in production
+      cb(null, false);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-provider-phone'],
     credentials: true,
   });
   await app.register(sensible); // adds httpErrors, to(), etc.
@@ -73,9 +88,15 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(cleaningRoutes, { prefix: '/cleaning' });
       await api.register(mediaRoutes, { prefix: '/media' });
       await api.register(documentRoutes, { prefix: '/documents' });
+      await api.register(bookingRoutes, { prefix: '/bookings' });
+      await api.register(visitRoutes, { prefix: '/visits' });
+      await api.register(paymentRoutes, { prefix: '/payments' });
+      await api.register(profileViewRoutes, { prefix: '/profile-views' });
     },
     { prefix: '/api/v1' }
   );
+
+  await app.register(providerOnboardingRoutes, { prefix: '/api/provider' });
 
   // ── 404 Handler ───────────────────────────────────────────────────
   app.setNotFoundHandler((_request, reply) => {

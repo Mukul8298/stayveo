@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      'unrippling-crista-wearisomely.ngrok-free.dev' // your current ngrok domain
+      'creating-exhaust-tell-steven.trycloudflare.com'
     ]
   }
 })

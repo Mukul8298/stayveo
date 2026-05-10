@@ -173,55 +173,51 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [info, setInfo] = useState(() => ({
     ...EMPTY_PROFILE,
     fullName: localStorage.getItem('userName') || '',
     college: localStorage.getItem('userCollege') || localStorage.getItem('selectedCollege') || '',
   }));
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadProfile = async () => {
+    if (!authState?.userId) {
+      setIsLoadingProfile(false);
+      return;
+    }
 
-    async function loadProfile() {
-      if (!authState.userId) {
+    setIsLoadingProfile(true);
+    setLoadError(false);
+
+    try {
+      const response = await getCurrentUserProfile(authState.userId);
+      const profile = response?.data?.studentProfile;
+
+      if (!profile) {
+        // Profile might not exist yet for new users — that's okay
+        console.warn('No student profile found for user:', authState.userId);
         setIsLoadingProfile(false);
         return;
       }
 
-      setIsLoadingProfile(true);
-
-      try {
-        const response = await getCurrentUserProfile(authState.userId);
-        const profile = response.data?.studentProfile;
-
-        if (!profile) {
-          throw new Error('Student profile not found');
-        }
-
-        const nextInfo = mapProfileToForm(profile);
-        if (cancelled) return;
-
-        setInfo(nextInfo);
-        setProfileImg(nextInfo.profileImageUrl);
-        localStorage.setItem('userName', nextInfo.fullName);
-        localStorage.setItem('userCollege', nextInfo.college);
-        setAuth({ name: nextInfo.fullName, exists: true });
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(error.message || 'Failed to load profile');
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingProfile(false);
-        }
-      }
+      const nextInfo = mapProfileToForm(profile);
+      setInfo(nextInfo);
+      setProfileImg(nextInfo.profileImageUrl || '');
+      if (nextInfo.fullName) localStorage.setItem('userName', nextInfo.fullName);
+      if (nextInfo.college) localStorage.setItem('userCollege', nextInfo.college);
+      setAuth({ name: nextInfo.fullName || authState?.name, exists: true });
+    } catch (error) {
+      console.error('Profile load error:', error);
+      setLoadError(true);
+      toast.error(error?.message || 'Failed to load profile. Tap retry.');
+    } finally {
+      setIsLoadingProfile(false);
     }
+  };
 
+  useEffect(() => {
     loadProfile();
-    return () => {
-      cancelled = true;
-    };
-  }, [authState.userId, setAuth, toast]);
+  }, [authState?.userId]);
 
   const handlePhotoUpload = async (e) => {
     if (!isEditing) return;
@@ -316,18 +312,23 @@ export default function ProfilePage() {
             onChange={handlePhotoUpload}
           />
         </div>
-        <h1>{info.fullName || authState.name || 'Your Profile'}</h1>
+        <h1>{info.fullName || authState?.name || 'Your Profile'}</h1>
         <p>{info.year || 'Student'}{isLoadingProfile ? ' • Loading...' : ' • Student'}</p>
+        {loadError && (
+          <button className="retry-btn" onClick={loadProfile}>
+            ⚠️ Failed to load — Tap to Retry
+          </button>
+        )}
         <div className="college-badge">🎓 {info.college || 'College not set'}</div>
       </div>
 
       {/* ---- Stats ---- */}
       <div className="profile-stats">
-        <div className="profile-stat"><span className="ps-num">{currentUser.savedListings.length}</span><span>Saved</span></div>
+        <div className="profile-stat"><span className="ps-num">{currentUser?.savedListings?.length ?? 0}</span><span>Saved</span></div>
         <div className="profile-stat-divider" />
-        <div className="profile-stat"><span className="ps-num">2</span><span>Bookings</span></div>
+        <div className="profile-stat"><span className="ps-num">0</span><span>Bookings</span></div>
         <div className="profile-stat-divider" />
-        <div className="profile-stat"><span className="ps-num">{currentUser.activeServices.length}</span><span>Services</span></div>
+        <div className="profile-stat"><span className="ps-num">{currentUser?.activeServices?.length ?? 0}</span><span>Services</span></div>
       </div>
 
       {/* ---- Personal Information Section ---- */}

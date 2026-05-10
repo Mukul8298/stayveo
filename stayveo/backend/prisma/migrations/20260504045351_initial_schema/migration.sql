@@ -52,7 +52,7 @@ CREATE TABLE "student_profiles" (
     "gender" "gender_type",
     "food_preference" "food_pref",
     "lifestyle" "lifestyle_type",
-    "cleanliness_level" INTEGER,
+    "cleanliness_level" TEXT,
     "study_habits" "study_habit",
     "personality_type" "social_level",
     "location_preference" TEXT,

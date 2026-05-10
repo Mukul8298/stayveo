@@ -1,29 +1,65 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, Plus, TrendingUp, ChevronRight, Clock, Shield } from 'lucide-react';
-import { dashboardData, providerTypes, providerEarningsData, brokerData } from '../../data/mockData';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, Plus, TrendingUp, ChevronRight, Shield, CheckCircle2, LogOut, Loader } from 'lucide-react';
+import { useProvider } from '../../context/ProviderContext';
+import { getProviderDashboardStats } from '../../api/booking';
+import Button from '../../components/Button';
 import './ProviderDashboard.css';
+
+const SERVICE_META = {
+  PG:       { emoji: '🏠', label: 'PG / Hostel', color: '#6366F1', bg: '#EEF2FF' },
+  TIFFIN:   { emoji: '🍱', label: 'Tiffin',     color: '#F59E0B', bg: '#FFFBEB' },
+  LAUNDRY:  { emoji: '🧺', label: 'Laundry',    color: '#06B6D4', bg: '#ECFEFF' },
+  CLEANING: { emoji: '🧹', label: 'Cleaning',   color: '#8B5CF6', bg: '#F5F3FF' },
+};
 
 export default function ProviderDashboard() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const selectedTypes = location.state?.types || ['pg'];
-  const primaryType = selectedTypes[0];
-  const data = dashboardData[primaryType];
-  const typeInfo = providerTypes.find(t => t.key === primaryType);
+  const { provider, clearProvider } = useProvider();
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const providerName = provider.name || 'Provider';
+  const services = provider.services || [];
+  const providerId = provider.providerId;
+
+  useEffect(() => {
+    if (!providerId) {
+      setLoading(false);
+      return;
+    }
+    getProviderDashboardStats(providerId)
+      .then(setStats)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [providerId]);
+
+  const handleLogout = () => {
+    clearProvider();
+    navigate('/role-select');
+  };
+
+  // Determine greeting based on time
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const totalBookings = stats?.bookings?.total ?? 0;
+  const profileViews = stats?.profileViews?.total ?? 0;
+  const totalEarnings = stats?.earnings?.thisMonth ?? 0;
 
   return (
     <div className="pd-page" id="provider-dashboard">
       {/* Header */}
       <div className="pd-header">
         <div className="pd-header-left">
-          <p className="pd-greeting">Good evening 👋</p>
-          <h1>{brokerData.name}</h1>
+          <p className="pd-greeting">{greeting} 👋</p>
+          <h1>{providerName}</h1>
           <div className="pd-type-badges">
-            {selectedTypes.map(t => {
-              const info = providerTypes.find(p => p.key === t);
+            {services.map((svc) => {
+              const meta = SERVICE_META[svc] || { emoji: '📦', label: svc, color: '#64748B', bg: '#F1F5F9' };
               return (
-                <span key={t} className="pd-type-badge" style={{ background: info.bgColor, color: info.color }}>
-                  {info.emoji} {info.label}
+                <span key={svc} className="pd-type-badge" style={{ background: meta.bg, color: meta.color }}>
+                  {meta.emoji} {meta.label}
                 </span>
               );
             })}
@@ -32,56 +68,60 @@ export default function ProviderDashboard() {
         <div className="pd-header-right">
           <button className="pd-notif-btn" onClick={() => navigate('/provider/notifications')}>
             <Bell size={20} />
-            <span className="pd-notif-dot" />
+            {stats?.bookings?.new > 0 && <span className="pd-notif-dot" />}
           </button>
         </div>
       </div>
 
       {/* Verification Banner */}
-      <div className="pd-verify-banner">
-        <Clock size={16} />
-        <span>Verification pending</span>
-        <Shield size={14} />
-      </div>
-
-      {/* Earnings Card */}
-      <div className="pd-earnings" onClick={() => navigate('/provider/earnings', { state: { types: selectedTypes } })}>
-        <div className="pd-earnings-label"><TrendingUp size={16} /> Today's Earnings</div>
-        <div className="pd-earnings-amount">₹{providerEarningsData.today.toLocaleString()}</div>
-        <div className="pd-earnings-row">
-          <span>This Month: ₹{providerEarningsData.thisMonth.toLocaleString()}</span>
-          <ChevronRight size={16} />
+      {provider.isVerified ? (
+        <div className="pd-verify-banner pd-verified">
+          <CheckCircle2 size={16} />
+          <span>Verified Provider</span>
+          <Shield size={14} />
         </div>
-      </div>
+      ) : (
+        <div className="pd-verify-banner">
+          <Shield size={16} />
+          <span>Verification pending</span>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="pd-stats">
-        {data.stats.map((stat, i) => (
-          <div key={i} className="pd-stat" style={{ animationDelay: `${i * 0.06}s` }}>
-            <span className="pd-stat-icon">{stat.icon}</span>
-            <span className="pd-stat-value">{stat.value}</span>
-            <span className="pd-stat-label">{stat.label}</span>
-            <span className="pd-stat-change">{stat.change}</span>
-          </div>
-        ))}
+        <div className="pd-stat" onClick={() => navigate('/provider/bookings')}>
+          <span className="pd-stat-icon">📊</span>
+          <span className="pd-stat-value">{loading ? '...' : totalBookings}</span>
+          <span className="pd-stat-label">Total Bookings</span>
+          {stats?.bookings?.new > 0 && (
+            <span className="pd-stat-badge">{stats.bookings.new} new</span>
+          )}
+        </div>
+        <div className="pd-stat">
+          <span className="pd-stat-icon">⭐</span>
+          <span className="pd-stat-value">--</span>
+          <span className="pd-stat-label">Rating</span>
+        </div>
+        <div className="pd-stat">
+          <span className="pd-stat-icon">👁️</span>
+          <span className="pd-stat-value">{loading ? '...' : profileViews}</span>
+          <span className="pd-stat-label">Profile Views</span>
+        </div>
+        <div className="pd-stat" onClick={() => navigate('/provider/earnings')}>
+          <span className="pd-stat-icon">💰</span>
+          <span className="pd-stat-value">₹{loading ? '...' : totalEarnings.toLocaleString()}</span>
+          <span className="pd-stat-label">This Month</span>
+        </div>
       </div>
 
       {/* Quick Actions */}
       <div className="pd-section">
         <h2 className="pd-section-title">Quick Actions</h2>
         <div className="pd-actions">
-          {data.quickActions.map((action, i) => (
-            <button key={i} className="pd-action" onClick={() => {
-              if (action.includes('Request') || action.includes('Order') || action.includes('Pickup') || action.includes('Schedule'))
-                navigate('/provider/bookings', { state: { types: selectedTypes } });
-              else if (action.includes('Add') || action.includes('Update') || action.includes('Pricing'))
-                navigate('/provider/services', { state: { types: selectedTypes } });
-              else if (action.includes('Calendar') || action.includes('Route'))
-                navigate('/provider/calendar', { state: { types: selectedTypes } });
-            }}>
-              {action}
-            </button>
-          ))}
+          <button className="pd-action" onClick={() => navigate('/provider/services')}>Manage Services</button>
+          <button className="pd-action" onClick={() => navigate('/provider/bookings')}>View Bookings</button>
+          <button className="pd-action" onClick={() => navigate('/provider/profile')}>Edit Profile</button>
+          <button className="pd-action" onClick={() => navigate('/provider/earnings')}>Earnings</button>
         </div>
       </div>
 
@@ -89,27 +129,50 @@ export default function ProviderDashboard() {
       <div className="pd-section">
         <h2 className="pd-section-title">Recent Activity</h2>
         <div className="pd-activity-list">
-          <div className="pd-activity"><span className="pd-activity-dot pd-dot-green" /><div><strong>New booking</strong><p>Aarav Mehta • Room 3</p></div><span className="pd-activity-time">2m ago</span></div>
-          <div className="pd-activity"><span className="pd-activity-dot pd-dot-blue" /><div><strong>Payment received</strong><p>₹2,800 from Priya Singh</p></div><span className="pd-activity-time">1h ago</span></div>
-          <div className="pd-activity"><span className="pd-activity-dot pd-dot-orange" /><div><strong>Service completed</strong><p>Deep cleaning for Vikram</p></div><span className="pd-activity-time">3h ago</span></div>
+          <div className="pd-activity">
+            <span className="pd-activity-dot pd-dot-green" />
+            <div><strong>Account created</strong><p>Your provider profile is live</p></div>
+            <span className="pd-activity-time">Just now</span>
+          </div>
+          {services.map((svc) => (
+            <div key={svc} className="pd-activity">
+              <span className="pd-activity-dot pd-dot-blue" />
+              <div><strong>{SERVICE_META[svc]?.label || svc} added</strong><p>Service details saved</p></div>
+              <span className="pd-activity-time">Today</span>
+            </div>
+          ))}
+          {stats?.bookings?.new > 0 && (
+            <div className="pd-activity">
+              <span className="pd-activity-dot pd-dot-orange" />
+              <div><strong>{stats.bookings.new} new booking{stats.bookings.new > 1 ? 's' : ''}</strong><p>Tap to review</p></div>
+              <span className="pd-activity-time">Now</span>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Logout */}
+      <div style={{ padding: '0 var(--space-5)', marginBottom: 'var(--space-6)' }}>
+        <Button variant="ghost" fullWidth onClick={handleLogout}>
+          <LogOut size={16} /> Logout
+        </Button>
       </div>
 
       {/* Bottom Nav */}
       <nav className="pd-nav">
-        <button className="pd-nav-item pd-nav-active" onClick={() => navigate('/provider/dashboard', { state: { types: selectedTypes } })}>
+        <button className="pd-nav-item pd-nav-active" onClick={() => navigate('/provider/dashboard')}>
           <span>📊</span><span>Dashboard</span>
         </button>
-        <button className="pd-nav-item" onClick={() => navigate('/provider/bookings', { state: { types: selectedTypes } })}>
+        <button className="pd-nav-item" onClick={() => navigate('/provider/bookings')}>
           <span>📋</span><span>Bookings</span>
         </button>
-        <button className="pd-nav-fab" onClick={() => navigate('/provider/services', { state: { types: selectedTypes } })}>
+        <button className="pd-nav-fab" onClick={() => navigate('/provider/services')}>
           <Plus size={24} />
         </button>
-        <button className="pd-nav-item" onClick={() => navigate('/provider/calendar', { state: { types: selectedTypes } })}>
+        <button className="pd-nav-item" onClick={() => navigate('/provider/calendar')}>
           <span>📅</span><span>Calendar</span>
         </button>
-        <button className="pd-nav-item" onClick={() => navigate('/provider/profile', { state: { types: selectedTypes } })}>
+        <button className="pd-nav-item" onClick={() => navigate('/provider/profile')}>
           <span>👤</span><span>Profile</span>
         </button>
       </nav>
