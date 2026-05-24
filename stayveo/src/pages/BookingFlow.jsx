@@ -1,21 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, CheckCircle2, Clock, Loader2, Loader } from 'lucide-react';
 import Button from '../components/Button';
-import { listings } from '../data/mockData';
+import { fetchPGListings, FALLBACK_IMAGE } from '../api/supabaseApi';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createBooking } from '../api/booking';
 import './BookingFlow.css';
+
+// ── BookingFlow ─────────────────────────────────────────────────────────
+// MIGRATION CHANGES:
+// - Removed mock data import — fetches from real Supabase data
+// - Uses displayName from AuthContext instead of raw localStorage
+// - Added loading state while fetching room data
+// ────────────────────────────────────────────────────────────────────────
 
 const timeSlots = ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM'];
 
 export default function BookingFlow() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { authState } = useAuth();
+  const { authState, displayName } = useAuth();
   const toast = useToast();
-  const room = listings.find(l => l.id === +id) || listings[0];
+
+  // Fetch room from real data
+  const [room, setRoom] = useState(null);
+  const [roomLoading, setRoomLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const { data, aborted } = await fetchPGListings({ signal: controller.signal });
+        if (aborted) return;
+        const found = (data || []).find(l => String(l.id) === String(id));
+        setRoom(found || null);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error('BookingFlow: fetch error:', err);
+        }
+      } finally {
+        if (!controller.signal.aborted) setRoomLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [id]);
 
   const [step, setStep] = useState(0);
   const [moveIn, setMoveIn] = useState('');
@@ -37,7 +68,8 @@ export default function BookingFlow() {
         booking_date: moveIn,
         booking_time: moveInTime || '10:00 AM',
         price: room?.price || 0,
-        student_name: authState?.name || localStorage.getItem('userName') || 'Student',
+        // Use displayName from AuthContext (handles old users properly)
+        student_name: displayName || authState?.name || 'Student',
         student_phone: authState?.phone || '',
         notes: `Booking for ${room?.title || 'PG Room'}`,
       });
@@ -51,6 +83,32 @@ export default function BookingFlow() {
       setSubmitting(false);
     }
   };
+
+  // Loading state
+  if (roomLoading) {
+    return (
+      <div className="booking-page" id="booking-flow" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <Loader size={24} className="spinning" />
+      </div>
+    );
+  }
+
+  // Room not found
+  if (!room) {
+    return (
+      <div className="booking-page" id="booking-flow">
+        <div className="page-header">
+          <button className="back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
+          <h1>Book Room</h1>
+        </div>
+        <div style={{ textAlign: 'center', padding: '4rem 1.5rem', color: '#94a3b8' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏠</div>
+          <h3>Room not found</h3>
+          <p>This listing may have been removed.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (step === 2) {
     return (
@@ -69,6 +127,9 @@ export default function BookingFlow() {
     );
   }
 
+  // Image source with fallback
+  const imgSrc = room?.images?.[0] || FALLBACK_IMAGE;
+
   return (
     <div className="booking-page" id="booking-flow">
       <div className="page-header">
@@ -76,7 +137,11 @@ export default function BookingFlow() {
         <h1>Book Room</h1>
       </div>
       <div className="booking-room-preview">
-        <img src={room?.images?.[0]} alt={room?.title || 'Room'} />
+        <img
+          src={imgSrc}
+          alt={room?.title || 'Room'}
+          onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }}
+        />
         <div><h3>{room?.title || 'PG Room'}</h3><p>₹{(room?.price || 0).toLocaleString()}/month</p></div>
       </div>
 

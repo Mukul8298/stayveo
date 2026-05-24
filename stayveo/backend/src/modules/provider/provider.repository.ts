@@ -9,6 +9,7 @@ import type {
   ServiceDetailsInput,
   ServiceSelectionInput,
   ServiceTypeInput,
+  UpdateBusinessDetailsInput,
   UpdateProviderInput,
   VerifyIdInput,
 } from './provider.schema.js';
@@ -283,6 +284,92 @@ export const providerRepository = {
       where: { id: providerId },
       data: { isVerified },
       include: onboardingInclude,
+    });
+  },
+
+  /**
+   * Dashboard stats — runs 3 DB queries in PARALLEL using Promise.all.
+   *
+   * Why parallel? If we awaited them sequentially:
+   *   query1 (50ms) → query2 (50ms) → query3 (50ms) = 150ms total
+   * With Promise.all all 3 fire at once:
+   *   all 3 run simultaneously → ~50ms total
+   *
+   * This is the standard pattern for dashboard aggregations.
+   */
+  async getDashboardStats(providerId: string) {
+    const [serviceCount, bookingCount, earningsResult] = await Promise.all([
+      // Active listings = how many service types this provider has enrolled in
+      prisma.providerService.count({
+        where: { providerId },
+      }),
+
+      // Total bookings ever received by this provider
+      prisma.booking.count({
+        where: { providerId },
+      }),
+
+      // Total PAID earnings — aggregate._sum gives us the SUM of amount column
+      prisma.payment.aggregate({
+        where: { providerId, status: 'PAID' },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    return {
+      activeListings: serviceCount,
+      totalBookings:  bookingCount,
+      totalEarnings:  Number(earningsResult._sum.amount ?? 0),
+    };
+  },
+
+  /** Fetch the onboarding profile (used by Business Details page to prefill form) */
+  async getOnboardingProfile(phone: string) {
+    return prisma.providerProfile.findUnique({
+      where: { phone },
+      select: {
+        id:            true,
+        phone:         true,
+        name:          true,
+        email:         true,
+        businessName:  true,
+        address:       true,
+        contactNumber: true,
+        description:   true,
+        isVerified:    true,
+        services: {
+          select: { type: true },
+        },
+      },
+    });
+  },
+
+  /**
+   * Partial update of provider profile fields from the Business Details page.
+   * Uses Prisma's update (not upsert) — the record MUST already exist.
+   * Only updates fields that were explicitly passed (undefined = skip).
+   */
+  async updateOnboardingProfileFields(phone: string, data: UpdateBusinessDetailsInput) {
+    return prisma.providerProfile.update({
+      where: { phone },
+      data: {
+        ...(data.name          !== undefined && { name:          data.name }),
+        ...(data.email         !== undefined && { email:         data.email }),
+        ...(data.businessName  !== undefined && { businessName:  data.businessName }),
+        ...(data.address       !== undefined && { address:       data.address }),
+        ...(data.contactNumber !== undefined && { contactNumber: data.contactNumber }),
+        ...(data.description   !== undefined && { description:   data.description }),
+      },
+      select: {
+        id:            true,
+        phone:         true,
+        name:          true,
+        email:         true,
+        businessName:  true,
+        address:       true,
+        contactNumber: true,
+        description:   true,
+      },
     });
   },
 };

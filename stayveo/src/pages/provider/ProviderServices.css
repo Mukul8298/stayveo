@@ -1,6 +1,40 @@
+/* ── My Services Page ─────────────────────────────────────────────────── */
+
 .ps-page { min-height: 100vh; background: var(--neutral-50); }
 .ps-body { padding: var(--space-4) var(--space-5); }
 
+/* ── Stats row ────────────────────────────────────────────────────────── */
+.ps-stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: var(--space-4);
+  background: white;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  margin-bottom: var(--space-4);
+}
+.ps-stat { text-align: center; }
+.ps-stat-num {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--primary-500);
+}
+.ps-stat-num--green { color: #16A34A; }
+.ps-stat-num--amber { color: #D97706; }
+.ps-stat span:last-child {
+  font-size: 11px;
+  color: var(--neutral-500);
+}
+.ps-stat-line {
+  width: 1px;
+  height: 32px;
+  background: var(--neutral-200);
+}
+
+/* ── Add banner ───────────────────────────────────────────────────────── */
 .ps-add-banner {
   display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4);
   background: white; border: 2px dashed var(--primary-200); border-radius: var(--radius-lg);
@@ -11,32 +45,198 @@
 .ps-add-banner h3 { font-size: var(--text-sm); font-weight: 600; }
 .ps-add-banner p { font-size: var(--text-xs); color: var(--neutral-500); }
 
-.ps-list { display: flex; flex-direction: column; gap: var(--space-3); }
-.ps-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-4); background: white; border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs); transition: all var(--duration-fast);
-  animation: fadeInUp 0.3s var(--ease-out) both;
-}
-.ps-disabled { opacity: 0.5; }
-.ps-item-info { flex: 1; }
-.ps-item h3 { font-size: var(--text-sm); font-weight: 600; margin-bottom: 2px; }
-.ps-item-price { display: flex; align-items: baseline; gap: 2px; }
-.ps-price { font-family: var(--font-display); font-weight: 700; color: var(--primary-600); }
-.ps-unit { font-size: var(--text-xs); color: var(--neutral-400); }
-.ps-item-actions { display: flex; align-items: center; gap: var(--space-3); }
-.ps-edit {
-  width: 32px; height: 32px; border-radius: var(--radius-sm);
-  background: var(--neutral-50); color: var(--neutral-500);
-  display: flex; align-items: center; justify-content: center;
-}
-.ps-toggle { display: flex; align-items: center; }
-.ps-toggle-on { color: var(--accent-500); }
-.ps-toggle-off { color: var(--neutral-300); }
-
+/* ── Group ────────────────────────────────────────────────────────────── */
 .ps-group { margin-bottom: var(--space-5); }
 .ps-group-title {
   font-family: var(--font-display); font-size: var(--text-sm); font-weight: 600;
   color: var(--neutral-700); margin-bottom: var(--space-3);
   display: flex; align-items: center; gap: var(--space-2);
 }
+.ps-list { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* ── Room card ────────────────────────────────────────────────────────── */
+.ps-card {
+  display: flex;
+  align-items: stretch;
+  background: white;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+  transition: all 0.2s;
+  animation: fadeInUp 0.3s var(--ease-out) both;
+}
+.ps-card--disabled { opacity: 0.5; }
+
+/* ── Card image ───────────────────────────────────────────────────────── */
+.ps-card-img {
+  width: 90px;
+  flex-shrink: 0;
+}
+.ps-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ps-card-img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--neutral-100);
+  font-size: 28px;
+}
+
+/* ── Card body ────────────────────────────────────────────────────────── */
+.ps-card-body {
+  flex: 1;
+  padding: var(--space-3) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ps-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.ps-card-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--neutral-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Status badge ─────────────────────────────────────────────────────── */
+.ps-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.ps-badge--active { background: #DCFCE7; color: #166534; }
+.ps-badge--full   { background: #FEF3C7; color: #92400E; }
+.ps-badge--closed { background: var(--neutral-100); color: var(--neutral-500); }
+
+/* ── Card meta ────────────────────────────────────────────────────────── */
+.ps-card-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ps-card-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-500);
+  background: var(--primary-50);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+.ps-card-gender {
+  font-size: 11px;
+  color: var(--neutral-500);
+  text-transform: capitalize;
+}
+
+/* ── Card stats row ───────────────────────────────────────────────────── */
+.ps-card-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ps-card-price { display: flex; align-items: baseline; gap: 2px; }
+.ps-price {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--primary-600);
+}
+.ps-unit { font-size: var(--text-xs); color: var(--neutral-400); }
+
+.ps-card-beds {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--neutral-500);
+  font-weight: 500;
+}
+
+.ps-inventory-bar {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--neutral-100);
+}
+.ps-inventory-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--warning-500);
+}
+
+/* ── Amenity tags ─────────────────────────────────────────────────────── */
+.ps-card-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ps-amenity-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: var(--neutral-100);
+  color: var(--neutral-600);
+}
+.ps-amenity-more {
+  background: var(--primary-50);
+  color: var(--primary-500);
+  font-weight: 600;
+}
+
+/* ── Card actions ─────────────────────────────────────────────────────── */
+.ps-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border-left: 1px solid var(--neutral-100);
+}
+
+.ps-edit {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  background: var(--neutral-50); color: var(--neutral-500);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.ps-edit:hover { background: var(--primary-50); color: var(--primary-500); }
+
+.ps-toggle { display: flex; align-items: center; }
+.ps-toggle-on { color: var(--accent-500, #22C55E); }
+.ps-toggle-off { color: var(--neutral-300); }
+
+/* ── Loading ──────────────────────────────────────────────────────────── */
+.ps-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-16) var(--space-6);
+  color: var(--neutral-400);
+  font-size: var(--text-sm);
+}
+.ps-spinner {
+  animation: ps-spin 1s linear infinite;
+}
+@keyframes ps-spin { to { transform: rotate(360deg); } }

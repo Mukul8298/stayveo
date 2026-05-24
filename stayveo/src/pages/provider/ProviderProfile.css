@@ -7,30 +7,45 @@
 }
 .pp-avatar {
   width: 60px; height: 60px; border-radius: 50%; background: var(--primary-50);
-  display: flex; align-items: center; justify-content: center; font-size: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; color: var(--primary-600);
   border: 2px solid var(--primary-200); flex-shrink: 0;
+  font-family: var(--font-display);
 }
 .pp-info { flex: 1; }
 .pp-info h2 { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; }
 .pp-info p { font-size: var(--text-xs); color: var(--neutral-500); margin-bottom: var(--space-2); }
 .pp-types { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.pp-type-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 3px; }
-.pp-verify-badge {
-  position: absolute; top: var(--space-4); right: var(--space-5);
-  display: flex; align-items: center; gap: 4px;
-  padding: 3px 8px; border-radius: var(--radius-full);
-  background: #FEF3C7; color: #92400E; font-size: 10px; font-weight: 600;
+.pp-type-tag {
+  font-size: 10px; font-weight: 600; padding: 2px 8px;
+  border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 3px;
 }
 
+/* Stats bar */
 .pp-stats-bar {
   display: flex; align-items: center; justify-content: center; gap: var(--space-6);
   padding: var(--space-4); background: white; margin-bottom: var(--space-4);
+  min-height: 68px;
 }
 .pp-stat-mini { text-align: center; }
-.pp-stat-val { display: block; font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700; color: var(--primary-500); }
+.pp-stat-val {
+  display: block; font-family: var(--font-display);
+  font-size: var(--text-lg); font-weight: 700; color: var(--primary-500);
+}
 .pp-stat-mini span:last-child { font-size: 10px; color: var(--neutral-500); }
 .pp-stat-divider { width: 1px; height: 28px; background: var(--neutral-200); }
 
+/* Loading spinner inside stats bar */
+.pp-stats-loading {
+  display: flex; align-items: center; gap: var(--space-2);
+  color: var(--neutral-400); font-size: var(--text-sm);
+}
+.pp-stats-spinner {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Menu */
 .pp-menu { padding: 0 var(--space-5); display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-6); }
 .pp-menu-item {
   display: flex; align-items: center; gap: var(--space-3);
@@ -38,14 +53,24 @@
   border-radius: var(--radius-md); width: 100%;
   transition: all var(--duration-fast);
 }
-.pp-menu-item:hover { background: var(--neutral-50); }
-.pp-menu-icon { font-size: 20px; }
+.pp-menu-item:hover:not(:disabled) { background: var(--neutral-50); transform: translateX(2px); }
+.pp-menu-item--disabled { opacity: 0.55; cursor: default; }
+.pp-menu-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--neutral-50); flex-shrink: 0;
+}
 .pp-menu-content { flex: 1; text-align: left; }
 .pp-menu-content h3 { font-size: var(--text-sm); font-weight: 600; }
 .pp-menu-content p { font-size: 11px; color: var(--neutral-500); }
 .pp-menu-chevron { color: var(--neutral-300); }
-.pp-menu-badge { font-size: 14px; }
+.pp-menu-soon {
+  font-size: 10px; font-weight: 700; padding: 2px 7px;
+  background: var(--neutral-100); color: var(--neutral-400);
+  border-radius: var(--radius-full);
+}
 
+/* Logout */
 .pp-logout {
   display: flex; align-items: center; justify-content: center; gap: var(--space-2);
   width: calc(100% - 2 * var(--space-5)); margin: 0 var(--space-5);

@@ -8,6 +8,7 @@ import {
   sendOtpSchema,
   serviceDetailsSchema,
   serviceSelectionSchema,
+  updateBusinessDetailsSchema,
   updateProviderSchema,
   verifyIdSchema,
   verifyOtpSchema,
@@ -18,6 +19,7 @@ import type {
   PhotoUploadInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
+  UpdateBusinessDetailsInput,
   UpdateProviderInput,
   VerifyIdInput,
   VerifyOtpInput,
@@ -143,5 +145,41 @@ export const providerService = {
       throw { statusCode: 403, message: 'OTP verification required before onboarding' };
     }
     return profile;
+  },
+
+  /**
+   * Dashboard stats — fetches the 3 numbers shown on the profile card.
+   *
+   * WHY this exists in the service layer (not the controller):
+   * The controller should only handle HTTP concerns (reading headers, sending
+   * responses). Business logic — like "look up the profile by phone first,
+   * THEN query stats using the internal ID" — belongs here.
+   */
+  async getDashboardStats(phone: string) {
+    // Step 1: resolve phone → internal providerId
+    const profile = await providerService.getVerifiedOnboardingProfile(phone);
+    // Step 2: run the 3 aggregation queries in parallel
+    return providerRepository.getDashboardStats(profile.id);
+  },
+
+  /** Fetch current business details to pre-fill the edit form */
+  async getBusinessDetails(phone: string) {
+    const profile = await providerRepository.getOnboardingProfile(phone);
+    if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
+    return profile;
+  },
+
+  /**
+   * Update business details from the settings page.
+   *
+   * Architecture decision: we validate with Zod FIRST (schema.parse),
+   * then guard the profile exists, then update. This means a malformed
+   * request never reaches the DB — Zod short-circuits it.
+   */
+  async updateBusinessDetails(phone: string, input: UpdateBusinessDetailsInput) {
+    const data = updateBusinessDetailsSchema.parse(input);
+    // Guard: profile must exist before we attempt to update
+    await providerService.getVerifiedOnboardingProfile(phone);
+    return providerRepository.updateOnboardingProfileFields(phone, data);
   },
 };

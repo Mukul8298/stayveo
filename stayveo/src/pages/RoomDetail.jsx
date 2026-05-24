@@ -1,15 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Share2, Heart, MapPin, BadgeCheck, Wifi, UtensilsCrossed, WashingMachine, Sparkles, Star, Phone, Eye, X, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, Share2, Heart, MapPin, BadgeCheck, Wifi, UtensilsCrossed, WashingMachine, Sparkles, Star, Phone, Eye, X, Calendar, Clock, Loader } from 'lucide-react';
 import ImageCarousel from '../components/ImageCarousel';
 import Rating from '../components/Rating';
 import Button from '../components/Button';
 import Chip from '../components/Chip';
-import { listings } from '../data/mockData';
+import { fetchPGListings } from '../api/supabaseApi';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { createVisitRequest, recordProfileView } from '../api/booking';
+import RoomDetailMap from '../components/maps/RoomDetailMap';
+import { getCollegeById } from '../api/colleges';
+import { calculateDistanceKm, formatDistance } from '../utils/calculateDistance';
 import './RoomDetail.css';
+
+// ── RoomDetail ──────────────────────────────────────────────────────────
+// MIGRATION CHANGES:
+// - Removed mock data import — fetches PG details from Supabase
+// - Uses AbortController for safe async cleanup
+// - Handles missing room gracefully (shows "not found" state)
+// ────────────────────────────────────────────────────────────────────────
 
 const serviceMap = { wifi: { icon: <Wifi size={16}/>, name: 'WiFi' }, food: { icon: <UtensilsCrossed size={16}/>, name: 'Food' }, laundry: { icon: <WashingMachine size={16}/>, name: 'Laundry' }, cleaning: { icon: <Sparkles size={16}/>, name: 'Cleaning' } };
 
@@ -19,18 +29,78 @@ const timeSlots = [
   '05:00 PM', '06:00 PM',
 ];
 
+function getStoredCollegeCoordinates() {
+  const latitude = Number(localStorage.getItem('selectedCollegeLatitude'));
+  const longitude = Number(localStorage.getItem('selectedCollegeLongitude'));
+
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return { latitude, longitude };
+  }
+
+  return null;
+}
+
 export default function RoomDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { authState } = useAuth();
   const toast = useToast();
-  const room = listings.find(l => l.id === +id) || listings[0];
+
+  // ── Fetch room from real database ──────────────────────────────────
+  const [room, setRoom] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showCallSheet, setShowCallSheet] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        let college = getStoredCollegeCoordinates();
+        const collegeId = localStorage.getItem('userCollegeId') || localStorage.getItem('selectedCollegeId');
+        if (!college && collegeId) {
+          college = await getCollegeById(collegeId, { signal: controller.signal });
+          if (college?.latitude && college?.longitude) {
+            localStorage.setItem('selectedCollegeLatitude', String(college.latitude));
+            localStorage.setItem('selectedCollegeLongitude', String(college.longitude));
+          }
+        }
+
+        const { data, aborted } = await fetchPGListings({ signal: controller.signal });
+        if (aborted) return;
+        // Find the room by ID (try numeric and string match)
+        const found = (data || []).find(l => String(l.id) === String(id));
+        if (found && college) {
+          const distanceKm = calculateDistanceKm(college.latitude, college.longitude, found.latitude, found.longitude);
+          setRoom({
+            ...found,
+            distance: distanceKm,
+            distanceKm,
+            distanceLabel: formatDistance(distanceKm),
+          });
+        } else {
+          setRoom(found || null);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error('RoomDetail: fetch error:', err);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [id]);
 
   // Visit modal state
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [visitDate, setVisitDate] = useState('');
   const [visitTime, setVisitTime] = useState('');
   const [visitSubmitting, setVisitSubmitting] = useState(false);
+
+  // Gallery preview state
+  const [previewImage, setPreviewImage] = useState(null);
 
   const handleVisitSubmit = async () => {
     if (!visitDate || !visitTime) {
@@ -63,6 +133,35 @@ export default function RoomDetail() {
     }
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="room-detail" id="room-detail" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <Loader size={24} className="spinning" />
+      </div>
+    );
+  }
+
+  // Room not found
+  if (!room) {
+    return (
+      <div className="room-detail" id="room-detail">
+        <div className="room-detail-header">
+          <button className="rd-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
+        </div>
+        <div style={{ textAlign: 'center', padding: '4rem 1.5rem', color: '#94a3b8' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏠</div>
+          <h3>Room not found</h3>
+          <p>This listing may have been removed or is unavailable.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const extraImages = room?.images ? room.images.slice(1) : [];
+  const providerPhone = room?.providerPhone || 'Phone number unavailable';
+  const canCallProvider = Boolean(room?.providerPhone);
+
   return (
     <div className="room-detail" id="room-detail">
       <div className="room-detail-header">
@@ -86,7 +185,7 @@ export default function RoomDetail() {
 
         <div className="rd-price-row">
           <div className="rd-price">₹{(room?.price || 0).toLocaleString()}<span>/month</span></div>
-          <Chip variant="distance" icon={<MapPin size={11} />}>{room?.distance || '?'} km from campus</Chip>
+          <Chip variant="distance" icon={<MapPin size={11} />}>{room?.distanceLabel || 'Distance unavailable'}</Chip>
         </div>
 
         <div className="rd-section">
@@ -120,11 +219,26 @@ export default function RoomDetail() {
           </div>
         </div>
 
+        {extraImages.length > 0 && (
+          <div className="rd-section">
+            <h3>Gallery</h3>
+            <div className="rd-gallery-stack">
+              {extraImages.map((imgUrl, idx) => (
+                <div
+                  key={idx}
+                  className="rd-gallery-card"
+                  onClick={() => setPreviewImage(imgUrl)}
+                >
+                  <img src={imgUrl} alt={`Property view ${idx + 1}`} loading="lazy" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="rd-section">
           <h3>Location</h3>
-          <div className="rd-map">
-            <div className="rd-map-placeholder"><MapPin size={32} /><p>Map Preview</p><span>{room?.distance || '?'} km from IIT Delhi</span></div>
-          </div>
+          <RoomDetailMap latitude={room?.latitude} longitude={room?.longitude} address={room?.address} />
         </div>
 
         {/* ─── Owner Section with Visit + Call buttons ─────────────── */}
@@ -137,7 +251,7 @@ export default function RoomDetail() {
             <button className="rd-visit-btn" onClick={() => setShowVisitModal(true)}>
               <Eye size={14} /> Visit for Review
             </button>
-            <button className="rd-call"><Phone size={16} /> Call</button>
+            <button className="rd-call" onClick={() => setShowCallSheet(true)}><Phone size={16} /> Call</button>
           </div>
         </div>
       </div>
@@ -208,6 +322,42 @@ export default function RoomDetail() {
             >
               {visitSubmitting ? 'Scheduling...' : '✅ Schedule Visit'}
             </button>
+          </div>
+        </>
+      )}
+
+      {showCallSheet && (
+        <>
+          <div className="overlay" onClick={() => setShowCallSheet(false)} />
+          <div className="rd-call-sheet">
+            <div className="rd-call-handle" />
+            <div className="rd-call-header">
+              <div>
+                <h2>Call Property Owner</h2>
+                <p>{room?.owner || 'Property Owner'}</p>
+              </div>
+              <button onClick={() => setShowCallSheet(false)}><X size={20} /></button>
+            </div>
+            <a
+              className={`rd-call-number ${!canCallProvider ? 'disabled' : ''}`}
+              href={canCallProvider ? `tel:${room.providerPhone}` : undefined}
+            >
+              <Phone size={18} />
+              {providerPhone}
+            </a>
+          </div>
+        </>
+      )}
+
+      {/* ─── Image Preview Modal ───────────────────────────────── */}
+      {previewImage && (
+        <>
+          <div className="overlay" onClick={() => setPreviewImage(null)} style={{ zIndex: 1000 }} />
+          <div className="rd-preview-modal" style={{ zIndex: 1001 }}>
+            <button className="rd-preview-close" onClick={() => setPreviewImage(null)}>
+              <X size={24} />
+            </button>
+            <img src={previewImage} alt="Full preview" className="rd-preview-img" />
           </div>
         </>
       )}

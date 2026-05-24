@@ -121,6 +121,8 @@ model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   phone_number String   @unique @db.VarChar(15)
   role         UserRole
+  collegeId    String?  @map("college_id") @db.Uuid
+  collegeName  String?  @map("college_name")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -128,6 +130,7 @@ model User {
   studentProfile StudentProfile?
   provider       Provider?
   providerProfile ProviderProfile?
+  college       College? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -182,18 +185,26 @@ model Provider {
 // ─── PROVIDER ONBOARDING PROFILE ───────────────────────────────────────
 
 model ProviderProfile {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String   @unique @map("user_id") @db.Uuid
-  phone      String   @unique @db.VarChar(15)
-  name       String?
-  email      String?
-  isVerified Boolean  @default(false) @map("is_verified")
-  otpVerified Boolean @default(false) @map("otp_verified")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @unique @map("user_id") @db.Uuid
+  phone         String   @unique @db.VarChar(15)
+  name          String?
+  email         String?
+  businessName  String?  @map("business_name")
+  address       String?
+  contactNumber String?  @map("contact_number") @db.VarChar(20)
+  description   String?
+  isVerified    Boolean  @default(false) @map("is_verified")
+  otpVerified   Boolean  @default(false) @map("otp_verified")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   services      ProviderService[]
   verifications ProviderVerification[]
+  roomListings  RoomListing[]
+  mealPlans      MealPlan[]
+  laundryOfferings LaundryOffering[]
+  cleaningOfferings CleaningOffering[]
 
   @@map("provider_profiles")
 }
@@ -214,26 +225,31 @@ model ProviderService {
 }
 
 model PGDetails {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  serviceId String   @unique @map("service_id") @db.Uuid
-  pgName    String   @map("pg_name")
-  address   String
-  roomType  String   @map("room_type")
-  minPrice  Float    @map("min_price")
-  amenities String[]
-  photos    String[]
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId  String   @unique @map("service_id") @db.Uuid
+  pgName     String   @map("pg_name")
+  address    String
+
+  latitude   Decimal? @db.Decimal(9, 6)
+  longitude  Decimal? @db.Decimal(9, 6)
+
+  roomType   String   @map("room_type")
+  minPrice   Float    @map("min_price")
+  amenities  String[]
+  photos     String[]
 
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@map("pg_details")
 }
-
 model TiffinDetails {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceId   String   @unique @map("service_id") @db.Uuid
   name        String
   price       Float
   mealsPerDay Int      @map("meals_per_day")
+  latitude    Decimal? @db.Decimal(9, 6)
+  longitude   Decimal? @db.Decimal(9, 6)
   photos      String[]
 
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -245,6 +261,8 @@ model LaundryDetails {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceId String   @unique @map("service_id") @db.Uuid
   pricing   String
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
   photos    String[]
 
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -256,6 +274,8 @@ model CleaningDetails {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceId String   @unique @map("service_id") @db.Uuid
   pricing   String
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
   photos    String[]
 
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
@@ -420,6 +440,27 @@ enum PaymentStatus {
   @@map("payment_status")
 }
 
+// Lifecycle status for room inventory
+// ACTIVE  = visible to students, beds available
+// FULL    = auto-set when available_beds hits 0
+// CLOSED  = provider manually paused the listing
+enum RoomStatus {
+  ACTIVE @map("active")
+  FULL   @map("full")
+  CLOSED @map("closed")
+
+  @@map("room_status")
+}
+
+enum ServiceListingStatus {
+  ACTIVE @map("active")
+  PAUSED @map("paused")
+  DRAFT  @map("draft")
+  HIDDEN @map("hidden")
+
+  @@map("service_listing_status")
+}
+
 // ─── BOOKINGS ───────────────────────────────────────────────────────────
 
 model Booking {
@@ -492,4 +533,149 @@ model Payment {
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@map("payments")
+}
+model College {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique
+  city        String
+  university  String?
+  latitude    Decimal  @db.Decimal(9, 6)
+  longitude   Decimal  @db.Decimal(9, 6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  users       User[]
+
+  @@map("colleges")
+}
+
+// ─── ROOM INVENTORY (Provider Dashboard) ──────────────────────────────
+// This is the production inventory table — separate from the onboarding
+// pg_details table. Each row = one room TYPE a provider offers.
+// availableBeds is decremented on booking confirmation.
+
+model RoomListing {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId      String     @map("provider_id") @db.Uuid
+
+  // ── Core details ────────────────────────────────────────────
+  title           String     @db.VarChar(200)            // "Single AC Room"
+  description     String?                                // long-form details
+  roomType        String     @map("room_type") @db.VarChar(100) // "Single", "Double", "Triple"
+  genderPreference String    @default("unisex") @map("gender_preference") @db.VarChar(20)
+
+  // ── Pricing ──────────────────────────────────────────────
+  price           Float                                  // per month
+  securityDeposit Float?     @map("security_deposit")   // optional refundable deposit
+
+  // ── Inventory ─────────────────────────────────────────────
+  totalBeds       Int        @default(1) @map("total_beds")
+  availableBeds   Int        @default(1) @map("available_beds")
+
+  // ── Physical details ──────────────────────────────────────
+  floor           Int?                                   // null = ground floor or unknown
+  amenities       String[]   @default([])                // ["WiFi", "AC", "Geyser"]
+  images          String[]   @default([])                // Supabase public URLs
+
+  // ── Availability ──────────────────────────────────────────
+  // isActive = provider-controlled (they can flip it anytime)
+  // status   = derived lifecycle (ACTIVE / FULL / CLOSED)
+  // Both must be true for students to see the listing.
+  isActive        Boolean    @default(true) @map("is_active")
+  status          RoomStatus @default(ACTIVE)
+
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  provider        ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("room_listings")
+}
+
+model MealPlan {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId      String               @map("provider_id") @db.Uuid
+  name            String               @db.VarChar(200)
+  mealType        String?              @map("meal_type") @db.VarChar(80)
+  foodType        String?              @map("food_type") @db.VarChar(30)
+  monthlyPrice    Float?               @map("monthly_price")
+  weeklyPrice     Float?               @map("weekly_price")
+  deliveryTime    String?              @map("delivery_time") @db.VarChar(160)
+  servingWindows  String[]             @default([]) @map("serving_windows")
+  weeklyMenu      String?              @map("weekly_menu")
+  description     String?
+  hygieneBadge    Boolean              @default(false) @map("hygiene_badge")
+  address         String?
+  latitude        Decimal?             @db.Decimal(9, 6)
+  longitude       Decimal?             @db.Decimal(9, 6)
+  serviceRadiusKm Decimal?             @map("service_radius_km") @db.Decimal(5, 2)
+  images          String[]             @default([])
+  coverImage      String?              @map("cover_image")
+  isActive        Boolean              @default(true) @map("is_active")
+  status          ServiceListingStatus @default(ACTIVE)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  provider        ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, status, isActive])
+  @@index([latitude, longitude])
+  @@map("meal_plans")
+}
+
+model LaundryOffering {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId      String               @map("provider_id") @db.Uuid
+  name            String               @db.VarChar(200)
+  washType        String?              @map("wash_type") @db.VarChar(80)
+  kgPrice         Float?               @map("kg_price")
+  perClothPrice   Float?               @map("per_cloth_price")
+  pickupAvailable Boolean              @default(true) @map("pickup_available")
+  expressDelivery Boolean              @default(false) @map("express_delivery")
+  estimatedTime   String?              @map("estimated_time") @db.VarChar(120)
+  description     String?
+  address         String?
+  latitude        Decimal?             @db.Decimal(9, 6)
+  longitude       Decimal?             @db.Decimal(9, 6)
+  serviceRadiusKm Decimal?             @map("service_radius_km") @db.Decimal(5, 2)
+  images          String[]             @default([])
+  coverImage      String?              @map("cover_image")
+  isActive        Boolean              @default(true) @map("is_active")
+  status          ServiceListingStatus @default(ACTIVE)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  provider        ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, status, isActive])
+  @@index([latitude, longitude])
+  @@map("laundry_offerings")
+}
+
+model CleaningOffering {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId        String               @map("provider_id") @db.Uuid
+  name              String               @db.VarChar(200)
+  cleaningType      String?              @map("cleaning_type") @db.VarChar(80)
+  deepCleaning      Boolean              @default(false) @map("deep_cleaning")
+  equipmentIncluded Boolean              @default(true) @map("equipment_included")
+  roomSize          String?              @map("room_size") @db.VarChar(60)
+  price             Float?
+  availableSlots    String[]             @default([]) @map("available_slots")
+  description       String?
+  address           String?
+  latitude          Decimal?             @db.Decimal(9, 6)
+  longitude         Decimal?             @db.Decimal(9, 6)
+  serviceRadiusKm   Decimal?             @map("service_radius_km") @db.Decimal(5, 2)
+  images            String[]             @default([])
+  coverImage        String?              @map("cover_image")
+  isActive          Boolean              @default(true) @map("is_active")
+  status            ServiceListingStatus @default(ACTIVE)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  provider          ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, status, isActive])
+  @@index([latitude, longitude])
+  @@map("cleaning_offerings")
 }

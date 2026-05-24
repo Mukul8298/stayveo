@@ -61,6 +61,8 @@ function normalizeStudentAliases(value: unknown) {
 const studentProfileFields = z.object({
   fullName: z.string().min(1).max(200),
   college: z.string().min(1).max(200),
+  collegeId: z.string().uuid().optional(),
+  collegeName: z.string().min(1).max(200).optional(),
   year: z.coerce.number().int().min(1).max(6).optional(),
   gender: z.preprocess(
     genderEnum,

@@ -37,10 +37,10 @@
   font-weight: 600; margin-bottom: var(--space-1);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.listing-meta { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.listing-meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
 .listing-distance {
   display: flex; align-items: center; gap: 3px;
-  font-size: var(--text-xs); color: #EA580C; font-weight: 500;
+  flex-shrink: 0; font-size: var(--text-xs); color: #EA580C; font-weight: 600;
 }
 .listing-services { display: flex; align-items: center; gap: var(--space-2); }
 .listing-service-icon {

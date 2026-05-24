@@ -29,6 +29,8 @@ import bookingRoutes from './modules/bookings/booking.routes.js';
 import visitRoutes from './modules/visits/visit.routes.js';
 import paymentRoutes from './modules/payments/payment.routes.js';
 import profileViewRoutes from './modules/profile-views/profile-view.routes.js';
+import roomListingRoutes from './modules/room-listings/room-listing.routes.js';
+import collegeRoutes from './modules/colleges/college.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -92,11 +94,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(visitRoutes, { prefix: '/visits' });
       await api.register(paymentRoutes, { prefix: '/payments' });
       await api.register(profileViewRoutes, { prefix: '/profile-views' });
+      await api.register(collegeRoutes, { prefix: '/colleges' });
     },
     { prefix: '/api/v1' }
   );
 
+  await app.register(collegeRoutes, { prefix: '/colleges' });
   await app.register(providerOnboardingRoutes, { prefix: '/api/provider' });
+  await app.register(roomListingRoutes, { prefix: '/api/provider/room-listings' });
 
   // ── 404 Handler ───────────────────────────────────────────────────
   app.setNotFoundHandler((_request, reply) => {

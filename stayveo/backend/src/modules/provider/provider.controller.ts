@@ -11,6 +11,7 @@ import type {
   SendOtpInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
+  UpdateBusinessDetailsInput,
   VerifyIdInput,
   VerifyOtpInput,
 } from './provider.schema.js';
@@ -103,5 +104,41 @@ export const providerController = {
     const phone = getProviderPhone(request.body, request);
     const profile = await providerService.verifyIdentity(phone, request.body);
     return sendSuccess(reply, profile, 'Identity verification saved');
+  },
+
+  /**
+   * GET /provider/dashboard-stats
+   * Returns: { activeListings, totalBookings, totalEarnings }
+   *
+   * Why GET (not POST)? This endpoint only reads data, never mutates.
+   * HTTP semantics: GET = read, POST/PUT = write.
+   */
+  async getDashboardStats(request: FastifyRequest, reply: FastifyReply) {
+    const headerPhone = request.headers['x-provider-phone'];
+    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
+    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
+    const stats = await providerService.getDashboardStats(phone);
+    return sendSuccess(reply, stats);
+  },
+
+  /** GET /provider/business-details — prefill the edit form */
+  async getBusinessDetails(request: FastifyRequest, reply: FastifyReply) {
+    const headerPhone = request.headers['x-provider-phone'];
+    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
+    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
+    const details = await providerService.getBusinessDetails(phone);
+    return sendSuccess(reply, details);
+  },
+
+  /** PUT /provider/business-details — save the edited form */
+  async updateBusinessDetails(
+    request: FastifyRequest<{ Body: UpdateBusinessDetailsInput }>,
+    reply: FastifyReply
+  ) {
+    const headerPhone = request.headers['x-provider-phone'];
+    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
+    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
+    const updated = await providerService.updateBusinessDetails(phone, request.body);
+    return sendSuccess(reply, updated, 'Business details updated successfully');
   },
 };

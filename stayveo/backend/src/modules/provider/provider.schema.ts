@@ -41,6 +41,8 @@ export const serviceSelectionSchema = z.object({
 export const pgDetailsSchema = z.object({
   pgName: z.string().min(1).max(200),
   address: z.string().min(1).max(500),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
   roomType: z.string().min(1).max(100),
   minPrice: z.coerce.number().min(0),
   amenities: z.array(z.string().min(1)).default([]),
@@ -51,16 +53,22 @@ export const tiffinDetailsSchema = z.object({
   name: z.string().min(1).max(200),
   price: z.coerce.number().min(0),
   mealsPerDay: z.coerce.number().int().min(1).max(6),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
   photos: z.array(z.string().url()).default([]),
 });
 
 export const laundryDetailsSchema = z.object({
   pricing: z.string().min(1).max(500),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
   photos: z.array(z.string().url()).default([]),
 });
 
 export const cleaningDetailsSchema = z.object({
   pricing: z.string().min(1).max(500),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
   photos: z.array(z.string().url()).default([]),
 });
 
@@ -109,3 +117,17 @@ export type ServiceDetailsInput = z.infer<typeof serviceDetailsSchema>;
 export type PhotoUploadInput = z.infer<typeof photoUploadSchema>;
 export type VerifyIdInput = z.infer<typeof verifyIdSchema>;
 export type ServiceTypeInput = z.infer<typeof serviceTypeSchema>;
+
+// ── Business Details update (provider self-edits from profile page) ──────
+// Only the fields a provider can change themselves. No phone — that is
+// the immutable identity key used to look up the record.
+export const updateBusinessDetailsSchema = z.object({
+  name:          z.string().min(1).max(200).optional(),
+  email:         z.string().email().optional().nullable(),
+  businessName:  z.string().min(1).max(200).optional().nullable(),
+  address:       z.string().min(1).max(500).optional().nullable(),
+  contactNumber: z.string().min(10).max(20).optional().nullable(),
+  description:   z.string().max(1000).optional().nullable(),
+});
+
+export type UpdateBusinessDetailsInput = z.infer<typeof updateBusinessDetailsSchema>;

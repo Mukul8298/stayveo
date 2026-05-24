@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
-import { services as mockServices } from '../data/mockData';
 import { fetchAllServices } from '../api/supabaseApi';
 import './ServicesHome.css';
+
+// ── ServicesHome ────────────────────────────────────────────────────────
+// MIGRATION CHANGES:
+// - Removed mock data import — uses ONLY real Supabase data
+// - Uses AbortController for safe async cleanup
+// ────────────────────────────────────────────────────────────────────────
 
 const categories = [
   { key: 'all', label: 'All', icon: '🏠' },
@@ -16,29 +21,36 @@ const categories = [
 export default function ServicesHome() {
   const navigate = useNavigate();
   const [active, setActive] = useState('all');
-  const [services, setServices] = useState(mockServices);
+  // Start with empty array — NO mock data
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // ── Fetch real services from Supabase ─────────────────────────────────
   useEffect(() => {
+    const controller = new AbortController();
+
     (async () => {
       try {
-        const { data, error } = await fetchAllServices();
+        const { data, error } = await fetchAllServices({ signal: controller.signal });
+        if (controller.signal.aborted) return;
+
         if (error) {
           console.error('ServicesHome: fetch error:', error);
-          // Keep mock data as fallback
           return;
         }
-        if (data?.length > 0) {
-          setServices(data);
-        }
-        // If no data from DB, keep mock services
+        setServices(data || []);
       } catch (err) {
-        console.error('ServicesHome: unexpected error:', err);
+        if (!controller.signal.aborted) {
+          console.error('ServicesHome: unexpected error:', err);
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => controller.abort();
   }, []);
 
   const filtered = active === 'all' ? services : services.filter(s => s?.category === active);

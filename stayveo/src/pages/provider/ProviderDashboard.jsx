@@ -7,10 +7,10 @@ import Button from '../../components/Button';
 import './ProviderDashboard.css';
 
 const SERVICE_META = {
-  PG:       { emoji: '🏠', label: 'PG / Hostel', color: '#6366F1', bg: '#EEF2FF' },
-  TIFFIN:   { emoji: '🍱', label: 'Tiffin',     color: '#F59E0B', bg: '#FFFBEB' },
-  LAUNDRY:  { emoji: '🧺', label: 'Laundry',    color: '#06B6D4', bg: '#ECFEFF' },
-  CLEANING: { emoji: '🧹', label: 'Cleaning',   color: '#8B5CF6', bg: '#F5F3FF' },
+  PG: { emoji: '🏠', label: 'PG / Hostel', color: '#6366F1', bg: '#EEF2FF' },
+  TIFFIN: { emoji: '🍱', label: 'Tiffin', color: '#F59E0B', bg: '#FFFBEB' },
+  LAUNDRY: { emoji: '🧺', label: 'Laundry', color: '#06B6D4', bg: '#ECFEFF' },
+  CLEANING: { emoji: '🧹', label: 'Cleaning', color: '#8B5CF6', bg: '#F5F3FF' },
 };
 
 export default function ProviderDashboard() {

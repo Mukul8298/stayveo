@@ -1,0 +1,183 @@
+.location-picker {
+  position: relative;
+  width: 100%;
+  height: clamp(260px, 42vh, 380px);
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1.5px solid var(--neutral-200);
+  background: var(--neutral-100);
+  box-shadow: var(--shadow-sm);
+}
+
+.location-picker .mapboxgl-map {
+  font-family: var(--font-body);
+}
+
+.location-picker .mapboxgl-canvas {
+  outline: none;
+}
+
+.location-picker .mapboxgl-ctrl-group {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.location-picker-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger-500);
+  filter: drop-shadow(0 8px 12px rgba(15, 23, 42, 0.28));
+  transform-origin: center bottom;
+  animation: locationMarkerDrop 0.32s var(--ease-spring);
+}
+
+.location-picker-marker::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  width: 20px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.18);
+  transform: translateY(100%);
+}
+
+.location-picker-actions {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.location-picker-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--neutral-700);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+}
+
+.location-picker-current:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.location-picker-current:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.location-picker-pin {
+  background: rgba(17, 24, 39, 0.88);
+  color: white;
+}
+
+.location-picker-readout {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  background: rgba(17, 24, 39, 0.82);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-md);
+}
+
+.location-picker-error {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: calc(var(--space-3) + 44px);
+  z-index: 2;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(220, 38, 38, 0.94);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.location-picker-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--neutral-50), #eef2f7);
+}
+
+.location-picker-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 280px;
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--neutral-500);
+}
+
+.location-picker-empty-content h4 {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--neutral-800);
+}
+
+.location-picker-empty-content p {
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.location-picker-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes locationMarkerDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.84);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 380px) {
+  .location-picker {
+    height: 260px;
+  }
+
+  .location-picker-current {
+    max-width: calc(100vw - 72px);
+    padding: 0 var(--space-3);
+  }
+}

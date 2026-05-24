@@ -3,7 +3,17 @@
 // All responses follow { success, data, message } format.
 // ────────────────────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const LOCAL_API_BASE = 'http://localhost:3000/api/v1';
+const ENV_API_BASE = import.meta.env.VITE_API_URL;
+const isLocalFrontend =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+const API_BASES = [
+  ...(isLocalFrontend ? [LOCAL_API_BASE] : []),
+  ENV_API_BASE,
+  ...(!isLocalFrontend ? [LOCAL_API_BASE] : []),
+].filter(Boolean);
 
 async function request(endpoint, options = {}) {
   const { method = 'GET', body, userId } = options;
@@ -11,19 +21,29 @@ async function request(endpoint, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (userId) headers['x-user-id'] = userId;
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let lastError;
 
-  const json = await res.json();
+  for (const baseUrl of API_BASES) {
+    try {
+      const res = await fetch(`${baseUrl}${endpoint}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
 
-  if (!json.success) {
-    throw new Error(json.message || 'Something went wrong');
+      const json = await res.json();
+
+      if (!json.success) {
+        throw new Error(json.message || 'Something went wrong');
+      }
+
+      return json;
+    } catch (err) {
+      lastError = err;
+    }
   }
 
-  return json;
+  throw lastError || new Error('Something went wrong');
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────

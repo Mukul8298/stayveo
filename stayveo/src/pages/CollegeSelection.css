@@ -28,7 +28,73 @@
 .college-item:nth-child(4) { animation-delay: 0.15s; }
 .college-item:nth-child(5) { animation-delay: 0.2s; }
 .college-item:hover { background: var(--neutral-50); }
+.college-item.selected { background: var(--primary-50); box-shadow: inset 0 0 0 1px var(--primary-200); }
 .college-item-icon { font-size: 28px; width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--primary-50); display: flex; align-items: center; justify-content: center; }
 .college-item-info { display: flex; flex-direction: column; }
-.college-item-name { font-weight: 600; font-size: var(--text-sm); }
+.college-item-name { font-weight: 600; font-size: var(--text-sm); line-height: 1.25; overflow-wrap: anywhere; }
 .college-item-city { font-size: var(--text-xs); color: var(--neutral-400); }
+
+.college-skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+}
+.college-skeleton span {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--neutral-100), var(--neutral-200), var(--neutral-100));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  flex-shrink: 0;
+}
+.college-skeleton div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.college-skeleton i {
+  display: block;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--neutral-100), var(--neutral-200), var(--neutral-100));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+.college-skeleton i:first-child { width: 75%; }
+.college-skeleton i:last-child { width: 45%; }
+
+.college-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
+  text-align: center;
+  color: var(--neutral-500);
+}
+.college-state-icon {
+  font-size: 30px;
+  margin-bottom: var(--space-1);
+}
+.college-state h4 {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  color: var(--neutral-800);
+}
+.college-state p {
+  max-width: 260px;
+  font-size: var(--text-sm);
+}
+.college-state-error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+.college-state-error h4 {
+  color: #7f1d1d;
+}

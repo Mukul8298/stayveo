@@ -1,0 +1,43 @@
+/* ── Create Room Listing Page ──────────────────────────────────────────── */
+
+.pcl-page {
+  min-height: 100vh;
+  background: var(--neutral-50);
+  padding-bottom: var(--space-10);
+}
+
+.pcl-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-400));
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  margin: var(--space-4) var(--space-5) 0;
+  color: white;
+}
+.pcl-hero-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pcl-hero h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.pcl-hero p {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.pcl-content {
+  padding: var(--space-4) var(--space-5);
+}

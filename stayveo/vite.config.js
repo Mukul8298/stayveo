@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      'creating-exhaust-tell-steven.trycloudflare.com'
+      'old-possess-naturals-lucy.trycloudflare.com'
     ]
   }
 })

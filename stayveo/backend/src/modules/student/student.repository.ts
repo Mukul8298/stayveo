@@ -9,29 +9,57 @@ export const studentRepository = {
     return prisma.studentProfile.findUnique({
       where: { userId },
       include: {
-        user: { select: { id: true, phone_number: true, role: true } },
+        user: { select: { id: true, phone_number: true, role: true, collegeId: true, collegeName: true } },
       },
     });
   },
 
   /** Create student profile linked to a user */
   async create(userId: string, data: CreateStudentInput) {
-    return prisma.studentProfile.create({
-      data: { ...data, userId },
-      include: {
-        user: { select: { id: true, phone_number: true, role: true } },
-      },
+    const { collegeId, collegeName, ...profileData } = data;
+
+    return prisma.$transaction(async (tx) => {
+      if (collegeId || collegeName) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            collegeId: collegeId || null,
+            collegeName: collegeName || profileData.college,
+          },
+        });
+      }
+
+      return tx.studentProfile.create({
+        data: { ...profileData, userId },
+        include: {
+          user: { select: { id: true, phone_number: true, role: true, collegeId: true, collegeName: true } },
+        },
+      });
     });
   },
 
   /** Update student profile */
   async update(userId: string, data: UpdateStudentInput) {
-    return prisma.studentProfile.update({
-      where: { userId },
-      data,
-      include: {
-        user: { select: { id: true, phone_number: true, role: true } },
-      },
+    const { collegeId, collegeName, ...profileData } = data;
+
+    return prisma.$transaction(async (tx) => {
+      if (collegeId !== undefined || collegeName !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            ...(collegeId !== undefined ? { collegeId } : {}),
+            ...(collegeName !== undefined ? { collegeName } : {}),
+          },
+        });
+      }
+
+      return tx.studentProfile.update({
+        where: { userId },
+        data: profileData,
+        include: {
+          user: { select: { id: true, phone_number: true, role: true, collegeId: true, collegeName: true } },
+        },
+      });
     });
   },
 };

@@ -79,6 +79,7 @@ export default function StudentOnboarding() {
 
     const userId = localStorage.getItem('userId');
     const college = localStorage.getItem('selectedCollege') || 'Unknown';
+    const collegeId = localStorage.getItem('selectedCollegeId') || '';
 
     if (!userId) {
       setError('Session expired. Please login again.');
@@ -95,6 +96,7 @@ export default function StudentOnboarding() {
       const profilePayload = {
         fullName: data.name.trim(),
         college,
+        collegeName: college,
         year: YEAR_MAP[data.year] || undefined,
         gender: GENDER_MAP[data.gender] || undefined,
         foodPreference: FOOD_MAP[data.food] || undefined,
@@ -102,6 +104,7 @@ export default function StudentOnboarding() {
         locationPreference: data.location,
         budget: String(data.budget),
       };
+      if (collegeId) profilePayload.collegeId = collegeId;
 
       // Remove undefined fields
       Object.keys(profilePayload).forEach(k => {
@@ -113,11 +116,15 @@ export default function StudentOnboarding() {
       // Save to localStorage for quick access
       localStorage.setItem('userName', data.name.trim());
       localStorage.setItem('userCollege', college);
+      localStorage.setItem('userCollegeName', college);
+      if (collegeId) localStorage.setItem('userCollegeId', collegeId);
       localStorage.setItem('profileComplete', 'true');
 
       // Update global auth state
       setAuth({
         name: data.name.trim(),
+        college,
+        collegeId,
         exists: true,
         isAuthenticated: true,
       });
@@ -137,7 +144,7 @@ export default function StudentOnboarding() {
       title: 'About you', content: (
         <div className="onb-fields">
           <div className="onb-field">
-            <label>Name <span className="onb-required">*</span></label>
+            <label>Name</label>
             <input
               className={`input-field ${fieldErrors.name ? 'input-error' : ''}`}
               placeholder="Your name"
@@ -147,7 +154,7 @@ export default function StudentOnboarding() {
             {fieldErrors.name && <span className="onb-field-error">{fieldErrors.name}</span>}
           </div>
           <div className="onb-field">
-            <label>Year <span className="onb-required">*</span></label>
+            <label>Year</label>
             <div className="onb-chips">{['1st Year','2nd Year','3rd Year','4th Year'].map(y => (
               <button key={y} className={`onb-chip ${data.year === y ? 'active' : ''}`}
                 onClick={() => { setData({...data, year: y}); setFieldErrors(p => ({...p, year: undefined})); }}>{y}</button>
@@ -155,7 +162,7 @@ export default function StudentOnboarding() {
             {fieldErrors.year && <span className="onb-field-error">{fieldErrors.year}</span>}
           </div>
           <div className="onb-field">
-            <label>Gender <span className="onb-required">*</span></label>
+            <label>Gender</label>
             <div className="onb-chips">{['Male','Female','Other'].map(g => (
               <button key={g} className={`onb-chip ${data.gender === g ? 'active' : ''}`}
                 onClick={() => { setData({...data, gender: g}); setFieldErrors(p => ({...p, gender: undefined})); }}>{g}</button>
@@ -169,7 +176,7 @@ export default function StudentOnboarding() {
       title: 'Preferences', content: (
         <div className="onb-fields">
           <div className="onb-field">
-            <label>Food Preference <span className="onb-required">*</span></label>
+            <label>Food Preference</label>
             <div className="onb-chips">{['🥬 Vegetarian','🍗 Non-Veg','🌱 Vegan','🍽️ No Preference'].map(f => (
               <button key={f} className={`onb-chip ${data.food === f ? 'active' : ''}`}
                 onClick={() => { setData({...data, food: f}); setFieldErrors(p => ({...p, food: undefined})); }}>{f}</button>
@@ -177,7 +184,7 @@ export default function StudentOnboarding() {
             {fieldErrors.food && <span className="onb-field-error">{fieldErrors.food}</span>}
           </div>
           <div className="onb-field">
-            <label>Lifestyle <span className="onb-required">*</span></label>
+            <label>Lifestyle</label>
             <div className="onb-chips">{['🌅 Early Bird','🌙 Night Owl','⚡ Flexible'].map(l => (
               <button key={l} className={`onb-chip ${data.lifestyle === l ? 'active' : ''}`}
                 onClick={() => { setData({...data, lifestyle: l}); setFieldErrors(p => ({...p, lifestyle: undefined})); }}>{l}</button>
@@ -191,7 +198,7 @@ export default function StudentOnboarding() {
       title: 'Budget & Location', content: (
         <div className="onb-fields">
           <div className="onb-field">
-            <label>Monthly Budget <span className="onb-required">*</span></label>
+            <label>Monthly Budget</label>
             <div className="onb-budget-display">₹{data.budget.toLocaleString()}<span>/month</span></div>
             <input
               type="range" min="3000" max="25000" step="500"
@@ -203,7 +210,7 @@ export default function StudentOnboarding() {
             {fieldErrors.budget && <span className="onb-field-error">{fieldErrors.budget}</span>}
           </div>
           <div className="onb-field">
-            <label>Location Preference <span className="onb-required">*</span></label>
+            <label>Location Preference</label>
             <div className="onb-chips">{['Near Campus', 'City Center', 'Metro Accessible', 'Anywhere'].map(loc => (
               <button key={loc} className={`onb-chip ${data.location === loc ? 'active' : ''}`}
                 onClick={() => { setData({...data, location: loc}); setFieldErrors(p => ({...p, location: undefined})); }}>{loc}</button>

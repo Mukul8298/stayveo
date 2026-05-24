@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Check, Loader2, Plus, X, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, X, CheckCircle2, Camera, MapPin, ImagePlus, AlertCircle } from 'lucide-react';
 import Button from '../../components/Button';
+import LocationPicker from '../../components/maps/LocationPicker';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
+import { uploadImage, removeImageFromStorage } from '../../lib/storage';
 import {
   saveBasicInfo,
   saveServices,
@@ -12,12 +14,17 @@ import {
 } from '../../api/provider';
 import './ProviderOnboarding.css';
 
+// ── Constants ────────────────────────────────────────────────────────────
+const MAX_PHOTOS = 5;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 // ── Service configs ─────────────────────────────────────────────────────
 const SERVICE_CONFIG = {
-  PG:       { emoji: '🏠', label: 'PG / Hostel', desc: 'Rooms & accommodation' },
-  TIFFIN:   { emoji: '🍱', label: 'Tiffin',     desc: 'Meal delivery service' },
-  LAUNDRY:  { emoji: '🧺', label: 'Laundry',    desc: 'Wash & fold service' },
-  CLEANING: { emoji: '🧹', label: 'Cleaning',   desc: 'Room cleaning service' },
+  PG: { emoji: '🏠', label: 'PG / Hostel', desc: 'Rooms & accommodation' },
+  TIFFIN: { emoji: '🍱', label: 'Tiffin', desc: 'Meal delivery service' },
+  LAUNDRY: { emoji: '🧺', label: 'Laundry', desc: 'Wash & fold service' },
+  CLEANING: { emoji: '🧹', label: 'Cleaning', desc: 'Room cleaning service' },
 };
 
 const AMENITY_OPTIONS = ['WiFi', 'AC', 'Food', 'Laundry', 'Geyser', 'Parking', 'CCTV', 'Study Hall', 'Power Backup'];
@@ -51,15 +58,28 @@ function getServiceFields(type) {
   }
 }
 
+// ── Generate unique ID for uploaded images ───────────────────────────────
+let imageIdCounter = 0;
+function generateImageId() {
+  return `img_${Date.now()}_${++imageIdCounter}`;
+}
+
+function createPhotoFingerprint(file) {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function getPhotoServiceKey(serviceType) {
+  return serviceType.toLowerCase();
+}
+
+function getUploadFolderId(provider) {
+  return provider.providerId || provider.phone || 'anonymous-provider';
+}
+
 export default function ProviderOnboarding() {
   const navigate = useNavigate();
   const toast = useToast();
   const { provider, updateProvider } = useProvider();
-
-  // Redirect if not OTP-verified
-  if (!provider.otpVerified) {
-    return <Navigate to="/provider/login" replace />;
-  }
 
   const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -75,7 +95,18 @@ export default function ProviderOnboarding() {
   // Service details: { PG: { pgName, address, ... }, TIFFIN: { name, price, ... } }
   const [serviceData, setServiceData] = useState({});
   const [chipSelections, setChipSelections] = useState({});
-  const [photoUrl, setPhotoUrl] = useState('');
+
+  // ── Image upload state ───────────────────────────────────────────────
+  // { PG: [{ id, file, previewUrl, uploadedUrl, storagePath, uploading, error, metadata }] }
+  const [uploadedPhotos, setUploadedPhotos] = useState({});
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+  const uploadedPhotosRef = useRef({});
+  const uploadSessionIdRef = useRef(crypto.randomUUID());
+
+  // ── Service-specific location state ─────────────────────────────────
+  // { PG: { latitude, longitude, address }, TIFFIN: {...}, LAUNDRY: {...}, CLEANING: {...} }
+  const [serviceLocations, setServiceLocations] = useState({});
 
   // Verification
   const [aadharNumber, setAadharNumber] = useState('');
@@ -104,6 +135,8 @@ export default function ProviderOnboarding() {
   const currentStep = allSteps[stepIndex];
   const totalSteps = allSteps.length;
   const progress = ((stepIndex + 1) / totalSteps) * 100;
+  const currentStepPhotos = currentStep?.serviceType ? uploadedPhotos[currentStep.serviceType] || [] : [];
+  const currentStepUploading = currentStepPhotos.some((photo) => photo.uploading);
 
   // ── Helpers ───────────────────────────────────────────────────────────
   const updateServiceField = (type, field, value) => {
@@ -123,29 +156,283 @@ export default function ProviderOnboarding() {
     });
   };
 
-  const addPhoto = (type) => {
-    if (!photoUrl.trim()) return;
-    try {
-      new URL(photoUrl); // validate URL
-    } catch {
-      toast.error('Please enter a valid URL');
-      return;
-    }
-    const current = serviceData[type]?.photos || [];
-    updateServiceField(type, 'photos', [...current, photoUrl.trim()]);
-    setPhotoUrl('');
-  };
-
-  const removePhoto = (type, idx) => {
-    const current = serviceData[type]?.photos || [];
-    updateServiceField(type, 'photos', current.filter((_, i) => i !== idx));
-  };
-
   const toggleService = (svc) => {
     setSelectedServices((prev) =>
       prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
     );
   };
+
+  useEffect(() => {
+    uploadedPhotosRef.current = uploadedPhotos;
+  }, [uploadedPhotos]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(uploadedPhotosRef.current).flat().forEach((photo) => {
+        if (photo.previewUrl) URL.revokeObjectURL(photo.previewUrl);
+      });
+    };
+  }, []);
+
+  // ── NEW: Image Upload Handlers ────────────────────────────────────────
+
+  /**
+   * Validates selected files, creates instant previews, uploads to Supabase
+   * Storage, and writes the public URLs back into each photo object.
+   */
+  const handleImageUpload = useCallback((serviceType, files) => {
+    const currentPhotos = uploadedPhotos[serviceType] || [];
+    const remainingSlots = MAX_PHOTOS - currentPhotos.length;
+
+    if (remainingSlots <= 0) {
+      toast.error(`Maximum ${MAX_PHOTOS} photos allowed`);
+      return;
+    }
+
+    const existingFingerprints = new Set(
+      currentPhotos.map((photo) => photo.metadata?.fingerprint).filter(Boolean)
+    );
+    const batchFingerprints = new Set();
+    const photoItems = [];
+
+    for (const file of Array.from(files).slice(0, remainingSlots)) {
+      // Validate file type
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        toast.error(`${file.name}: Only JPG, PNG, WebP allowed`);
+        continue;
+      }
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name}: File too large (max 5MB)`);
+        continue;
+      }
+
+      const fingerprint = createPhotoFingerprint(file);
+      if (existingFingerprints.has(fingerprint) || batchFingerprints.has(fingerprint)) {
+        toast.error(`${file.name}: This photo is already selected`);
+        continue;
+      }
+
+      batchFingerprints.add(fingerprint);
+      photoItems.push({
+        id: generateImageId(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        uploadedUrl: '',
+        storagePath: '',
+        uploading: true,
+        error: '',
+        metadata: {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified,
+          fingerprint,
+        },
+      });
+    }
+
+    if (photoItems.length > 0) {
+      setUploadedPhotos((prev) => ({
+        ...prev,
+        [serviceType]: [...(prev[serviceType] || []), ...photoItems],
+      }));
+      toast.success(`${photoItems.length} photo${photoItems.length > 1 ? 's' : ''} selected`);
+
+      photoItems.forEach(async (photo) => {
+        try {
+          const result = await uploadImage({
+            file: photo.file,
+            providerId: getUploadFolderId(provider),
+            listingId: uploadSessionIdRef.current,
+            serviceType: getPhotoServiceKey(serviceType),
+            imageId: photo.id,
+          });
+
+          setUploadedPhotos((prev) => ({
+            ...prev,
+            [serviceType]: (prev[serviceType] || []).map((item) =>
+              item.id === photo.id
+                ? {
+                  ...item,
+                  uploadedUrl: result.publicUrl,
+                  storagePath: result.storagePath,
+                  uploading: false,
+                  error: '',
+                }
+                : item
+            ),
+          }));
+        } catch (uploadError) {
+          setUploadedPhotos((prev) => ({
+            ...prev,
+            [serviceType]: (prev[serviceType] || []).map((item) =>
+              item.id === photo.id
+                ? {
+                  ...item,
+                  uploading: false,
+                  error: uploadError.message || 'Upload failed',
+                }
+                : item
+            ),
+          }));
+          toast.error(`${photo.metadata.name}: ${uploadError.message || 'Upload failed'}`);
+        }
+      });
+    }
+  }, [provider, toast, uploadedPhotos]);
+
+  /**
+   * Removes an uploaded image by its ID.
+   * Revokes the object URL to free memory.
+   */
+  const handleRemoveImage = useCallback(async (serviceType, imageId) => {
+    let removedPhoto;
+
+    setUploadedPhotos((prev) => {
+      const photos = prev[serviceType] || [];
+      const photo = photos.find((p) => p.id === imageId);
+      removedPhoto = photo;
+      // Clean up the preview blob URL
+      if (photo?.previewUrl) {
+        URL.revokeObjectURL(photo.previewUrl);
+      }
+      return {
+        ...prev,
+        [serviceType]: photos.filter((p) => p.id !== imageId),
+      };
+    });
+
+    if (removedPhoto?.storagePath) {
+      try {
+        await removeImageFromStorage(removedPhoto.storagePath);
+      } catch (removeError) {
+        toast.error(removeError.message || 'Photo removed locally, but storage cleanup failed');
+      }
+    }
+  }, [toast]);
+
+  const handleRetryUpload = useCallback(async (serviceType, imageId) => {
+    const photo = (uploadedPhotos[serviceType] || []).find((item) => item.id === imageId);
+    if (!photo?.file) return;
+
+    setUploadedPhotos((prev) => ({
+      ...prev,
+      [serviceType]: (prev[serviceType] || []).map((item) =>
+        item.id === imageId ? { ...item, uploading: true, error: '' } : item
+      ),
+    }));
+
+    try {
+      const result = await uploadImage({
+        file: photo.file,
+        providerId: getUploadFolderId(provider),
+        listingId: uploadSessionIdRef.current,
+        serviceType: getPhotoServiceKey(serviceType),
+        imageId: photo.id,
+      });
+
+      setUploadedPhotos((prev) => ({
+        ...prev,
+        [serviceType]: (prev[serviceType] || []).map((item) =>
+          item.id === imageId
+            ? {
+              ...item,
+              uploadedUrl: result.publicUrl,
+              storagePath: result.storagePath,
+              uploading: false,
+              error: '',
+            }
+            : item
+        ),
+      }));
+    } catch (uploadError) {
+      setUploadedPhotos((prev) => ({
+        ...prev,
+        [serviceType]: (prev[serviceType] || []).map((item) =>
+          item.id === imageId
+            ? { ...item, uploading: false, error: uploadError.message || 'Upload failed' }
+            : item
+        ),
+      }));
+      toast.error(`${photo.metadata.name}: ${uploadError.message || 'Upload failed'}`);
+    }
+  }, [provider, toast, uploadedPhotos]);
+
+  /**
+   * Opens the hidden file input to select images.
+   * Called when a user clicks on an empty upload slot.
+   */
+  const handleSlotClick = useCallback((serviceType) => {
+    // Store the service type on the input so the change handler knows which service
+    if (fileInputRef.current) {
+      fileInputRef.current.dataset.serviceType = serviceType;
+      fileInputRef.current.click();
+    }
+  }, []);
+
+  /**
+   * Handles the file input change event.
+   */
+  const handleFileInputChange = useCallback((e) => {
+    const serviceType = e.target.dataset.serviceType;
+    if (serviceType && e.target.files.length > 0) {
+      handleImageUpload(serviceType, e.target.files);
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+  }, [handleImageUpload]);
+
+  // ── Drag & Drop Handlers ──────────────────────────────────────────────
+  const dragCounter = useRef(0);
+
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((serviceType, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleImageUpload(serviceType, e.dataTransfer.files);
+    }
+  }, [handleImageUpload]);
+
+  // ── Mapbox Location Handler ───────────────────────────────────────────
+  const handleLocationChange = useCallback((serviceType, location) => {
+    // TODO: Reverse geocode location.latitude/location.longitude into a clean postal address.
+    // TODO: Auto-fill/confirm the address field after the provider accepts the geocoded result.
+    // TODO: Add service availability zones and radius checks around this coordinate.
+    setServiceLocations((prev) => ({
+      ...prev,
+      [serviceType]: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.address || '',
+        source: location.source,
+      },
+    }));
+  }, []);
 
   // ── Step Handlers ─────────────────────────────────────────────────────
   const handleNext = async () => {
@@ -202,8 +489,28 @@ export default function ProviderOnboarding() {
             if (data.price) data.price = Number(data.price);
             if (data.mealsPerDay) data.mealsPerDay = Number(data.mealsPerDay);
 
-            // Ensure photos array
-            if (!data.photos) data.photos = [];
+            // ── Attach uploaded photo URLs ────────────────────────
+            // PostgreSQL stores URLs only; the binary files live in Supabase Storage.
+            const photos = uploadedPhotos[type] || [];
+            if (photos.some((photo) => photo.uploading)) {
+              throw new Error('Please wait for all photos to finish uploading');
+            }
+            const failedPhoto = photos.find((photo) => photo.error);
+            if (failedPhoto) {
+              throw new Error(`${failedPhoto.metadata.name} failed to upload. Remove it or try again.`);
+            }
+            data.photos = photos.map((photo) => photo.uploadedUrl).filter(Boolean);
+
+            // ── Attach Mapbox geolocation data ───────────────────
+            // TODO: Use these coordinates for distance filters, nearby colleges, and map search.
+            const selectedLocation = serviceLocations[type];
+            if (
+              typeof selectedLocation?.latitude === 'number' &&
+              typeof selectedLocation?.longitude === 'number'
+            ) {
+              data.latitude = selectedLocation.latitude;
+              data.longitude = selectedLocation.longitude;
+            }
 
             await saveServiceDetails(provider.phone, type, data);
             toast.success(`${SERVICE_CONFIG[type].label} details saved ✓`);
@@ -232,6 +539,167 @@ export default function ProviderOnboarding() {
     setError('');
   };
 
+  // ── Render: Photo Upload Grid (5-slot: 3 + 2 layout) ─────────────────
+  const renderPhotoUpload = (serviceType) => {
+    const photos = uploadedPhotos[serviceType] || [];
+    const slots = Array.from({ length: MAX_PHOTOS }, (_, i) => photos[i] || null);
+
+    return (
+      <div className="po-upload-section" id={`upload-${serviceType}`}>
+        {/* Section Header */}
+        <div className="po-upload-header">
+          <div className="po-upload-header-text">
+            <h3>Property Photos</h3>
+            <p>Upload up to {MAX_PHOTOS} photos of your property</p>
+          </div>
+          <span className="po-upload-counter">
+            {photos.length}/{MAX_PHOTOS}
+          </span>
+        </div>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFileInputChange}
+        />
+
+        {/* 5-Slot Upload Grid with drag-and-drop */}
+        <div
+          className={`po-upload-grid ${isDragging ? 'dragging' : ''}`}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDrop(serviceType, e)}
+        >
+          {slots.map((photo, index) => (
+            <div
+              key={photo ? photo.id : `empty-${index}`}
+              className={`po-upload-slot ${photo ? 'filled' : 'empty'}`}
+              onClick={() => !photo && handleSlotClick(serviceType)}
+              id={`upload-slot-${serviceType}-${index}`}
+            >
+              {photo ? (
+                <>
+                  {/* Filled slot: image preview */}
+                  <img
+                    src={photo.previewUrl}
+                    alt={photo.metadata.name}
+                    className="po-upload-preview"
+                  />
+                  <div className="po-upload-overlay">
+                    <span className="po-upload-filename">{photo.metadata.name}</span>
+                  </div>
+                  {photo.uploading && (
+                    <div className="po-upload-status">
+                      <Loader2 size={18} className="spin" />
+                      <span>Uploading</span>
+                    </div>
+                  )}
+                  {!photo.uploading && photo.uploadedUrl && !photo.error && (
+                    <div className="po-upload-success" aria-label="Uploaded">
+                      <Check size={13} strokeWidth={3} />
+                    </div>
+                  )}
+                  {photo.error && (
+                    <div className="po-upload-error-state">
+                      <AlertCircle size={17} />
+                      <span>{photo.error}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryUpload(serviceType, photo.id);
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    className="po-upload-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveImage(serviceType, photo.id);
+                    }}
+                    aria-label="Remove photo"
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Empty slot: upload placeholder */}
+                  <div className="po-upload-slot-inner">
+                    {index === 0 && photos.length === 0 ? (
+                      <>
+                        <ImagePlus size={28} className="po-upload-slot-icon-main" />
+                        <span className="po-upload-slot-label">Add Cover Photo</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={22} className="po-upload-slot-icon" />
+                        <span className="po-upload-slot-label">Add Photo</span>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Drag-and-drop hint + format info */}
+        <div className="po-upload-footer">
+          <p className="po-upload-hint">
+            <ImagePlus size={14} />
+            Drag & drop photos here or click any slot to browse
+          </p>
+          <p className="po-upload-formats">JPG, PNG, WebP • Max 5MB each</p>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render: Mapbox Location Picker ────────────────────────────────────
+  const renderMapSection = (serviceType) => {
+    const serviceLabel = SERVICE_CONFIG[serviceType]?.label || 'Service';
+
+    return (
+      <div className="po-map-section" id={`map-${serviceType}`}>
+        <div className="po-map-header">
+          <h3>
+            <MapPin size={18} />
+            Exact Location
+          </h3>
+          <p>Click the map or use GPS to pin your {serviceLabel.toLowerCase()} location</p>
+        </div>
+
+        <LocationPicker
+          latitude={serviceLocations[serviceType]?.latitude}
+          longitude={serviceLocations[serviceType]?.longitude}
+          address={serviceLocations[serviceType]?.address || serviceData[serviceType]?.address || ''}
+          onChange={(location) => handleLocationChange(serviceType, location)}
+        />
+
+        {typeof serviceLocations[serviceType]?.latitude === 'number' &&
+          typeof serviceLocations[serviceType]?.longitude === 'number' && (
+            <div className="po-map-coords">
+              <span>
+                Selected: {serviceLocations[serviceType].latitude.toFixed(6)}, {serviceLocations[serviceType].longitude.toFixed(6)}
+              </span>
+              {serviceLocations[serviceType].address && (
+                <span className="po-map-addr">{serviceLocations[serviceType].address}</span>
+              )}
+            </div>
+          )}
+      </div>
+    );
+  };
+
   // ── Success State ─────────────────────────────────────────────────────
   if (stepIndex >= totalSteps) {
     return (
@@ -250,6 +718,11 @@ export default function ProviderOnboarding() {
         </div>
       </div>
     );
+  }
+
+  // Redirect if not OTP-verified. This must stay after hooks to preserve hook order.
+  if (!provider.otpVerified) {
+    return <Navigate to="/provider/login" replace />;
   }
 
   // ── Render ────────────────────────────────────────────────────────────
@@ -341,39 +814,22 @@ export default function ProviderOnboarding() {
                 );
               }
 
+              // ── NEW: Premium Photo Upload + Map Section ─────────
               if (field.type === 'photos') {
-                const photos = serviceData[type]?.photos || [];
                 return (
-                  <div key={field.key} className="po-field po-photo-section">
-                    <label>Photo URLs <span className="po-optional">(paste image links)</span></label>
-                    <div className="po-photo-add">
-                      <input className="input-field" type="url" placeholder="https://example.com/photo.jpg"
-                        value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addPhoto(type)} />
-                      <button className="po-photo-add-btn" onClick={() => addPhoto(type)}>
-                        <Plus size={14} /> Add
-                      </button>
-                    </div>
-                    {photos.length > 0 && (
-                      <div className="po-photo-list">
-                        {photos.map((url, idx) => (
-                          <div key={idx} className="po-photo-item">
-                            <img src={url} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
-                            <span>{url}</span>
-                            <button className="po-photo-remove" onClick={() => removePhoto(type, idx)}>
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div key={field.key} className="po-field">
+                    {/* Image Upload Grid */}
+                    {renderPhotoUpload(type)}
+
+                    {/* Map Location Section (PG only) */}
+                    {renderMapSection(type)}
                   </div>
                 );
               }
 
               return (
                 <div key={field.key} className="po-field">
-                  <label>{field.label}{field.required && ' *'}</label>
+                  <label>{field.label}{field.required}</label>
                   <input className="input-field" type={field.type} placeholder={field.placeholder}
                     value={serviceData[type]?.[field.key] || ''}
                     onChange={(e) => updateServiceField(type, field.key, e.target.value)} />
@@ -404,9 +860,11 @@ export default function ProviderOnboarding() {
 
       {/* Footer */}
       <div className="po-footer">
-        <Button variant="accent" fullWidth size="lg" onClick={handleNext} disabled={loading}>
+        <Button variant="accent" fullWidth size="lg" onClick={handleNext} disabled={loading || currentStepUploading}>
           {loading ? (
             <><Loader2 size={18} className="spin" /> Saving...</>
+          ) : currentStepUploading ? (
+            <><Loader2 size={18} className="spin" /> Uploading photos...</>
           ) : stepIndex < totalSteps - 1 ? (
             'Next →'
           ) : (

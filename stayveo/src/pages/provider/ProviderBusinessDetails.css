@@ -1,0 +1,190 @@
+/* ── Business Details Page ───────────────────────────────────────────── */
+
+.pbd-page {
+  min-height: 100vh;
+  background: var(--neutral-50);
+  padding-bottom: var(--space-10);
+}
+
+.pbd-content {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Hero section ─────────────────────────────────────────────────────── */
+.pbd-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-400));
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  color: white;
+}
+.pbd-hero-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pbd-hero h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.pbd-hero p {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+/* ── Form sections ────────────────────────────────────────────────────── */
+.pbd-section {
+  background: white;
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pbd-section-title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--neutral-400);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--neutral-100);
+}
+
+/* ── Field ────────────────────────────────────────────────────────────── */
+.pbd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pbd-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--neutral-700);
+}
+.pbd-label-hint {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--neutral-400);
+  background: var(--neutral-100);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+.pbd-label-icon {
+  color: var(--neutral-400);
+}
+
+/* ── Input ────────────────────────────────────────────────────────────── */
+.pbd-input {
+  width: 100%;
+  padding: 12px var(--space-4);
+  border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  color: var(--neutral-800);
+  background: var(--neutral-50);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  box-sizing: border-box;
+}
+.pbd-input:focus {
+  border-color: var(--primary-400);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.pbd-input::placeholder {
+  color: var(--neutral-400);
+}
+.pbd-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.55;
+}
+.pbd-textarea--lg {
+  min-height: 110px;
+}
+
+/* ── Char count ───────────────────────────────────────────────────────── */
+.pbd-char-count {
+  font-size: 11px;
+  color: var(--neutral-400);
+  text-align: right;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.pbd-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.pbd-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 14px var(--space-6);
+  border-radius: var(--radius-xl);
+  background: var(--primary-500);
+  color: white;
+  font-size: var(--text-base);
+  font-weight: 700;
+  font-family: var(--font-display);
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+.pbd-save-btn:hover:not(:disabled) {
+  background: var(--primary-600);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+}
+.pbd-save-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
+.pbd-no-changes {
+  font-size: 12px;
+  color: var(--neutral-400);
+}
+
+/* ── Loading state ────────────────────────────────────────────────────── */
+.pbd-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-16) var(--space-6);
+  color: var(--neutral-400);
+  font-size: var(--text-sm);
+}
+.pbd-spinner {
+  animation: pbd-spin 1s linear infinite;
+}
+@keyframes pbd-spin { to { transform: rotate(360deg); } }

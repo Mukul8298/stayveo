@@ -37,6 +37,12 @@ import ProviderCalendar from './pages/provider/ProviderCalendar';
 import ProviderEarnings from './pages/provider/ProviderEarnings';
 import ProviderProfile from './pages/provider/ProviderProfile';
 import ProviderNotifications from './pages/provider/ProviderNotifications';
+import ProviderBusinessDetails from './pages/provider/ProviderBusinessDetails';
+import ProviderHelp from './pages/provider/ProviderHelp';
+import ProviderCreateListing from './pages/provider/ProviderCreateListing';
+import ProviderEditListing from './pages/provider/ProviderEditListing';
+import ProviderServiceCreate from './pages/provider/ProviderServiceCreate';
+import ProviderServiceEdit from './pages/provider/ProviderServiceEdit';
 
 const noStudentNav = ['/', '/role-select', '/auth', '/college-select', '/onboarding'];
 const chatRoutes = ['/roommate/chat'];
@@ -96,6 +102,12 @@ function AppContent() {
         <Route path="/provider/earnings" element={<ProviderEarnings />} />
         <Route path="/provider/profile" element={<ProviderProfile />} />
         <Route path="/provider/notifications" element={<ProviderNotifications />} />
+        <Route path="/provider/business-details" element={<ProviderBusinessDetails />} />
+        <Route path="/provider/help" element={<ProviderHelp />} />
+        <Route path="/provider/listing/create" element={<ProviderCreateListing />} />
+        <Route path="/provider/listing/:id/edit" element={<ProviderEditListing />} />
+        <Route path="/provider/services/:type/create" element={<ProviderServiceCreate />} />
+        <Route path="/provider/services/:type/:id/edit" element={<ProviderServiceEdit />} />
       </Routes>
       {showStudentNav && <BottomNav />}
     </div>
