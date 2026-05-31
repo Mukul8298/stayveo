@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, MapPin, Star, CheckCircle, Loader } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Loader } from 'lucide-react';
 import Rating from '../components/Rating';
 import Button from '../components/Button';
+import RoomDetailMap from '../components/maps/RoomDetailMap';
 import { fetchAllServices } from '../api/supabaseApi';
+import { useDistanceFromCollege } from '../hooks/useDistanceFromCollege';
+import { createServiceRequest } from '../api/serviceRequests';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import './ServiceDetail.css';
 
 // ── ServiceDetail ───────────────────────────────────────────────────────
@@ -15,9 +20,15 @@ import './ServiceDetail.css';
 export default function ServiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { authState } = useAuth();
+  const toast = useToast();
 
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [requesting, setRequesting] = useState(false);
+  const { itemsWithDistance } = useDistanceFromCollege(service ? [service] : []);
+  const serviceWithDistance = itemsWithDistance[0] || service;
+  const isRequestService = ['laundry', 'cleaning'].includes(String(serviceWithDistance?.category || '').toLowerCase());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,6 +76,38 @@ export default function ServiceDetail() {
     );
   }
 
+  const handlePrimaryAction = async () => {
+    if (!isRequestService) {
+      navigate(`/booking/${serviceWithDistance.id}`, { state: { service: serviceWithDistance } });
+      return;
+    }
+
+    if (!authState?.userId) {
+      toast.error('Login required to request this service');
+      navigate('/auth');
+      return;
+    }
+
+    setRequesting(true);
+    try {
+      await createServiceRequest(authState.userId, {
+        providerId: serviceWithDistance.providerId,
+        providerName: serviceWithDistance.provider,
+        serviceId: serviceWithDistance.id,
+        serviceType: serviceWithDistance.category,
+        providerLatitude: serviceWithDistance.latitude,
+        providerLongitude: serviceWithDistance.longitude,
+        studentPhone: authState.phone,
+      });
+      toast.success('Request sent. The provider will review your address and distance.');
+      navigate('/notifications');
+    } catch (error) {
+      toast.error(error.message || 'Could not send request');
+    } finally {
+      setRequesting(false);
+    }
+  };
+
   return (
     <div className="page" id="service-detail">
       <div className="page-header">
@@ -75,18 +118,19 @@ export default function ServiceDetail() {
       <div className="sd-body">
         <div className="sd-hero">
           <span className="sd-emoji">{service.image}</span>
-          <h2>{service.name}</h2>
+          <h2>{serviceWithDistance.name}</h2>
           <div className="sd-meta">
-            <Rating value={service.rating} count={service.reviews} size="md" />
-            <span className="sd-distance"><MapPin size={14} /> {service.distance} km</span>
+            <span className="sd-distance"><MapPin size={14} /> {serviceWithDistance.distanceLabel || 'Distance unavailable'}</span>
+            <span className="sd-meta-dot">•</span>
+            <Rating value={serviceWithDistance.rating} count={serviceWithDistance.reviews} size="md" />
           </div>
-          <p className="sd-desc">{service.description}</p>
+          <p className="sd-desc">{serviceWithDistance.description}</p>
         </div>
 
         <div className="sd-section">
           <h3>Pricing Plans</h3>
           <div className="sd-plans">
-            {(service.plans || []).map((p, i) => (
+            {(serviceWithDistance.plans || []).map((p, i) => (
               <div key={i} className={`sd-plan ${i === 1 ? 'recommended' : ''}`}>
                 {i === 1 && <span className="sd-plan-badge">Best Value</span>}
                 <h4>{p.name}</h4>
@@ -102,16 +146,27 @@ export default function ServiceDetail() {
           <div className="sd-review">
             <div className="sd-reviewer"><span>👩‍🎓</span><div><strong>Ria M.</strong><span>1 week ago</span></div></div>
             <p>Excellent service! Always on time and very thorough. Highly recommend for students.</p>
-            <div className="sd-review-rating"><Star size={12} fill="#F59E0B" stroke="#F59E0B" /> {service.rating}</div>
+            <div className="sd-review-rating"><Star size={12} fill="#F59E0B" stroke="#F59E0B" /> {serviceWithDistance.rating}</div>
           </div>
+        </div>
+
+        <div className="sd-section sd-map-section">
+          <h3>Location</h3>
+          <RoomDetailMap
+            latitude={serviceWithDistance.latitude}
+            longitude={serviceWithDistance.longitude}
+            address={serviceWithDistance.address}
+          />
         </div>
       </div>
 
       <div className="sd-sticky-footer">
         <div className="sd-footer-price">
-          From ₹{(service.plans?.[0]?.price || 0).toLocaleString()}<span>{service.unit}</span>
+          ₹{(serviceWithDistance.plans?.[0]?.price || serviceWithDistance.price || 0).toLocaleString()}<span>{serviceWithDistance.unit}</span>
         </div>
-        <Button variant="accent" size="lg">Add to My Room</Button>
+        <Button variant="accent" size="lg" onClick={handlePrimaryAction} disabled={requesting}>
+          {requesting ? 'Sending...' : isRequestService ? 'Book Request' : 'Book Now'}
+        </Button>
       </div>
     </div>
   );

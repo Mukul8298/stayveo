@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
 import { fetchAllServices } from '../api/supabaseApi';
+import { useDistanceFromCollege } from '../hooks/useDistanceFromCollege';
 import './ServicesHome.css';
 
 // ── ServicesHome ────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export default function ServicesHome() {
   // Start with empty array — NO mock data
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { itemsWithDistance: servicesByDistance } = useDistanceFromCollege(services);
 
   // ── Fetch real services from Supabase ─────────────────────────────────
   useEffect(() => {
@@ -53,7 +55,9 @@ export default function ServicesHome() {
     return () => controller.abort();
   }, []);
 
-  const filtered = active === 'all' ? services : services.filter(s => s?.category === active);
+  const filtered = active === 'all'
+    ? servicesByDistance
+    : servicesByDistance.filter(s => s?.category === active);
 
   return (
     <div className="page" id="services-home">

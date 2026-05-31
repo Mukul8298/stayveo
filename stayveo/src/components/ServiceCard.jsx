@@ -4,9 +4,10 @@ import './ServiceCard.css';
 
 export default function ServiceCard({ service, onClick }) {
   const {
-    name = 'Service', category, price = 0, unit = '',
-    rating = 0, reviews = 0, distance = 0, verified, image = '📦'
+    name = 'Service', price = 0, unit = '',
+    rating = 0, reviews = 0, distance, distanceLabel, verified, image = '📦'
   } = service || {};
+  const safeDistanceLabel = distanceLabel || (Number.isFinite(Number(distance)) ? `${Number(distance).toFixed(1)}km` : 'Distance unavailable');
 
   return (
     <div className="service-card" onClick={onClick} id={`service-${service?.id}`}>
@@ -17,8 +18,9 @@ export default function ServiceCard({ service, onClick }) {
           {verified && <span className="service-verified">✓</span>}
         </div>
         <div className="service-card-meta">
+          <span className="service-distance"><MapPin size={12} /> {safeDistanceLabel}</span>
+          <span className="service-meta-dot">•</span>
           <Rating value={rating} count={reviews} />
-          <span className="service-distance"><MapPin size={11} /> {distance ?? '?'} km</span>
         </div>
         <div className="service-card-price">
           <span className="service-price">₹{(price || 0).toLocaleString()}</span>

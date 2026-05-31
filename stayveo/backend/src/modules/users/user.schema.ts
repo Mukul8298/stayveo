@@ -101,6 +101,9 @@ export const updateUserProfileSchema = z.preprocess(
       z.enum(['Introvert', 'Ambivert', 'Extrovert'])
     ),
     locationPreference: z.string().optional(),
+    currentAddress: z.string().max(1000).optional().or(z.literal('')),
+    latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+    longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
     sleepSchedule: z.preprocess(
       displaySleep,
       z.enum(['Early Bird', 'Night Owl', 'Flexible'])

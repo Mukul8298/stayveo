@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      'old-possess-naturals-lucy.trycloudflare.com'
+      'bibliography-polyester-symantec-transformation.trycloudflare.com '
     ]
   }
 })

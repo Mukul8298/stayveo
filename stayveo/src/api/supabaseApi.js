@@ -281,6 +281,11 @@ function mapPGToListing(pg, index = 0) {
     title: pg?.pg_name || pg?.name || pg?.title || 'PG Room',
     type: pg?.type || 'PG',
     price: pg?.min_price || pg?.price || 0,
+    securityDeposit: pg?.security_deposit ?? pg?.securityDeposit ?? null,
+    foodCharges: pg?.food_charges ?? pg?.foodCharges ?? pg?.meal_charges ?? null,
+    electricityCharges: pg?.electricity_charges ?? pg?.electricityCharges ?? null,
+    slotReservationFee: pg?.slot_reservation_fee ?? pg?.slotReservationFee ?? null,
+    platformFee: pg?.platform_fee ?? pg?.platformFee ?? null,
     distance: pg?.distance ?? pg?.distance_km ?? null,
     distanceKm: pg?.distance ?? pg?.distance_km ?? null,
     distanceLabel: null,
@@ -426,7 +431,9 @@ export async function fetchTiffinServices({ signal } = {}) {
     unit: '/month',
     rating: t?.rating ?? t?.avg_rating ?? 0,
     reviews: t?.review_count ?? 0,
-    distance: t?.distance ?? 0,
+    distance: null,
+    distanceKm: null,
+    distanceLabel: null,
     verified: t?.verified ?? true,
     image: '🍱',
     description: `${t?.name || 'Tiffin'} - ${t?.meals_per_day || 2} meals/day`,
@@ -434,6 +441,11 @@ export async function fetchTiffinServices({ signal } = {}) {
       { name: 'Monthly', price: t?.price || 2500, details: `${t?.meals_per_day || 2} meals/day` },
     ],
     provider: t?.provider_services?.provider_profiles?.name || 'Provider',
+    providerId: t?.provider_services?.provider_id || t?.provider_id || null,
+    providerPhone: t?.provider_services?.provider_profiles?.phone || null,
+    address: t?.address || t?.service_area || 'Address not available',
+    latitude: t?.latitude === null || t?.latitude === undefined ? null : Number(t.latitude),
+    longitude: t?.longitude === null || t?.longitude === undefined ? null : Number(t.longitude),
   }));
 
   return { data: services, error: null };
@@ -470,7 +482,9 @@ export async function fetchLaundryServices({ signal } = {}) {
     unit: '/kg',
     rating: l?.rating ?? l?.avg_rating ?? 0,
     reviews: l?.review_count ?? 0,
-    distance: l?.distance ?? 0,
+    distance: null,
+    distanceKm: null,
+    distanceLabel: null,
     verified: l?.verified ?? true,
     image: '🧺',
     description: 'Wash, dry & fold service with pickup and delivery.',
@@ -478,6 +492,11 @@ export async function fetchLaundryServices({ signal } = {}) {
       { name: 'Per Kg', price: parsePricing(l?.pricing, 149), details: 'Wash + Fold' },
     ],
     provider: l?.provider_services?.provider_profiles?.name || 'Provider',
+    providerId: l?.provider_services?.provider_id || l?.provider_id || null,
+    providerPhone: l?.provider_services?.provider_profiles?.phone || null,
+    address: l?.address || l?.service_area || 'Address not available',
+    latitude: l?.latitude === null || l?.latitude === undefined ? null : Number(l.latitude),
+    longitude: l?.longitude === null || l?.longitude === undefined ? null : Number(l.longitude),
   }));
 
   return { data: services, error: null };
@@ -514,7 +533,9 @@ export async function fetchCleaningServices({ signal } = {}) {
     unit: '/visit',
     rating: c?.rating ?? c?.avg_rating ?? 0,
     reviews: c?.review_count ?? 0,
-    distance: c?.distance ?? 0,
+    distance: null,
+    distanceKm: null,
+    distanceLabel: null,
     verified: c?.verified ?? true,
     image: '🧹',
     description: 'Room cleaning, bathroom cleaning, and laundry pickup.',
@@ -522,6 +543,11 @@ export async function fetchCleaningServices({ signal } = {}) {
       { name: 'Basic', price: parsePricing(c?.pricing, 299), details: 'Room sweep + mop' },
     ],
     provider: c?.provider_services?.provider_profiles?.name || 'Provider',
+    providerId: c?.provider_services?.provider_id || c?.provider_id || null,
+    providerPhone: c?.provider_services?.provider_profiles?.phone || null,
+    address: c?.address || c?.service_area || 'Address not available',
+    latitude: c?.latitude === null || c?.latitude === undefined ? null : Number(c.latitude),
+    longitude: c?.longitude === null || c?.longitude === undefined ? null : Number(c.longitude),
   }));
 
   return { data: services, error: null };

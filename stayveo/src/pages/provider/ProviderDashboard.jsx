@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Plus, TrendingUp, ChevronRight, Shield, CheckCircle2, LogOut, Loader } from 'lucide-react';
+import { Bell, Plus, Shield, CheckCircle2, LogOut } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
 import { getProviderDashboardStats } from '../../api/booking';
 import Button from '../../components/Button';
@@ -25,7 +25,7 @@ export default function ProviderDashboard() {
 
   useEffect(() => {
     if (!providerId) {
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
       return;
     }
     getProviderDashboardStats(providerId)
@@ -119,7 +119,7 @@ export default function ProviderDashboard() {
         <h2 className="pd-section-title">Quick Actions</h2>
         <div className="pd-actions">
           <button className="pd-action" onClick={() => navigate('/provider/services')}>Manage Services</button>
-          <button className="pd-action" onClick={() => navigate('/provider/bookings')}>View Bookings</button>
+          <button className="pd-action" onClick={() => navigate('/provider/requests')}>View Requests</button>
           <button className="pd-action" onClick={() => navigate('/provider/profile')}>Edit Profile</button>
           <button className="pd-action" onClick={() => navigate('/provider/earnings')}>Earnings</button>
         </div>
@@ -169,8 +169,8 @@ export default function ProviderDashboard() {
         <button className="pd-nav-fab" onClick={() => navigate('/provider/services')}>
           <Plus size={24} />
         </button>
-        <button className="pd-nav-item" onClick={() => navigate('/provider/calendar')}>
-          <span>📅</span><span>Calendar</span>
+        <button className="pd-nav-item" onClick={() => navigate('/provider/requests')}>
+          <span>📥</span><span>Requests</span>
         </button>
         <button className="pd-nav-item" onClick={() => navigate('/provider/profile')}>
           <span>👤</span><span>Profile</span>

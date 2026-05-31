@@ -86,6 +86,9 @@ const studentProfileFields = z.object({
     z.enum(['INTROVERT', 'EXTROVERT', 'AMBIVERT']).optional()
   ),
   locationPreference: z.string().optional(),
+  currentAddress: z.string().max(1000).optional().or(z.literal('')),
+  latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
   budget: z.string().min(1).max(100).optional(),
   profileImageUrl: z.string().optional().or(z.literal('')),
 });

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, ChevronRight, Heart, Bell, HelpCircle, LogOut, Edit3, Loader2 } from 'lucide-react';
+import { Camera, ChevronRight, Heart, Home, HelpCircle, LogOut, Edit3, Loader2 } from 'lucide-react';
 import { currentUser } from '../data/mockData';
 import Button from '../components/Button';
+import LocationPicker from '../components/maps/LocationPicker';
 import { getCurrentUserProfile, updateUserProfile } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -67,6 +68,9 @@ const EMPTY_PROFILE = {
   studyHabits: '',
   personalityType: 3,
   locationPreference: '',
+  currentAddress: '',
+  latitude: null,
+  longitude: null,
   profileImageUrl: '',
 };
 
@@ -109,6 +113,9 @@ function mapProfileToForm(profile) {
     studyHabits: DISPLAY_STUDY[profile?.studyHabits] || '',
     personalityType: SOCIAL_LEVEL_TO_SLIDER[profile?.personalityType] || 3,
     locationPreference: profile?.locationPreference || '',
+    currentAddress: profile?.currentAddress || '',
+    latitude: Number.isFinite(Number(profile?.latitude)) ? Number(profile.latitude) : null,
+    longitude: Number.isFinite(Number(profile?.longitude)) ? Number(profile.longitude) : null,
     profileImageUrl: profile?.profileImageUrl || '',
   };
 }
@@ -126,6 +133,9 @@ function validateProfile(info, phone) {
   if (!info.personalityType) return 'Personality type is required';
   if (!info.budget?.[0] || !info.budget?.[1]) return 'Budget range is required';
   if (info.budget[0] >= info.budget[1]) return 'Budget range is invalid';
+  if (info.currentAddress.trim() && (!Number.isFinite(Number(info.latitude)) || !Number.isFinite(Number(info.longitude)))) {
+    return 'Pin your current address on the map';
+  }
   return '';
 }
 
@@ -180,7 +190,7 @@ export default function ProfilePage() {
     college: localStorage.getItem('userCollege') || localStorage.getItem('selectedCollege') || '',
   }));
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     if (!authState?.userId) {
       setIsLoadingProfile(false);
       return;
@@ -213,11 +223,11 @@ export default function ProfilePage() {
     } finally {
       setIsLoadingProfile(false);
     }
-  };
+  }, [authState, setAuth, toast]);
 
   useEffect(() => {
-    loadProfile();
-  }, [authState?.userId]);
+    queueMicrotask(loadProfile);
+  }, [loadProfile]);
 
   const handlePhotoUpload = async (e) => {
     if (!isEditing) return;
@@ -258,6 +268,9 @@ export default function ProfilePage() {
         studyHabits: info.studyHabits,
         personalityType: getSocialLabel(info.personalityType),
         locationPreference: info.locationPreference,
+        currentAddress: info.currentAddress.trim(),
+        latitude: Number.isFinite(Number(info.latitude)) ? Number(info.latitude) : null,
+        longitude: Number.isFinite(Number(info.longitude)) ? Number(info.longitude) : null,
         sleepSchedule: info.sleepSchedule,
         profileImageUrl: info.profileImageUrl || undefined,
       };
@@ -285,8 +298,8 @@ export default function ProfilePage() {
 
   const menuItems = [
     { icon: <Heart size={18} />, label: 'Saved Listings', path: '/saved' },
-    { icon: <Bell size={18} />, label: 'Notifications', path: '/notifications' },
-    { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/profile' },
+    { icon: <Home size={18} />, label: 'My Space', path: '/dashboard' },
+    { icon: <HelpCircle size={18} />, label: 'Help & Support', path: '/support' },
   ];
 
   return (
@@ -470,6 +483,40 @@ export default function ProfilePage() {
               value={info.locationPreference}
               onChange={e => isEditing && setInfo({ ...info, locationPreference: e.target.value })}
               disabled={!isEditing}
+            />
+          </div>
+
+          <div className="pi-card pi-card-address">
+            <label>Current Address</label>
+            {isEditing ? (
+              <textarea
+                className="pi-input pi-textarea"
+                placeholder={'Room 203, Boys Hostel,\nNear Shivaji College,\nRajouri Garden, Delhi'}
+                value={info.currentAddress}
+                onChange={e => setInfo({ ...info, currentAddress: e.target.value })}
+                rows={4}
+              />
+            ) : (
+              <span className="pi-value pi-address-value">{info.currentAddress || 'Not set'}</span>
+            )}
+          </div>
+
+          <div className="pi-card pi-card-map">
+            <label>Exact Location</label>
+            <LocationPicker
+              key={`${info.latitude || 'no-lat'}-${info.longitude || 'no-lng'}`}
+              latitude={Number.isFinite(Number(info.latitude)) ? Number(info.latitude) : undefined}
+              longitude={Number.isFinite(Number(info.longitude)) ? Number(info.longitude) : undefined}
+              address={info.currentAddress}
+              className={!isEditing ? 'profile-location-readonly' : ''}
+              onChange={(location) => {
+                if (!isEditing) return;
+                setInfo((prev) => ({
+                  ...prev,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                }));
+              }}
             />
           </div>
         </div>

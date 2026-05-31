@@ -150,6 +150,9 @@ model StudentProfile {
   studyHabits        StudyHabit?     @map("study_habits")
   personalityType    SocialLevel?    @map("personality_type")
   locationPreference String?         @map("location_preference")
+  currentAddress     String?         @map("current_address")
+  latitude           Float?
+  longitude          Float?
   budget             String?
   profileImageUrl    String?         @map("profile_image_url")
 
@@ -533,6 +536,50 @@ model Payment {
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@map("payments")
+}
+
+model LaundryRequest {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  studentId         String   @map("student_id") @db.Uuid
+  providerId        String   @map("provider_id") @db.Uuid
+  providerName      String?  @map("provider_name") @db.VarChar(200)
+  serviceType       String   @map("service_type") @db.VarChar(40)
+  serviceId         String   @map("service_id") @db.Uuid
+  status            String   @default("pending") @db.VarChar(20)
+  studentAddress    String?  @map("student_address")
+  studentLatitude   Float?   @map("student_latitude")
+  studentLongitude  Float?   @map("student_longitude")
+  providerLatitude  Float?   @map("provider_latitude")
+  providerLongitude Float?   @map("provider_longitude")
+  distanceKm        Float?   @map("distance_km")
+  pickupDate        DateTime? @map("pickup_date") @db.Date
+  pickupTime        String?  @map("pickup_time") @db.VarChar(80)
+  estimatedArrival  String?  @map("estimated_arrival") @db.VarChar(120)
+  studentPhone      String?  @map("student_phone") @db.VarChar(15)
+  studentName       String?  @map("student_name") @db.VarChar(200)
+  studentImageUrl   String?  @map("student_image_url")
+  declineReason     String?  @map("decline_reason")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([studentId, status])
+  @@index([providerId, status])
+  @@index([serviceId, status])
+  @@map("laundry_requests")
+}
+
+model Notification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String   @db.VarChar(200)
+  message   String
+  type      String   @default("service") @db.VarChar(40)
+  isRead    Boolean  @default(false) @map("is_read")
+  requestId String?  @map("request_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
 }
 model College {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

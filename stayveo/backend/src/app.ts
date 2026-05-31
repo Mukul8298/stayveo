@@ -31,6 +31,7 @@ import paymentRoutes from './modules/payments/payment.routes.js';
 import profileViewRoutes from './modules/profile-views/profile-view.routes.js';
 import roomListingRoutes from './modules/room-listings/room-listing.routes.js';
 import collegeRoutes from './modules/colleges/college.routes.js';
+import serviceRequestRoutes from './modules/service-requests/service-request.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -61,7 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       cb(null, false);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-provider-phone'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-provider-phone', 'x-provider-id'],
     credentials: true,
   });
   await app.register(sensible); // adds httpErrors, to(), etc.
@@ -95,6 +96,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(paymentRoutes, { prefix: '/payments' });
       await api.register(profileViewRoutes, { prefix: '/profile-views' });
       await api.register(collegeRoutes, { prefix: '/colleges' });
+      await api.register(serviceRequestRoutes, { prefix: '/service-requests' });
     },
     { prefix: '/api/v1' }
   );

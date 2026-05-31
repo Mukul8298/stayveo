@@ -98,6 +98,9 @@ export const userService = {
       studyHabits: STUDY_TO_ENUM[data.studyHabits],
       personalityType: PERSONALITY_TO_ENUM[data.personalityType],
       locationPreference: data.locationPreference?.trim() || null,
+      currentAddress: data.currentAddress?.trim() || null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
       budget: data.budget.trim(),
       profileImageUrl: data.profileImageUrl?.trim() || null,
     });

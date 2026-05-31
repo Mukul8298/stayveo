@@ -1,21 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, CheckCircle2, Clock, Loader2, Loader } from 'lucide-react';
-import Button from '../components/Button';
+import {
+  ArrowLeft,
+  BadgeCheck,
+  BedDouble,
+  CalendarCheck2,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  FileText,
+  Info,
+  Loader,
+  Loader2,
+  MapPin,
+  Phone,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Zap,
+} from 'lucide-react';
 import { fetchPGListings, FALLBACK_IMAGE } from '../api/supabaseApi';
+import { createBooking } from '../api/booking';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { createBooking } from '../api/booking';
 import './BookingFlow.css';
 
-// ── BookingFlow ─────────────────────────────────────────────────────────
-// MIGRATION CHANGES:
-// - Removed mock data import — fetches from real Supabase data
-// - Uses displayName from AuthContext instead of raw localStorage
-// - Added loading state while fetching room data
-// ────────────────────────────────────────────────────────────────────────
+const DEFAULT_SLOT_RESERVATION_FEE = 500;
+const DEFAULT_PLATFORM_FEE = 299;
+const DEFAULT_FOOD_CHARGES = 2000;
 
-const timeSlots = ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM'];
+const formatCurrency = value => `₹${Number(value || 0).toLocaleString('en-IN')}`;
+
+const firstNumber = (...values) => {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number >= 0) return number;
+  }
+  return null;
+};
+
+function PricingRow({ label, value, muted = false, strong = false }) {
+  return (
+    <div className={`booking-price-row ${muted ? 'is-muted' : ''} ${strong ? 'is-strong' : ''}`}>
+      <span>{label}</span>
+      <strong>{typeof value === 'number' ? formatCurrency(value) : value}</strong>
+    </div>
+  );
+}
+
+function BookingCard({ children, className = '' }) {
+  return <section className={`booking-card ${className}`}>{children}</section>;
+}
 
 export default function BookingFlow() {
   const { id } = useParams();
@@ -23,9 +59,11 @@ export default function BookingFlow() {
   const { authState, displayName } = useAuth();
   const toast = useToast();
 
-  // Fetch room from real data
   const [room, setRoom] = useState(null);
   const [roomLoading, setRoomLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingId, setBookingId] = useState('');
+  const [reserved, setReserved] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,7 +72,7 @@ export default function BookingFlow() {
       try {
         const { data, aborted } = await fetchPGListings({ signal: controller.signal });
         if (aborted) return;
-        const found = (data || []).find(l => String(l.id) === String(id));
+        const found = (data || []).find(listing => String(listing.id) === String(id));
         setRoom(found || null);
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -48,61 +86,94 @@ export default function BookingFlow() {
     return () => controller.abort();
   }, [id]);
 
-  const [step, setStep] = useState(0);
-  const [moveIn, setMoveIn] = useState('');
-  const [moveInTime, setMoveInTime] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [bookingId, setBookingId] = useState('');
+  const pricing = useMemo(() => {
+    const monthlyRent = firstNumber(room?.price);
+    const securityDeposit = firstNumber(room?.securityDeposit) ?? monthlyRent;
+    const foodCharges = firstNumber(room?.foodCharges) ?? DEFAULT_FOOD_CHARGES;
+    const electricityCharges = firstNumber(room?.electricityCharges);
+    const slotReservationFee = firstNumber(room?.slotReservationFee) ?? DEFAULT_SLOT_RESERVATION_FEE;
+    const platformFee = firstNumber(room?.platformFee) ?? DEFAULT_PLATFORM_FEE;
+    const totalPayableNow = slotReservationFee + platformFee;
 
-  const handleConfirmBooking = async () => {
-    if (!moveIn) { toast.error('Please select a move-in date'); return; }
-    if (!authState?.userId) { toast.error('Please login first'); navigate('/'); return; }
+    return {
+      monthlyRent,
+      securityDeposit,
+      foodCharges,
+      electricityCharges,
+      slotReservationFee,
+      platformFee,
+      totalPayableNow,
+    };
+  }, [room]);
+
+  const roomTypeLabel = room?.roomType || room?.type || 'Single Room';
+  const amenityLabel = room?.amenities?.includes('AC') ? 'AC' : room?.amenities?.[0] || 'Verified amenities';
+  const distanceLabel = room?.distanceLabel || (
+    Number.isFinite(Number(room?.distanceKm)) ? `${Number(room.distanceKm).toFixed(1)} km from campus` : 'Near your campus'
+  );
+  const availabilityText = Number(room?.availableBeds) > 0
+    ? `Only ${room.availableBeds} slot${Number(room.availableBeds) === 1 ? '' : 's'} remaining`
+    : 'High demand near your campus';
+  const imgSrc = room?.images?.[0] || FALLBACK_IMAGE;
+
+  const handleReserveSlot = async () => {
+    if (!authState?.userId) {
+      toast.error('Please login first');
+      navigate('/');
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const today = new Date().toISOString().split('T')[0];
       const res = await createBooking(authState.userId, {
         provider_id: room?.providerId || crypto.randomUUID(),
         room_id: room?.roomId || undefined,
         service_type: 'PG Room',
-        room_type: room?.type || 'Single',
-        booking_date: moveIn,
-        booking_time: moveInTime || '10:00 AM',
-        price: room?.price || 0,
-        // Use displayName from AuthContext (handles old users properly)
+        room_type: roomTypeLabel,
+        booking_date: today,
+        booking_time: '10:00 AM',
+        price: pricing.totalPayableNow,
         student_name: displayName || authState?.name || 'Student',
         student_phone: authState?.phone || '',
-        notes: `Booking for ${room?.title || 'PG Room'}`,
+        notes: `Slot reservation for ${room?.title || 'PG Room'}; monthly rent ${formatCurrency(pricing.monthlyRent)} paid directly to owner.`,
       });
       setBookingId(res?.data?.id?.slice(0, 8) || Math.floor(Math.random() * 9000 + 1000));
-      toast.success('Booking confirmed!');
-      setStep(2);
+      toast.success('Slot reserved successfully');
+      setReserved(true);
     } catch (err) {
       console.error('Booking failed:', err);
-      toast.error(err?.message || 'Failed to create booking. Please try again.');
+      toast.error(err?.message || 'Failed to reserve slot. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Loading state
+  const handleCallOwner = () => {
+    if (!room?.providerPhone) {
+      toast.info('Owner phone number will be shared shortly.');
+      return;
+    }
+    window.location.href = `tel:${room.providerPhone}`;
+  };
+
   if (roomLoading) {
     return (
-      <div className="booking-page" id="booking-flow" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+      <div className="booking-page booking-loading" id="booking-flow">
         <Loader size={24} className="spinning" />
       </div>
     );
   }
 
-  // Room not found
   if (!room) {
     return (
       <div className="booking-page" id="booking-flow">
-        <div className="page-header">
-          <button className="back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
-          <h1>Book Room</h1>
+        <div className="page-header booking-header">
+          <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back"><ArrowLeft size={22} /></button>
+          <h1>Reserve Your Slot</h1>
         </div>
-        <div style={{ textAlign: 'center', padding: '4rem 1.5rem', color: '#94a3b8' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏠</div>
+        <div className="booking-empty">
+          <div className="booking-empty-icon"><BedDouble size={36} /></div>
           <h3>Room not found</h3>
           <p>This listing may have been removed.</p>
         </div>
@@ -110,88 +181,147 @@ export default function BookingFlow() {
     );
   }
 
-  if (step === 2) {
+  if (reserved) {
     return (
-      <div className="booking-success" id="booking-confirmed">
-        <div className="booking-success-icon"><CheckCircle2 size={64} /></div>
-        <h1>Booking Confirmed!</h1>
-        <p>Your room at {room?.title || 'PG'} is booked</p>
-        <div className="booking-success-details">
-          <div className="bsd-row"><span>Move-in Date</span><strong>{moveIn}</strong></div>
-          <div className="bsd-row"><span>Time</span><strong>{moveInTime || '10:00 AM'}</strong></div>
-          <div className="bsd-row"><span>Monthly Rent</span><strong>₹{(room?.price || 0).toLocaleString()}</strong></div>
-          <div className="bsd-row"><span>Booking ID</span><strong>#{bookingId}</strong></div>
+      <div className="booking-page booking-success-page" id="booking-confirmed">
+        <div className="page-header booking-header">
+          <button className="back-btn" onClick={() => navigate('/home')} aria-label="Go back"><ArrowLeft size={22} /></button>
+          <h1>Reserve Your Slot</h1>
         </div>
-        <Button variant="primary" fullWidth size="lg" onClick={() => navigate('/dashboard')}>Go to My Space</Button>
+
+        <main className="booking-success-content">
+          <div className="booking-success-badge">
+            <Check size={56} strokeWidth={2.5} />
+          </div>
+          <h2>Slot Reserved Successfully</h2>
+          <p>The property owner will contact you shortly. Your reservation has been confirmed.</p>
+
+          <BookingCard className="booking-success-card">
+            <div className="booking-success-room">
+              <img
+                src={imgSrc}
+                alt={room?.title || 'Room'}
+                onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }}
+              />
+              <div>
+                <h3>{room?.title || 'PG Room'}</h3>
+                <span><BedDouble size={16} /> {roomTypeLabel} <b>•</b> {amenityLabel}</span>
+              </div>
+            </div>
+            <div className="booking-success-divider" />
+            <div className="booking-success-paid-row">
+              <div>
+                <span>Amount Paid</span>
+                <strong>{formatCurrency(pricing.totalPayableNow)}</strong>
+                {bookingId && <small>Booking ID #{bookingId}</small>}
+              </div>
+              <span className="booking-paid-pill">Paid via UPI</span>
+            </div>
+            <div className="booking-receipt-note">
+              <Info size={20} />
+              <p>A copy of this receipt has been sent to your registered email.</p>
+            </div>
+          </BookingCard>
+
+          <div className="booking-success-actions">
+            <button className="booking-primary-action" onClick={handleCallOwner}>
+              <Phone size={21} /> Call Owner
+            </button>
+            <button className="booking-outline-action" onClick={() => navigate('/dashboard')}>
+              <ReceiptText size={22} /> View Booking
+            </button>
+            <button className="booking-link-action" onClick={() => navigate('/home')}>Continue Browsing</button>
+          </div>
+        </main>
       </div>
     );
   }
 
-  // Image source with fallback
-  const imgSrc = room?.images?.[0] || FALLBACK_IMAGE;
-
   return (
     <div className="booking-page" id="booking-flow">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
-        <h1>Book Room</h1>
-      </div>
-      <div className="booking-room-preview">
-        <img
-          src={imgSrc}
-          alt={room?.title || 'Room'}
-          onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }}
-        />
-        <div><h3>{room?.title || 'PG Room'}</h3><p>₹{(room?.price || 0).toLocaleString()}/month</p></div>
+      <div className="page-header booking-header">
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back"><ArrowLeft size={22} /></button>
+        <h1>Reserve Your Slot</h1>
       </div>
 
-      {step === 0 && (
-        <div className="booking-step">
-          <h2>Select Move-in Date</h2>
-          <div className="booking-date-input">
-            <Calendar size={18} />
-            <input
-              type="date"
-              value={moveIn}
-              onChange={e => setMoveIn(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
-            />
+      <main className="booking-content">
+        <BookingCard className="booking-property-card">
+          <img
+            className="booking-property-image"
+            src={imgSrc}
+            alt={room?.title || 'Room'}
+            onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }}
+          />
+          <div className="booking-property-info">
+            <div className="booking-property-title-row">
+              <h2>{room?.title || 'PG Room'}</h2>
+              {room?.verified && <span className="booking-verified"><BadgeCheck size={14} /> Verified</span>}
+            </div>
+            <p><BedDouble size={15} /> {roomTypeLabel} <b>•</b> {amenityLabel}</p>
+            <p><MapPin size={15} /> {distanceLabel}</p>
+            <strong>{formatCurrency(pricing.monthlyRent)}<span>/month</span></strong>
           </div>
+        </BookingCard>
 
-          <h2 style={{ marginTop: 16 }}>Preferred Time</h2>
-          <div className="booking-time-grid">
-            {timeSlots.map(slot => (
-              <button
-                key={slot}
-                className={`booking-time-slot ${moveInTime === slot ? 'active' : ''}`}
-                onClick={() => setMoveInTime(slot)}
-              >
-                <Clock size={12} /> {slot}
-              </button>
-            ))}
+        <BookingCard>
+          <div className="booking-card-heading">
+            <div>
+              <h2>Property Charges</h2>
+              <p>Pay directly to the property owner after confirmation.</p>
+            </div>
+            <FileText size={22} />
           </div>
-
-          <Button variant="primary" fullWidth size="lg" onClick={() => setStep(1)}
-            disabled={!moveIn}>Continue</Button>
-        </div>
-      )}
-
-      {step === 1 && (
-        <div className="booking-step">
-          <h2>Price Breakdown</h2>
-          <div className="booking-breakdown">
-            <div className="bb-row"><span>Monthly Rent</span><span>₹{(room?.price || 0).toLocaleString()}</span></div>
-            <div className="bb-row"><span>Security Deposit</span><span>₹{((room?.price || 0) * 2).toLocaleString()}</span></div>
-            <div className="bb-row"><span>Platform Fee</span><span>₹499</span></div>
-            <div className="bb-divider" />
-            <div className="bb-row bb-total"><span>Total Due Now</span><span>₹{((room?.price || 0) * 3 + 499).toLocaleString()}</span></div>
+          <div className="booking-price-list">
+            <PricingRow label="Monthly Rent" value={pricing.monthlyRent} />
+            <PricingRow label="Security Deposit" value={pricing.securityDeposit} />
+            <PricingRow label="Food Charges (optional)" value={pricing.foodCharges} muted />
+            <PricingRow label="Electricity (optional)" value={pricing.electricityCharges ?? 'As per usage'} muted />
           </div>
-          <Button variant="accent" fullWidth size="lg" onClick={handleConfirmBooking}
-            disabled={submitting}>
-            {submitting ? <><Loader2 size={16} className="spin" /> Processing...</> : 'Confirm Booking'}
-          </Button>
-        </div>
-      )}
+          <div className="booking-info-note">
+            <Info size={18} />
+            <p>These charges are paid directly to the property owner after your visit or final confirmation.</p>
+          </div>
+        </BookingCard>
+
+        <BookingCard className="booking-reservation-card">
+          <div className="booking-card-heading">
+            <div>
+              <h2>StayVeo Reservation Charges</h2>
+              <p>Reserve your slot and connect with the property owner instantly.</p>
+            </div>
+            <CreditCard size={22} />
+          </div>
+          <div className="booking-price-list">
+            <PricingRow label="Slot Reservation Fee" value={pricing.slotReservationFee} />
+            <PricingRow label="Platform Fee" value={pricing.platformFee} />
+            <div className="booking-divider" />
+            <PricingRow label="Total Payable Now" value={pricing.totalPayableNow} strong />
+          </div>
+        </BookingCard>
+
+        <section className="booking-trust-grid" aria-label="Trust and safety">
+          <div><ShieldCheck size={18} /> Verified Property</div>
+          <div><Phone size={18} /> Direct owner connection</div>
+          <div><CalendarCheck2 size={18} /> Secure reservation</div>
+          <div><CheckCircle2 size={18} /> Refund policy available</div>
+        </section>
+
+        <section className="booking-urgency">
+          <div><Zap size={18} /></div>
+          <span>{availabilityText}</span>
+          <small><Users size={14} /> 3 students viewed this today</small>
+        </section>
+
+        <p className="booking-terms">
+          By reserving, you agree that property rent and deposit are handled directly with the owner. StayVeo collects only the reservation and platform fee now.
+        </p>
+      </main>
+
+      <div className="booking-sticky-cta">
+        <button className="booking-primary-action" onClick={handleReserveSlot} disabled={submitting}>
+          {submitting ? <><Loader2 size={18} className="spin" /> Reserving...</> : <><Sparkles size={18} /> Reserve Slot for {formatCurrency(pricing.totalPayableNow)}</>}
+        </button>
+      </div>
     </div>
   );
 }

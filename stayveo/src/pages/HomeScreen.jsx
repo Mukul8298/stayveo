@@ -7,6 +7,7 @@ import { fetchPGListings, subscribeToPGChanges } from '../api/supabaseApi';
 import { getCollegeById } from '../api/colleges';
 import { useAuth } from '../context/AuthContext';
 import { useNearbyPGs } from '../hooks/useNearbyPGs';
+import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
 import './HomeScreen.css';
 
 // ── HomeScreen ──────────────────────────────────────────────────────────
@@ -28,6 +29,7 @@ export default function HomeScreen() {
   // For old users, AuthContext resolves it from Supabase metadata,
   // localStorage, or falls back to "User".
   const { displayName, authState } = useAuth();
+  const { unreadCount } = useRealtimeNotifications(authState?.userId);
 
   const [welcomeToast, setWelcomeToast] = useState('');
   // Start with empty array — NO mock data fallback
@@ -48,7 +50,9 @@ export default function HomeScreen() {
       if (val && val !== 'undefined' && val !== 'null' && val.trim()) {
         return val.trim();
       }
-    } catch {}
+    } catch {
+      return 'Your College';
+    }
     return 'Your College';
   })();
 
@@ -68,12 +72,12 @@ export default function HomeScreen() {
       Number.isFinite(collegeFromStorage.latitude) &&
       Number.isFinite(collegeFromStorage.longitude)
     ) {
-      setSelectedCollege(collegeFromStorage);
+      queueMicrotask(() => setSelectedCollege(collegeFromStorage));
       return () => controller.abort();
     }
 
     if (!collegeFromStorage.id) {
-      setSelectedCollege(null);
+      queueMicrotask(() => setSelectedCollege(null));
       return () => controller.abort();
     }
 
@@ -138,7 +142,7 @@ export default function HomeScreen() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    loadListings(controller.signal);
+    queueMicrotask(() => loadListings(controller.signal));
 
     // Real-time: auto-refresh when a provider adds a new PG
     const unsubscribe = subscribeToPGChanges(() => {
@@ -167,7 +171,7 @@ export default function HomeScreen() {
   // ── Show welcome-back toast for returning users ──────────────────────
   useEffect(() => {
     if (location.state?.welcomeBack && location.state?.name) {
-      setWelcomeToast(`Welcome back ${location.state.name} 👋`);
+      queueMicrotask(() => setWelcomeToast(`Welcome back ${location.state.name} 👋`));
       const timer = setTimeout(() => setWelcomeToast(''), 4000);
       return () => clearTimeout(timer);
     }
@@ -210,7 +214,7 @@ export default function HomeScreen() {
           </div>
           <button className="home-notif" onClick={() => navigate('/notifications')}>
             <Bell size={20} />
-            <span className="notif-dot" />
+            {unreadCount > 0 && <span className="notif-dot" />}
           </button>
         </div>
         <div className="home-search-row">

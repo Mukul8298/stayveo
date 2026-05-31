@@ -379,3 +379,36 @@
   color: var(--neutral-500);
   cursor: not-allowed;
 }
+
+.pi-textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.pi-address-value {
+  display: block;
+  white-space: pre-line;
+  line-height: 1.45;
+  color: var(--neutral-700);
+}
+
+.pi-card-address,
+.pi-card-map {
+  background: white;
+  border-color: var(--neutral-200);
+  box-shadow: var(--shadow-xs);
+}
+
+.pi-card-map .location-picker {
+  height: 260px;
+  border-radius: var(--radius-lg);
+}
+
+.profile-location-readonly .location-picker-actions {
+  display: none;
+}
+
+.profile-location-readonly {
+  pointer-events: none;
+}

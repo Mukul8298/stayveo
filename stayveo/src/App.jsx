@@ -17,8 +17,10 @@ import RoommateSwipe from './pages/RoommateSwipe';
 import MatchedChat from './pages/MatchedChat';
 import ServicesHome from './pages/ServicesHome';
 import ServiceDetail from './pages/ServiceDetail';
+import ServiceRequestCheckout from './pages/ServiceRequestCheckout';
 import StudentDashboard from './pages/StudentDashboard';
 import ProfilePage from './pages/ProfilePage';
+import StudentHelp from './pages/StudentHelp';
 import BrokerDashboard from './pages/BrokerDashboard';
 import AddListing from './pages/AddListing';
 import BookingsManagement from './pages/BookingsManagement';
@@ -32,6 +34,7 @@ import ProviderOnboarding from './pages/provider/ProviderOnboarding';
 import ProviderVerification from './pages/provider/ProviderVerification';
 import ProviderDashboard from './pages/provider/ProviderDashboard';
 import ProviderBookings from './pages/provider/ProviderBookings';
+import ProviderRequests from './pages/provider/ProviderRequests';
 import ProviderServices from './pages/provider/ProviderServices';
 import ProviderCalendar from './pages/provider/ProviderCalendar';
 import ProviderEarnings from './pages/provider/ProviderEarnings';
@@ -80,8 +83,10 @@ function AppContent() {
         <Route path="/roommate/chat" element={<MatchedChat />} />
         <Route path="/services" element={<ServicesHome />} />
         <Route path="/service/:id" element={<ServiceDetail />} />
+        <Route path="/service-request/:id/checkout" element={<ServiceRequestCheckout />} />
         <Route path="/dashboard" element={<StudentDashboard />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/support" element={<StudentHelp />} />
         <Route path="/notifications" element={<NotificationsScreen />} />
         <Route path="/saved" element={<SavedListings />} />
 
@@ -97,6 +102,7 @@ function AppContent() {
         <Route path="/provider/verify" element={<ProviderVerification />} />
         <Route path="/provider/dashboard" element={<ProviderDashboard />} />
         <Route path="/provider/bookings" element={<ProviderBookings />} />
+        <Route path="/provider/requests" element={<ProviderRequests />} />
         <Route path="/provider/services" element={<ProviderServices />} />
         <Route path="/provider/calendar" element={<ProviderCalendar />} />
         <Route path="/provider/earnings" element={<ProviderEarnings />} />
