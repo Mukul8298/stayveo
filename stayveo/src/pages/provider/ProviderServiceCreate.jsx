@@ -32,12 +32,6 @@ export default function ProviderServiceCreate() {
 
   return (
     <div className="psf-page">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>{config.createTitle}</h1>
-      </div>
 
       <div className="psf-content">
         <div className="psf-hero">

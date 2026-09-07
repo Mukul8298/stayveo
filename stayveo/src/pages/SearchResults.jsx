@@ -35,7 +35,7 @@ export default function SearchResults() {
     const longitude = Number(localStorage.getItem('selectedCollegeLongitude'));
 
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-      setSelectedCollege({ latitude, longitude });
+      queueMicrotask(() => setSelectedCollege({ latitude, longitude }));
       return () => controller.abort();
     }
 
@@ -139,7 +139,7 @@ export default function SearchResults() {
   return (
     <div className="page" id="search-results">
       <div className="search-header">
-        <button className="back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
+        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back"><ArrowLeft size={20} /></button>
         <div style={{ flex: 1 }}>
           <SearchBar
             value={query}
@@ -153,8 +153,8 @@ export default function SearchResults() {
           {loading ? 'Searching...' : `${nearbyListings.length} listing${nearbyListings.length !== 1 ? 's' : ''} found`}
         </div>
         <div className="search-actions">
-          <button className={`view-toggle ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')}><Grid3X3 size={16} /></button>
-          <button className={`view-toggle ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}><List size={16} /></button>
+          <button className={`view-toggle ${view === 'grid' ? 'active' : ''}`} onClick={() => setView('grid')} aria-label="Show grid view"><Grid3X3 size={16} /></button>
+          <button className={`view-toggle ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} aria-label="Show list view"><List size={16} /></button>
           <button className="filter-btn" onClick={() => setFilterOpen(true)}><SlidersHorizontal size={16} /> Filters</button>
         </div>
       </div>

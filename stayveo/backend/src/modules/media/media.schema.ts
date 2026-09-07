@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 export const uploadMediaSchema = z.object({
-  serviceType: z.enum(['PG', 'TIFFIN', 'LAUNDRY', 'CLEANING']),
+  serviceType: z.enum(['PG', 'TIFFIN']),
   fileUrl: z.string().url(),
 });
 

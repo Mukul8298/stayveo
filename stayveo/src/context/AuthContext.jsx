@@ -100,8 +100,6 @@ function resolveDisplayName(supabaseUser, localStorageName) {
       candidates.push(supabaseUser.email.split('@')[0]);
     }
     if (supabaseUser.phone) {
-      // Don't use raw phone as a name, but log it for debugging
-      console.log('🔍 AuthContext: user phone:', supabaseUser.phone);
     }
 
     for (const c of candidates) {
@@ -121,7 +119,6 @@ function resolveDisplayName(supabaseUser, localStorageName) {
   const resolved = sources[0];
 
   if (resolved) {
-    console.log(`✅ AuthContext: resolved display name "${resolved.value}" from ${resolved.source}`);
     return resolved.value;
   }
 
@@ -137,14 +134,6 @@ export function AuthProvider({ children }) {
     const name = safeGetItem('userName');
     const college = safeGetItem('userCollege') || safeGetItem('selectedCollege');
     const profileComplete = safeGetItem('profileComplete') === 'true';
-
-    console.log('🔍 AuthContext: hydrating from localStorage:', {
-      userId: userId ? `${userId.substring(0, 8)}...` : null,
-      phone: phone ? `***${phone.slice(-4)}` : null,
-      name,
-      college,
-      profileComplete,
-    });
 
     if (userId && phone) {
       return {
@@ -179,20 +168,12 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        console.log('🔄 AuthContext: attempting to resolve display name from Supabase...');
 
         const { data: { user }, error } = await supabase.auth.getUser();
 
         if (error) {
           console.warn('⚠️ AuthContext: supabase.auth.getUser() error:', error.message);
         }
-
-        console.log('🔍 AuthContext: Supabase user:', user ? {
-          id: user.id?.substring(0, 8) + '...',
-          email: user.email,
-          phone: user.phone,
-          metadata: user.user_metadata,
-        } : 'null (no active Supabase session)');
 
         const localName = safeGetItem('userName');
         const resolvedName = resolveDisplayName(user, localName);
@@ -201,7 +182,6 @@ export function AuthProvider({ children }) {
         // so future page loads don't need to re-resolve
         if (resolvedName && resolvedName !== 'User') {
           safeSetItem('userName', resolvedName);
-          console.log('🔧 AuthContext: auto-repaired localStorage userName to:', resolvedName);
         }
 
         setAuthState((prev) => ({
@@ -228,11 +208,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('🔑 AuthContext: Supabase auth event:', event);
         if (event === 'SIGNED_OUT') {
-          // Don't auto-clear our app auth — the Fastify backend is the
-          // source of truth. But log it for debugging.
-          console.log('ℹ️ Supabase session ended (may be stale token cleanup)');
         }
       }
     );
@@ -255,6 +231,8 @@ export function AuthProvider({ children }) {
       if (updates.collegeId) {
         safeSetItem('userCollegeId', updates.collegeId);
       }
+      const changed = Object.keys(next).some((key) => next[key] !== prev[key]);
+      if (!changed) return prev;
       return next;
     });
   }, []);

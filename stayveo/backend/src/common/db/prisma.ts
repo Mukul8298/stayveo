@@ -14,7 +14,7 @@ export const prisma =
         url: process.env.DIRECT_URL || process.env.DATABASE_URL,
       },
     },
-    log: process.env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['error'],
+    log: ['error'],
   });
 
 if (process.env.NODE_ENV !== 'production') {

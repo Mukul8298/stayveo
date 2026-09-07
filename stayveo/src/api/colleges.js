@@ -1,14 +1,4 @@
-const LOCAL_API_BASES = ['http://localhost:3000/api/v1', 'http://localhost:3000'];
-const ENV_API_BASE = import.meta.env.VITE_API_URL;
-const isLocalFrontend =
-  typeof window !== 'undefined' &&
-  ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-const API_BASES = [
-  ...(isLocalFrontend ? LOCAL_API_BASES : []),
-  ENV_API_BASE,
-  ...(!isLocalFrontend ? LOCAL_API_BASES : []),
-].filter(Boolean);
+import { API_BASES } from '../config/api.js';
 
 function normalizeCollege(college) {
   if (!college) return null;

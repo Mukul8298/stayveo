@@ -11,7 +11,18 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, PlusCircle } from 'lucide-react';
+import {
+  Bell,
+  Plus,
+  PlusCircle,
+  LayoutDashboard,
+  ClipboardList,
+  Settings,
+  User,
+  LogOut,
+  HelpCircle,
+  Wrench,
+} from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
 import { createRoomListing } from '../../api/provider';
@@ -20,9 +31,11 @@ import './ProviderCreateListing.css';
 
 export default function ProviderCreateListing() {
   const navigate = useNavigate();
-  const { provider } = useProvider();
+  const { provider, clearProvider } = useProvider();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const providerName = provider?.name || 'Manager';
+  const firstName = providerName.split(' ')[0] || 'Manager';
 
   async function handleCreate(data) {
     try {
@@ -37,32 +50,26 @@ export default function ProviderCreateListing() {
     }
   }
 
+  function handleLogout() {
+    clearProvider();
+    navigate('/role-select');
+  }
+
   return (
-    <div className="pcl-page" id="provider-create-listing">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Add New Room</h1>
-      </div>
+    <div className="pcl-content-wrap" id="provider-create-listing">
+      <main className="pcl-main">
+        <section className="pcl-hero" aria-labelledby="pcl-title">
+          <h1 id="pcl-title">List your property</h1>
+        </section>
 
-      <div className="pcl-hero">
-        <div className="pcl-hero-icon">
-          <PlusCircle size={28} />
+        <div className="pcl-content">
+          <RoomListingForm
+            onSubmit={handleCreate}
+            loading={saving}
+            submitLabel="Save Property"
+          />
         </div>
-        <div>
-          <h2>Create a Room Listing</h2>
-          <p>Add details, pricing, and photos to attract students</p>
-        </div>
-      </div>
-
-      <div className="pcl-content">
-        <RoomListingForm
-          onSubmit={handleCreate}
-          loading={saving}
-          submitLabel="Create Listing"
-        />
-      </div>
+      </main>
     </div>
   );
 }

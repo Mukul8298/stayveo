@@ -6,6 +6,7 @@
 import { authRepository } from './auth.repository.js';
 import { sendOtpSchema, verifyOtpSchema } from './auth.schema.js';
 import type { SendOtpInput, VerifyOtpInput } from './auth.schema.js';
+import { yearToDisplay } from '../../common/utils/year.js';
 
 export const authService = {
   /**
@@ -64,7 +65,7 @@ export const authService = {
           id: user.studentProfile!.id,
           fullName: user.studentProfile!.fullName,
           college: user.studentProfile!.college,
-          year: user.studentProfile!.year,
+          year: yearToDisplay(user.studentProfile!.year),
           gender: user.studentProfile!.gender,
           foodPreference: user.studentProfile!.foodPreference,
           sleepSchedule: user.studentProfile!.sleepSchedule,

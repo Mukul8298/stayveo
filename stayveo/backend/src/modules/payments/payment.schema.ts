@@ -7,8 +7,12 @@ export const createPaymentSchema = z.object({
   user_id: z.string().uuid(),
   provider_id: z.string().uuid(),
   amount: z.number().min(0),
-  type: z.enum(['rent', 'laundry', 'cleaning', 'tiffin']),
-  status: z.enum(['paid', 'pending']).default('pending'),
+  type: z.enum(['rent', 'reservation', 'tiffin']),
+  // Accept gateway terminology at the API boundary, then normalize it to the
+  // existing database enum (PAID/PENDING/FAILED) in the repository.
+  status: z.enum(['paid', 'success', 'captured', 'completed', 'pending', 'processing', 'failed']).default('pending'),
+  payment_method: z.string().min(1).max(60).optional(),
+  transaction_id: z.string().min(1).max(128).optional(),
 });
 
 export const earningsFilterSchema = z.object({

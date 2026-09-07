@@ -27,6 +27,16 @@ export const notificationStore = {
     notifications = sortByCreatedAt([item, ...next]);
     emit();
   },
+  markRead(id) {
+    notifications = notifications.map((item) => (
+      item.id === id ? { ...item, is_read: true, isRead: true } : item
+    ));
+    emit();
+  },
+  markAllRead() {
+    notifications = notifications.map((item) => ({ ...item, is_read: true, isRead: true }));
+    emit();
+  },
   unreadCount() {
     return notifications.filter((item) => !item.is_read && !item.isRead).length;
   },

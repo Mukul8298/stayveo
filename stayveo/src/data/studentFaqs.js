@@ -17,7 +17,7 @@ export const studentFaqs = [
   },
   {
     question: 'Can I cancel my reservation?',
-    answer: 'Cancellation support is available through StayVeo support. Include your booking ID when emailing us so we can review the case quickly.',
+    answer: 'Cancellation support is available through StayVeo support. Include your Reservation ID when emailing us so we can review it quickly.',
   },
   {
     question: 'How do payments work?',

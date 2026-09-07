@@ -2,6 +2,18 @@
 
 import { z } from 'zod';
 
+const visitDateSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Visit date must be a valid date.')
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, 'Visit date must be a valid date.')
+  .refine((value) => {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    return new Date(`${value}T00:00:00.000Z`) >= today;
+  }, 'Visit date cannot be in the past.');
+
 export const createBookingSchema = z.object({
   provider_id: z.string().uuid(),
   room_id: z.string().uuid().optional(),
@@ -10,6 +22,19 @@ export const createBookingSchema = z.object({
   booking_date: z.string(), // ISO date string
   booking_time: z.string(),
   price: z.number().min(0),
+  monthly_rent: z.number().min(0).optional(),
+  security_deposit: z.number().min(0).optional(),
+  reservation_fee: z.number().min(0).optional(),
+  platform_fee: z.number().min(0).optional(),
+  minimum_stay_months: z.number().int().min(1).optional(),
+  number_of_beds: z.number().int().min(1).optional(),
+  food_charges: z.number().min(0).optional(),
+  electricity_charges: z.number().min(0).optional(),
+  water_charges: z.number().min(0).optional(),
+  maintenance_charges: z.number().min(0).optional(),
+  parking_charges: z.number().min(0).optional(),
+  other_charges: z.number().min(0).optional(),
+  move_in_date: visitDateSchema.optional(),
   student_name: z.string().optional(),
   student_phone: z.string().optional(),
   notes: z.string().optional(),

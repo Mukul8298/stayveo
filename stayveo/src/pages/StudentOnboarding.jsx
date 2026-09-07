@@ -32,10 +32,6 @@ function getStepErrors(step, data) {
   return errors;
 }
 
-function isStepValid(step, data) {
-  return Object.keys(getStepErrors(step, data)).length === 0;
-}
-
 export default function StudentOnboarding() {
   const navigate = useNavigate();
   const { setAuth } = useAuth();
@@ -130,7 +126,13 @@ export default function StudentOnboarding() {
       });
 
       toast.success('Profile saved! Welcome to StayVeo 🎉');
-      navigate('/home');
+      const returnTo = localStorage.getItem('tiffinReservationReturn');
+      if (returnTo) {
+        localStorage.removeItem('tiffinReservationReturn');
+        navigate(returnTo);
+      } else {
+        navigate('/home');
+      }
     } catch (err) {
       setError(err.message || 'Failed to save profile');
       toast.error(err.message || 'Failed to save profile');
@@ -221,8 +223,6 @@ export default function StudentOnboarding() {
       )
     }
   ];
-
-  const allFieldsFilled = isStepValid(step, data);
 
   return (
     <div className="onboarding-page" id="student-onboarding">

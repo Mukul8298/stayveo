@@ -11,7 +11,11 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 import { FastifyInstance } from 'fastify';
-import { roomListingController } from './room-listing.controller.js';
+import { roomListingController, publicRoomListingController } from './room-listing.controller.js';
+
+export async function publicRoomListingRoutes(fastify: FastifyInstance) {
+  fastify.get('/public', publicRoomListingController.list);
+}
 
 export default async function roomListingRoutes(fastify: FastifyInstance) {
   fastify.post('/',                roomListingController.create);
@@ -19,5 +23,6 @@ export default async function roomListingRoutes(fastify: FastifyInstance) {
   fastify.get('/:id',              roomListingController.getOne);
   fastify.put('/:id',              roomListingController.update);
   fastify.patch('/:id/toggle',     roomListingController.toggle);
+  fastify.patch('/:id/inventory',  roomListingController.adjustInventory);
   fastify.delete('/:id',           roomListingController.remove);
 }

@@ -25,9 +25,9 @@ enum UserRole {
 }
 
 enum GenderType {
-  MALE             @map("male")
-  FEMALE           @map("female")
-  OTHER            @map("other")
+  MALE              @map("male")
+  FEMALE            @map("female")
+  OTHER             @map("other")
   PREFER_NOT_TO_SAY @map("prefer_not_to_say")
 
   @@map("gender_type")
@@ -68,10 +68,8 @@ enum SocialLevel {
 }
 
 enum ServiceCategory {
-  PG       @map("pg")
-  TIFFIN   @map("tiffin")
-  LAUNDRY  @map("laundry")
-  CLEANING @map("cleaning")
+  PG     @map("pg")
+  TIFFIN @map("tiffin")
 
   @@map("service_category")
 }
@@ -79,8 +77,6 @@ enum ServiceCategory {
 enum ServiceType {
   PG
   TIFFIN
-  LAUNDRY
-  CLEANING
 
   @@map("provider_service_type")
 }
@@ -92,20 +88,6 @@ enum FoodType {
   VEGAN  @map("vegan")
 
   @@map("food_type")
-}
-
-enum PricingModel {
-  PER_KG   @map("per_kg")
-  PER_ITEM @map("per_item")
-
-  @@map("pricing_model")
-}
-
-enum CleanType {
-  BASIC      @map("basic")
-  DEEP_CLEAN @map("deep_clean")
-
-  @@map("clean_type")
 }
 
 enum DocType {
@@ -127,10 +109,13 @@ model User {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  studentProfile StudentProfile?
-  provider       Provider?
-  providerProfile ProviderProfile?
-  college       College? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  studentProfile          StudentProfile?
+  provider                Provider?
+  providerProfile         ProviderProfile?
+  college                 College?                 @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+  savedListings           SavedListing[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@map("users")
 }
@@ -201,13 +186,11 @@ model ProviderProfile {
   otpVerified   Boolean  @default(false) @map("otp_verified")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  services      ProviderService[]
-  verifications ProviderVerification[]
-  roomListings  RoomListing[]
-  mealPlans      MealPlan[]
-  laundryOfferings LaundryOffering[]
-  cleaningOfferings CleaningOffering[]
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services          ProviderService[]
+  verifications     ProviderVerification[]
+  roomListings      RoomListing[]
+  mealPlans         MealPlan[]
 
   @@map("provider_profiles")
 }
@@ -220,31 +203,49 @@ model ProviderService {
   provider        ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
   pgDetails       PGDetails?
   tiffinDetails   TiffinDetails?
-  laundryDetails  LaundryDetails?
-  cleaningDetails CleaningDetails?
 
   @@unique([providerId, type])
   @@map("provider_services")
 }
 
 model PGDetails {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  serviceId  String   @unique @map("service_id") @db.Uuid
-  pgName     String   @map("pg_name")
-  address    String
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  serviceId String @unique @map("service_id") @db.Uuid
+  pgName    String @map("pg_name")
+  address   String
 
-  latitude   Decimal? @db.Decimal(9, 6)
-  longitude  Decimal? @db.Decimal(9, 6)
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
 
-  roomType   String   @map("room_type")
-  minPrice   Float    @map("min_price")
-  amenities  String[]
-  photos     String[]
+  roomType          String   @map("room_type")
+  minPrice          Float    @map("min_price")
+  securityDeposit   Float    @default(0) @map("security_deposit")
+  reservationFee    Float    @default(0) @map("reservation_fee")
+  minimumStayMonths Int      @default(1) @map("minimum_stay_months")
+  numberOfBeds      Int      @default(1) @map("number_of_beds")
+  amenities         String[]
+  photos            String[]
 
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  savedBy SavedListing[]
 
   @@map("pg_details")
 }
+
+model SavedListing {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  pgId      String   @map("pg_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pg   PGDetails @relation(fields: [pgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pgId])
+  @@index([userId, createdAt])
+  @@map("saved_listings")
+}
+
 model TiffinDetails {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceId   String   @unique @map("service_id") @db.Uuid
@@ -258,32 +259,6 @@ model TiffinDetails {
   service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@map("tiffin_details")
-}
-
-model LaundryDetails {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  serviceId String   @unique @map("service_id") @db.Uuid
-  pricing   String
-  latitude  Decimal? @db.Decimal(9, 6)
-  longitude Decimal? @db.Decimal(9, 6)
-  photos    String[]
-
-  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@map("laundry_details")
-}
-
-model CleaningDetails {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  serviceId String   @unique @map("service_id") @db.Uuid
-  pricing   String
-  latitude  Decimal? @db.Decimal(9, 6)
-  longitude Decimal? @db.Decimal(9, 6)
-  photos    String[]
-
-  service ProviderService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-
-  @@map("cleaning_details")
 }
 
 model ProviderVerification {
@@ -345,37 +320,6 @@ model TiffinService {
   @@map("tiffin_services")
 }
 
-// ─── LAUNDRY SERVICES ───────────────────────────────────────────────────
-
-model LaundryService {
-  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  provider_id       String        @db.Uuid
-  pricing_model     PricingModel?
-  price             Decimal?      @db.Decimal(10, 2)
-  pickup_frequency  String?
-  delivery_time     String?
-  service_radius_km Decimal?      @db.Decimal(5, 2)
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@map("laundry_services")
-}
-
-// ─── CLEANING SERVICES ──────────────────────────────────────────────────
-
-model CleaningService {
-  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  provider_id       String     @db.Uuid
-  service_type      CleanType?
-  basic_price       Decimal?   @db.Decimal(10, 2)
-  deep_clean_price  Decimal?   @db.Decimal(10, 2)
-  staff_available   Int?
-  available_slots   Json?
-  service_radius_km Decimal?   @db.Decimal(5, 2)
-  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@map("cleaning_services")
-}
-
 // ─── MEDIA UPLOADS ──────────────────────────────────────────────────────
 
 model MediaUpload {
@@ -410,11 +354,11 @@ model Document {
 // ─── BOOKING ENUMS ──────────────────────────────────────────────────────
 
 enum BookingStatus {
-  NEW          @map("new")
-  ACCEPTED     @map("accepted")
-  IN_PROGRESS  @map("in_progress")
-  COMPLETED    @map("completed")
-  REJECTED     @map("rejected")
+  NEW         @map("new")
+  ACCEPTED    @map("accepted")
+  IN_PROGRESS @map("in_progress")
+  COMPLETED   @map("completed")
+  REJECTED    @map("rejected")
 
   @@map("booking_status")
 }
@@ -428,10 +372,9 @@ enum VisitStatus {
 }
 
 enum PaymentType {
-  RENT     @map("rent")
-  LAUNDRY  @map("laundry")
-  CLEANING @map("cleaning")
-  TIFFIN   @map("tiffin")
+  RENT        @map("rent")
+  RESERVATION @map("reservation")
+  TIFFIN      @map("tiffin")
 
   @@map("payment_type")
 }
@@ -439,6 +382,7 @@ enum PaymentType {
 enum PaymentStatus {
   PAID    @map("paid")
   PENDING @map("pending")
+  FAILED  @map("failed")
 
   @@map("payment_status")
 }
@@ -467,25 +411,40 @@ enum ServiceListingStatus {
 // ─── BOOKINGS ───────────────────────────────────────────────────────────
 
 model Booking {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String        @map("user_id") @db.Uuid
-  providerId   String        @map("provider_id") @db.Uuid
-  roomId       String?       @map("room_id") @db.Uuid
-  serviceType  String?       @map("service_type")
-  roomType     String?       @map("room_type")
-  status       BookingStatus @default(NEW)
-  bookingDate  DateTime      @map("booking_date") @db.Date
-  bookingTime  String        @map("booking_time")
-  price        Decimal       @db.Decimal(10, 2)
-  studentName  String?       @map("student_name")
-  studentPhone String?       @map("student_phone") @db.VarChar(15)
-  notes        String?
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String        @map("user_id") @db.Uuid
+  providerId         String        @map("provider_id") @db.Uuid
+  roomId             String?       @map("room_id") @db.Uuid
+  serviceType        String?       @map("service_type")
+  roomType           String?       @map("room_type")
+  reservationId      String?       @unique @map("reservation_id") @db.VarChar(64)
+  status             BookingStatus @default(NEW)
+  bookingDate        DateTime      @map("booking_date") @db.Date
+  bookingTime        String        @map("booking_time")
+  price              Decimal       @db.Decimal(10, 2)
+  monthlyRent        Decimal       @default(0) @map("monthly_rent") @db.Decimal(10, 2)
+  securityDeposit    Decimal       @default(0) @map("security_deposit") @db.Decimal(10, 2)
+  reservationFee     Decimal       @default(0) @map("reservation_fee") @db.Decimal(10, 2)
+  platformFee        Decimal       @default(0) @map("platform_fee") @db.Decimal(10, 2)
+  minimumStayMonths  Int           @default(1) @map("minimum_stay_months")
+  numberOfBeds       Int           @default(1) @map("number_of_beds")
+  foodCharges        Decimal       @default(0) @map("food_charges") @db.Decimal(10, 2)
+  electricityCharges Decimal       @default(0) @map("electricity_charges") @db.Decimal(10, 2)
+  waterCharges       Decimal       @default(0) @map("water_charges") @db.Decimal(10, 2)
+  maintenanceCharges Decimal       @default(0) @map("maintenance_charges") @db.Decimal(10, 2)
+  parkingCharges     Decimal       @default(0) @map("parking_charges") @db.Decimal(10, 2)
+  otherCharges       Decimal       @default(0) @map("other_charges") @db.Decimal(10, 2)
+  moveInDate         DateTime?     @map("move_in_date") @db.Date
+  studentName        String?       @map("student_name")
+  studentPhone       String?       @map("student_phone") @db.VarChar(15)
+  notes              String?
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
   visitRequests VisitRequest[]
   payments      Payment[]
+  receipt       Receipt?
 
   @@map("bookings")
 }
@@ -523,14 +482,16 @@ model ProfileView {
 // ─── PAYMENTS ───────────────────────────────────────────────────────────
 
 model Payment {
-  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId  String?       @map("booking_id") @db.Uuid
-  userId     String        @map("user_id") @db.Uuid
-  providerId String        @map("provider_id") @db.Uuid
-  amount     Decimal       @db.Decimal(10, 2)
-  type       PaymentType
-  status     PaymentStatus @default(PENDING)
-  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId     String?       @map("booking_id") @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  providerId    String        @map("provider_id") @db.Uuid
+  amount        Decimal       @db.Decimal(10, 2)
+  type          PaymentType
+  status        PaymentStatus @default(PENDING)
+  paymentMethod String?       @map("payment_method") @db.VarChar(60)
+  transactionId String?       @unique @map("transaction_id") @db.VarChar(128)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
@@ -538,58 +499,140 @@ model Payment {
   @@map("payments")
 }
 
-model LaundryRequest {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId         String   @map("student_id") @db.Uuid
-  providerId        String   @map("provider_id") @db.Uuid
-  providerName      String?  @map("provider_name") @db.VarChar(200)
-  serviceType       String   @map("service_type") @db.VarChar(40)
-  serviceId         String   @map("service_id") @db.Uuid
-  status            String   @default("pending") @db.VarChar(20)
-  studentAddress    String?  @map("student_address")
-  studentLatitude   Float?   @map("student_latitude")
-  studentLongitude  Float?   @map("student_longitude")
-  providerLatitude  Float?   @map("provider_latitude")
-  providerLongitude Float?   @map("provider_longitude")
-  distanceKm        Float?   @map("distance_km")
-  pickupDate        DateTime? @map("pickup_date") @db.Date
-  pickupTime        String?  @map("pickup_time") @db.VarChar(80)
-  estimatedArrival  String?  @map("estimated_arrival") @db.VarChar(120)
-  studentPhone      String?  @map("student_phone") @db.VarChar(15)
-  studentName       String?  @map("student_name") @db.VarChar(200)
-  studentImageUrl   String?  @map("student_image_url")
-  declineReason     String?  @map("decline_reason")
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+model Receipt {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId     String   @unique @map("booking_id") @db.Uuid
+  receiptNumber String   @unique @map("receipt_number") @db.VarChar(80)
+  payload       Json
+  qrCode        String   @map("qr_code")
+  generatedAt   DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
 
-  @@index([studentId, status])
-  @@index([providerId, status])
-  @@index([serviceId, status])
-  @@map("laundry_requests")
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("receipts")
 }
 
 model Notification {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  title     String   @db.VarChar(200)
-  message   String
-  type      String   @default("service") @db.VarChar(40)
-  isRead    Boolean  @default(false) @map("is_read")
-  requestId String?  @map("request_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  title         String   @db.VarChar(200)
+  message       String
+  type          String   @default("service") @db.VarChar(40)
+  eventType     String?  @map("event_type") @db.VarChar(80)
+  channel       String   @default("IN_APP") @db.VarChar(30)
+  status        String   @default("SENT") @db.VarChar(30)
+  payload       Json?
+  templateId    String?  @map("template_id") @db.Uuid
+  reservationId String?  @map("reservation_id") @db.VarChar(64)
+  isRead        Boolean  @default(false) @map("is_read")
+  requestId     String?  @map("request_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([userId, isRead, createdAt])
   @@map("notifications")
 }
+
+model NotificationTemplate {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key           String         @unique @db.VarChar(120)
+  audience      String         @db.VarChar(30)
+  channel       String         @default("IN_APP") @db.VarChar(30)
+  titleTemplate String         @map("title_template") @db.VarChar(200)
+  bodyTemplate  String         @map("body_template")
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  notifications Notification[]
+
+  @@map("notification_templates")
+}
+
+model NotificationPreference {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  channel   String   @db.VarChar(30)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel])
+  @@map("notification_preferences")
+}
+
+model NotificationLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String   @map("notification_id") @db.Uuid
+  level          String   @db.VarChar(20)
+  message        String
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([notificationId, createdAt])
+  @@map("notification_logs")
+}
+
+model NotificationDevice {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  platform  String   @db.VarChar(30)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId, isActive])
+  @@map("notification_devices")
+}
+
+model NotificationDelivery {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId   String    @map("notification_id") @db.Uuid
+  channel          String    @db.VarChar(30)
+  status           String    @db.VarChar(30)
+  providerResponse Json?     @map("provider_response")
+  deliveredAt      DateTime? @map("delivered_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([notificationId, channel])
+  @@map("notification_delivery")
+}
+
+model NotificationRetry {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String   @unique @map("notification_id") @db.Uuid
+  attemptCount   Int      @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime @map("next_attempt_at") @db.Timestamptz(6)
+  lastError      String?  @map("last_error")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([nextAttemptAt])
+  @@map("notification_retry")
+}
+
+model NotificationDeadLetter {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String   @unique @map("notification_id") @db.Uuid
+  reason         String
+  payload        Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("notification_dead_letters")
+}
+
 model College {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique
-  city        String
-  university  String?
-  latitude    Decimal  @db.Decimal(9, 6)
-  longitude   Decimal  @db.Decimal(9, 6)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  users       User[]
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique
+  city       String
+  university String?
+  latitude   Decimal  @db.Decimal(9, 6)
+  longitude  Decimal  @db.Decimal(9, 6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  users      User[]
 
   @@map("colleges")
 }
@@ -600,40 +643,55 @@ model College {
 // availableBeds is decremented on booking confirmation.
 
 model RoomListing {
-  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId      String     @map("provider_id") @db.Uuid
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
 
   // ── Core details ────────────────────────────────────────────
-  title           String     @db.VarChar(200)            // "Single AC Room"
-  description     String?                                // long-form details
-  roomType        String     @map("room_type") @db.VarChar(100) // "Single", "Double", "Triple"
-  genderPreference String    @default("unisex") @map("gender_preference") @db.VarChar(20)
+  title            String  @db.VarChar(200) // "Single AC Room"
+  description      String? // long-form details
+  address          String? @db.VarChar(500)
+  roomType         String  @map("room_type") @db.VarChar(100) // "Single", "Double", "Triple"
+  genderPreference String  @default("unisex") @map("gender_preference") @db.VarChar(20)
 
   // ── Pricing ──────────────────────────────────────────────
-  price           Float                                  // per month
-  securityDeposit Float?     @map("security_deposit")   // optional refundable deposit
+  price              Float // per month
+  securityDeposit    Float @default(0) @map("security_deposit")
+  reservationFee     Float @default(0) @map("reservation_fee")
+  minimumStayMonths  Int   @default(1) @map("minimum_stay_months")
+  numberOfBeds       Int   @default(1) @map("number_of_beds")
+  platformFee        Float @default(0) @map("platform_fee")
+  foodCharges        Float @default(0) @map("food_charges")
+  electricityCharges Float @default(0) @map("electricity_charges")
+  waterCharges       Float @default(0) @map("water_charges")
+  maintenanceCharges Float @default(0) @map("maintenance_charges")
+  parkingCharges     Float @default(0) @map("parking_charges")
+  otherCharges       Float @default(0) @map("other_charges")
 
   // ── Inventory ─────────────────────────────────────────────
-  totalBeds       Int        @default(1) @map("total_beds")
-  availableBeds   Int        @default(1) @map("available_beds")
+  totalBeds     Int @default(1) @map("total_beds")
+  availableBeds Int @default(1) @map("available_beds")
+  reservedBeds  Int @default(0) @map("reserved_beds")
+  occupiedBeds  Int @default(0) @map("occupied_beds")
+  blockedBeds   Int @default(0) @map("blocked_beds")
+  offlineBeds   Int @default(0) @map("offline_beds")
 
   // ── Physical details ──────────────────────────────────────
-  floor           Int?                                   // null = ground floor or unknown
-  amenities       String[]   @default([])                // ["WiFi", "AC", "Geyser"]
-  images          String[]   @default([])                // Supabase public URLs
+  floor     Int? // null = ground floor or unknown
+  amenities String[] @default([]) // ["WiFi", "AC", "Geyser"]
+  images    String[] @default([]) // Supabase public URLs
 
   // ── Availability ──────────────────────────────────────────
   // isActive = provider-controlled (they can flip it anytime)
   // status   = derived lifecycle (ACTIVE / FULL / CLOSED)
   // Both must be true for students to see the listing.
-  isActive        Boolean    @default(true) @map("is_active")
-  status          RoomStatus @default(ACTIVE)
+  isActive Boolean    @default(true) @map("is_active")
+  status   RoomStatus @default(ACTIVE)
 
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  provider        ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@map("room_listings")
 }
@@ -662,67 +720,592 @@ model MealPlan {
   createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  provider        ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
 
   @@index([providerId, status, isActive])
   @@index([latitude, longitude])
   @@map("meal_plans")
 }
 
-model LaundryOffering {
-  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId      String               @map("provider_id") @db.Uuid
-  name            String               @db.VarChar(200)
-  washType        String?              @map("wash_type") @db.VarChar(80)
-  kgPrice         Float?               @map("kg_price")
-  perClothPrice   Float?               @map("per_cloth_price")
-  pickupAvailable Boolean              @default(true) @map("pickup_available")
-  expressDelivery Boolean              @default(false) @map("express_delivery")
-  estimatedTime   String?              @map("estimated_time") @db.VarChar(120)
-  description     String?
-  address         String?
-  latitude        Decimal?             @db.Decimal(9, 6)
-  longitude       Decimal?             @db.Decimal(9, 6)
-  serviceRadiusKm Decimal?             @map("service_radius_km") @db.Decimal(5, 2)
-  images          String[]             @default([])
-  coverImage      String?              @map("cover_image")
-  isActive        Boolean              @default(true) @map("is_active")
-  status          ServiceListingStatus @default(ACTIVE)
-  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+// ─── TIFFIN MODULE ENUMS ────────────────────────────────────────────────
 
-  provider        ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+enum TiffinFoodType {
+  VEG    @map("veg")
+  NONVEG @map("nonveg")
+  JAIN   @map("jain")
+  BOTH   @map("both")
 
-  @@index([providerId, status, isActive])
-  @@index([latitude, longitude])
-  @@map("laundry_offerings")
+  @@map("tiffin_food_type")
 }
 
-model CleaningOffering {
-  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId        String               @map("provider_id") @db.Uuid
-  name              String               @db.VarChar(200)
-  cleaningType      String?              @map("cleaning_type") @db.VarChar(80)
-  deepCleaning      Boolean              @default(false) @map("deep_cleaning")
-  equipmentIncluded Boolean              @default(true) @map("equipment_included")
-  roomSize          String?              @map("room_size") @db.VarChar(60)
-  price             Float?
-  availableSlots    String[]             @default([]) @map("available_slots")
-  description       String?
-  address           String?
-  latitude          Decimal?             @db.Decimal(9, 6)
-  longitude         Decimal?             @db.Decimal(9, 6)
-  serviceRadiusKm   Decimal?             @map("service_radius_km") @db.Decimal(5, 2)
-  images            String[]             @default([])
-  coverImage        String?              @map("cover_image")
-  isActive          Boolean              @default(true) @map("is_active")
-  status            ServiceListingStatus @default(ACTIVE)
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+enum MealCategory {
+  BREAKFAST @map("breakfast")
+  LUNCH     @map("lunch")
+  DINNER    @map("dinner")
 
-  provider          ProviderProfile      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  @@map("meal_category")
+}
 
-  @@index([providerId, status, isActive])
+enum TiffinPlanType {
+  WEEKLY  @map("weekly")
+  MONTHLY @map("monthly")
+  CUSTOM  @map("custom")
+
+  @@map("tiffin_plan_type")
+}
+
+enum TiffinSubscriptionStatus {
+  ACTIVE    @map("active")
+  PAUSED    @map("paused")
+  EXPIRED   @map("expired")
+  CANCELLED @map("cancelled")
+  PENDING   @map("pending")
+
+  @@map("tiffin_subscription_status")
+}
+
+enum KitchenStatus {
+  OPEN               @map("open")
+  CLOSED             @map("closed")
+  TEMPORARILY_CLOSED @map("temporarily_closed")
+
+  @@map("kitchen_status")
+}
+
+enum KitchenVerificationStatus {
+  PENDING  @map("pending")
+  VERIFIED @map("verified")
+  REJECTED @map("rejected")
+
+  @@map("kitchen_verification_status")
+}
+
+enum TiffinDeliveryType {
+  SELF_DELIVERY    @map("self_delivery")
+  DELIVERY_PARTNER @map("delivery_partner")
+  PICKUP_ONLY      @map("pickup_only")
+  BOTH             @map("both")
+
+  @@map("tiffin_delivery_type")
+}
+
+enum MealLogStatus {
+  SCHEDULED @map("scheduled")
+  DELIVERED @map("delivered")
+  SKIPPED   @map("skipped")
+  MISSED    @map("missed")
+  CANCELLED @map("cancelled")
+  FAILED    @map("failed")
+
+  @@map("meal_log_status")
+}
+
+enum TiffinPaymentStatus {
+  PENDING    @map("pending")
+  PROCESSING @map("processing")
+  PAID       @map("paid")
+  FAILED     @map("failed")
+  CANCELLED  @map("cancelled")
+  REFUNDED   @map("refunded")
+
+  @@map("tiffin_payment_status")
+}
+
+enum TiffinPaymentMethod {
+  UPI         @map("upi")
+  CARD        @map("card")
+  NET_BANKING @map("net_banking")
+  WALLET      @map("wallet")
+  CASH        @map("cash")
+
+  @@map("tiffin_payment_method")
+}
+
+enum TiffinComplaintStatus {
+  OPEN        @map("open")
+  IN_PROGRESS @map("in_progress")
+  RESOLVED    @map("resolved")
+  REJECTED    @map("rejected")
+
+  @@map("tiffin_complaint_status")
+}
+
+enum TiffinSubscriptionDayStatus {
+  PENDING   @map("pending")
+  PARTIAL   @map("partial")
+  COMPLETED @map("completed")
+  SKIPPED   @map("skipped")
+  MISSED    @map("missed")
+  PAUSED    @map("paused")
+
+  @@map("tiffin_subscription_day_status")
+}
+
+// ─── TIFFIN KITCHEN (Owner Onboarding) ──────────────────────────────────
+
+model TiffinKitchen {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId                  String                    @unique @map("owner_id") @db.Uuid
+  kitchenName              String                    @map("kitchen_name") @db.VarChar(200)
+  kitchenLogo              String?                   @map("kitchen_logo")
+  coverImage               String?                   @map("cover_image")
+  description              String?
+  foodOptions              Json?                     @map("food_options")
+  ownerName                String                    @map("owner_name") @db.VarChar(150)
+  phone                    String                    @db.VarChar(15)
+  email                    String?                   @db.VarChar(255)
+  gstNumber                String?                   @map("gst_number") @db.VarChar(20)
+  fssaiLicenseNumber       String?                   @map("fssai_license_number") @db.VarChar(30)
+
+  // Location
+  address                  String?
+  latitude                 Decimal?                  @db.Decimal(9, 6)
+  longitude                Decimal?                  @db.Decimal(9, 6)
+  pincode                  String?                   @db.VarChar(10)
+  city                     String?                   @db.VarChar(100)
+  state                    String?                   @db.VarChar(100)
+  deliveryRadiusKm         Decimal                   @default(5.0) @map("delivery_radius_km") @db.Decimal(5, 2)
+
+  // Service Attributes
+  foodType                 TiffinFoodType            @default(VEG) @map("food_type")
+  breakfastAvailable       Boolean                   @default(false) @map("breakfast_available")
+  lunchAvailable           Boolean                   @default(true) @map("lunch_available")
+  dinnerAvailable          Boolean                   @default(true) @map("dinner_available")
+  mealsPerDay              Int                       @default(2) @map("meals_per_day")
+
+  // Pricing & Charges
+  securityDeposit          Decimal                   @default(0.00) @map("security_deposit") @db.Decimal(10, 2)
+  deliveryCharges          Decimal                   @default(0.00) @map("delivery_charges") @db.Decimal(10, 2)
+  packingCharges           Decimal                   @default(0.00) @map("packing_charges") @db.Decimal(10, 2)
+  extraMealPrice           Decimal                   @default(80.00) @map("extra_meal_price") @db.Decimal(10, 2)
+
+  // Weekly Off
+  isSundayClosed           Boolean                   @default(false) @map("is_sunday_closed")
+  customWeeklyOff          String?                   @map("custom_weekly_off") @db.VarChar(20)
+
+  // Dietary Customization Flags
+  allowsJain               Boolean                   @default(false) @map("allows_jain")
+  allowsLowOil             Boolean                   @default(false) @map("allows_low_oil")
+  allowsDiabeticDiet       Boolean                   @default(false) @map("allows_diabetic_diet")
+  allowsHighProtein        Boolean                   @default(false) @map("allows_high_protein")
+  allowsCustomInstructions Boolean                   @default(true) @map("allows_custom_instructions")
+
+  // Delivery Mode
+  deliveryType             TiffinDeliveryType        @default(SELF_DELIVERY) @map("delivery_type")
+  pickupAvailable          Boolean                   @default(false) @map("pickup_available")
+
+  // Policies
+  cancellationPolicy       String?                   @map("cancellation_policy")
+  refundPolicy             String?                   @map("refund_policy")
+
+  // Statuses
+  status                   KitchenStatus             @default(OPEN)
+  verificationStatus       KitchenVerificationStatus @default(PENDING) @map("verification_status")
+
+  // Cached metrics (updated on write operations)
+  averageRating            Decimal                   @default(0.00) @map("average_rating") @db.Decimal(3, 2)
+  totalReviews             Int                       @default(0) @map("total_reviews")
+
+  createdAt                DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime?                 @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  images            TiffinKitchenImage[]
+  mealTimings       TiffinKitchenMealTiming[]
+  weeklyMenus       TiffinKitchenWeeklyMenu[]
+  subscriptionPlans TiffinSubscriptionPlan[]
+  subscriptions     TiffinCustomerSubscription[]
+  mealLogs          TiffinMealLog[]
+  reviews           TiffinReview[]
+  complaints        TiffinComplaint[]
+  activityLogs      TiffinActivityLog[]
+
   @@index([latitude, longitude])
-  @@map("cleaning_offerings")
+  @@index([city, status, verificationStatus])
+  @@map("tiffin_kitchens")
+}
+
+model TiffinKitchenImage {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId String   @map("kitchen_id") @db.Uuid
+  imageUrl  String   @map("image_url")
+  caption   String?
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  kitchen TiffinKitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  @@index([kitchenId, sortOrder])
+  @@map("tiffin_kitchen_images")
+}
+
+model TiffinKitchenMealTiming {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId    String       @map("kitchen_id") @db.Uuid
+  mealCategory MealCategory @map("meal_category")
+  startTime    String       @map("start_time") @db.VarChar(10)
+  endTime      String       @map("end_time") @db.VarChar(10)
+  cutoffTime   String?      @map("cutoff_time") @db.VarChar(10)
+
+  kitchen TiffinKitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  @@unique([kitchenId, mealCategory])
+  @@map("tiffin_kitchen_meal_timings")
+}
+
+// ─── WEEKLY MENU ────────────────────────────────────────────────────────
+
+model TiffinKitchenWeeklyMenu {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId    String       @map("kitchen_id") @db.Uuid
+  dayOfWeek    String       @map("day_of_week") @db.VarChar(10)
+  mealCategory MealCategory @map("meal_category")
+  items        Json         // [{name, isSpecial?}]
+  calories     Int?
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  kitchen       TiffinKitchen            @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  menuHistories TiffinKitchenMenuHistory[]
+
+  @@unique([kitchenId, dayOfWeek, mealCategory])
+  @@map("tiffin_kitchen_weekly_menus")
+}
+
+model TiffinKitchenMenuHistory {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  weeklyMenuId  String   @map("weekly_menu_id") @db.Uuid
+  previousItems Json     @map("previous_items")
+  updatedBy     String   @map("updated_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  weeklyMenu TiffinKitchenWeeklyMenu @relation(fields: [weeklyMenuId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_kitchen_menu_histories")
+}
+
+// ─── SUBSCRIPTION PLANS ─────────────────────────────────────────────────
+
+model TiffinSubscriptionPlan {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId     String         @map("kitchen_id") @db.Uuid
+  planName      String         @map("plan_name") @db.VarChar(150)
+  planType      TiffinPlanType @map("plan_type")
+  durationDays  Int            @map("duration_days")
+  totalMeals    Int            @map("total_meals")
+  price         Decimal        @db.Decimal(10, 2)
+  discountPrice Decimal?       @map("discount_price") @db.Decimal(10, 2)
+  description   String?
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  kitchen       TiffinKitchen                @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  subscriptions TiffinCustomerSubscription[]
+
+  @@index([kitchenId, isActive])
+  @@map("tiffin_subscription_plans")
+}
+
+// ─── CUSTOMER SUBSCRIPTIONS ─────────────────────────────────────────────
+
+model TiffinCustomerSubscription {
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionCode    String                   @unique @map("subscription_code") @db.VarChar(30)
+  kitchenId           String                   @map("kitchen_id") @db.Uuid
+  customerId          String                   @map("customer_id") @db.Uuid
+  planId              String                   @map("plan_id") @db.Uuid
+
+  // Preferences
+  dietPreference      TiffinFoodType           @default(VEG) @map("diet_preference")
+  customInstructions  String?                  @map("custom_instructions")
+  optedBreakfast      Boolean                  @default(true) @map("opted_breakfast")
+  optedLunch          Boolean                  @default(true) @map("opted_lunch")
+  optedDinner         Boolean                  @default(true) @map("opted_dinner")
+
+  // Delivery
+  deliveryAddress     String?                  @map("delivery_address")
+  deliveryLatitude    Decimal?                 @map("delivery_latitude") @db.Decimal(9, 6)
+  deliveryLongitude   Decimal?                 @map("delivery_longitude") @db.Decimal(9, 6)
+
+  // Reservation snapshot. A PENDING row is the reservation; it becomes the
+  // active subscription only after the payment adapter confirms it.
+  amount              Decimal                  @default(0.00) @db.Decimal(10, 2)
+  currency            String                   @default("INR") @db.VarChar(3)
+
+  // Lifecycle
+  startDate           DateTime                 @map("start_date") @db.Date
+  endDate             DateTime                 @map("end_date") @db.Date
+  totalMealsAllocated Int                      @map("total_meals_allocated")
+  mealsRemaining      Int                      @map("meals_remaining")
+  mealsConsumed       Int                      @default(0) @map("meals_consumed")
+  mealsSkipped        Int                      @default(0) @map("meals_skipped")
+  totalEntitledDays   Int                      @default(28) @map("total_entitled_days")
+  consumedDays        Int                      @default(0) @map("consumed_days")
+  remainingDays       Int                      @default(28) @map("remaining_days")
+  paymentStatus       TiffinPaymentStatus      @default(PENDING) @map("payment_status")
+
+  // Status
+  status              TiffinSubscriptionStatus @default(PENDING)
+  autoRenew           Boolean                  @default(false) @map("auto_renew")
+  pausedAt            DateTime?                @map("paused_at") @db.Timestamptz(6)
+  resumedAt           DateTime?                @map("resumed_at") @db.Timestamptz(6)
+  cancelledAt         DateTime?                @map("cancelled_at") @db.Timestamptz(6)
+  confirmedAt         DateTime?                @map("confirmed_at") @db.Timestamptz(6)
+
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?                @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  kitchen     TiffinKitchen                    @relation(fields: [kitchenId], references: [id], onDelete: Restrict)
+  plan        TiffinSubscriptionPlan           @relation(fields: [planId], references: [id], onDelete: Restrict)
+  pauseLogs   TiffinSubscriptionPauseLog[]
+  renewalLogs TiffinSubscriptionRenewalLog[]
+  payments    TiffinPayment[]
+  subscriptionDays TiffinSubscriptionDay[]
+  mealLogs    TiffinMealLog[]
+  reviews     TiffinReview[]
+  complaints  TiffinComplaint[]
+
+  @@index([customerId, status])
+  @@index([kitchenId, status, endDate])
+  @@map("tiffin_customer_subscriptions")
+}
+
+model TiffinSubscriptionDay {
+  id             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String                      @map("subscription_id") @db.Uuid
+  serviceDate    DateTime                    @map("service_date") @db.Date
+  status         TiffinSubscriptionDayStatus @default(PENDING)
+  consumed       Boolean                     @default(false)
+  consumedAt     DateTime?                   @map("consumed_at") @db.Timestamptz(6)
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  mealLogs     TiffinMealLog[]
+
+  @@unique([subscriptionId, serviceDate])
+  @@index([serviceDate, status, consumed])
+  @@map("tiffin_subscription_days")
+}
+
+model TiffinSubscriptionPauseLog {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String    @map("subscription_id") @db.Uuid
+  pauseStartDate DateTime  @map("pause_start_date") @db.Date
+  pauseEndDate   DateTime  @map("pause_end_date") @db.Date
+  reason         String?
+  resumedEarlyAt DateTime? @map("resumed_early_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, pauseStartDate])
+  @@map("tiffin_subscription_pause_logs")
+}
+
+model TiffinSubscriptionRenewalLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  oldEndDate     DateTime @map("old_end_date") @db.Date
+  newEndDate     DateTime @map("new_end_date") @db.Date
+  addedMeals     Int      @map("added_meals")
+  paymentId      String?  @map("payment_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_subscription_renewal_logs")
+}
+
+// ─── MEAL TRACKING ──────────────────────────────────────────────────────
+
+model TiffinMealLog {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String        @map("subscription_id") @db.Uuid
+  kitchenId      String        @map("kitchen_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  mealDate       DateTime      @map("meal_date") @db.Date
+  mealCategory   MealCategory  @map("meal_category")
+  subscriptionDayId String?     @map("subscription_day_id") @db.Uuid
+  status         MealLogStatus @default(SCHEDULED)
+  isExtraMeal    Boolean       @default(false) @map("is_extra_meal")
+  extraMealPrice Decimal       @default(0.00) @map("extra_meal_price") @db.Decimal(10, 2)
+  deliveryOtp    String?       @map("delivery_otp") @db.VarChar(6)
+  deliveredAt    DateTime?     @map("delivered_at") @db.Timestamptz(6)
+  deliveredByProviderId String? @map("delivered_by_provider_id") @db.Uuid
+  skippedAt      DateTime?     @map("skipped_at") @db.Timestamptz(6)
+  missedAt       DateTime?     @map("missed_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscription   TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  kitchen        TiffinKitchen              @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  subscriptionDay TiffinSubscriptionDay?    @relation(fields: [subscriptionDayId], references: [id], onDelete: SetNull)
+  deliveryDetail TiffinMealDelivery?
+  complaints     TiffinComplaint[]
+
+  @@unique([subscriptionId, mealDate, mealCategory])
+  @@index([kitchenId, mealDate, mealCategory, status])
+  @@index([customerId, mealDate])
+  @@map("tiffin_meal_logs")
+}
+
+model TiffinMealDelivery {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mealLogId           String   @unique @map("meal_log_id") @db.Uuid
+  deliveryPersonName  String?  @map("delivery_person_name") @db.VarChar(150)
+  deliveryPersonPhone String?  @map("delivery_person_phone") @db.VarChar(15)
+  verifiedOtp         String?  @map("verified_otp") @db.VarChar(6)
+  deliveryNotes       String?  @map("delivery_notes")
+  proofImageUrl       String?  @map("proof_image_url")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  mealLog TiffinMealLog @relation(fields: [mealLogId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_meal_deliveries")
+}
+
+// ─── PAYMENTS & INVOICES ────────────────────────────────────────────────
+
+model TiffinPayment {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String              @map("subscription_id") @db.Uuid
+  kitchenId      String              @map("kitchen_id") @db.Uuid
+  customerId     String              @map("customer_id") @db.Uuid
+  transactionId  String?             @unique @map("transaction_id") @db.VarChar(128)
+  idempotencyKey String?             @unique @map("idempotency_key") @db.VarChar(128)
+  paymentGateway String?             @map("payment_gateway") @db.VarChar(50)
+  providerOrderId String?            @map("provider_order_id") @db.VarChar(128)
+  providerPaymentId String?          @map("provider_payment_id") @db.VarChar(128)
+  currency       String              @default("INR") @db.VarChar(3)
+  paymentMethod  TiffinPaymentMethod @default(UPI) @map("payment_method")
+  status         TiffinPaymentStatus @default(PENDING)
+
+  // Breakdown
+  baseAmount     Decimal             @map("base_amount") @db.Decimal(10, 2)
+  discountAmount Decimal             @default(0.00) @map("discount_amount") @db.Decimal(10, 2)
+  couponCode     String?             @map("coupon_code") @db.VarChar(30)
+  gstAmount      Decimal             @default(0.00) @map("gst_amount") @db.Decimal(10, 2)
+  platformFee    Decimal             @default(0.00) @map("platform_fee") @db.Decimal(10, 2)
+  packingCharge  Decimal             @default(0.00) @map("packing_charge") @db.Decimal(10, 2)
+  deliveryCharge Decimal             @default(0.00) @map("delivery_charge") @db.Decimal(10, 2)
+  totalAmount    Decimal             @map("total_amount") @db.Decimal(10, 2)
+  refundAmount   Decimal             @default(0.00) @map("refund_amount") @db.Decimal(10, 2)
+
+  paidAt    DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoice      TiffinInvoice?
+  refunds      TiffinRefund[]
+
+  @@index([subscriptionId, status])
+  @@index([kitchenId, status, paidAt])
+  @@index([customerId, status])
+  @@map("tiffin_payments")
+}
+
+model TiffinInvoice {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId     String   @unique @map("payment_id") @db.Uuid
+  invoiceNumber String   @unique @map("invoice_number") @db.VarChar(60)
+  pdfUrl        String?  @map("pdf_url")
+  issuedAt      DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+
+  payment TiffinPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_invoices")
+}
+
+model TiffinRefund {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId   String   @map("payment_id") @db.Uuid
+  refundRefId String   @unique @map("refund_ref_id") @db.VarChar(100)
+  amount      Decimal  @db.Decimal(10, 2)
+  reason      String?
+  status      String   @default("PROCESSED") @db.VarChar(30)
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  payment TiffinPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("tiffin_refunds")
+}
+
+// ─── REVIEWS & COMPLAINTS ───────────────────────────────────────────────
+
+model TiffinReview {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId      String   @map("kitchen_id") @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  subscriptionId String?  @map("subscription_id") @db.Uuid
+  rating         Int      // 1-5
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  kitchen      TiffinKitchen               @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  subscription TiffinCustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([kitchenId, rating])
+  @@map("tiffin_reviews")
+}
+
+model TiffinComplaint {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticketNumber   String               @unique @map("ticket_number") @db.VarChar(30)
+  kitchenId      String               @map("kitchen_id") @db.Uuid
+  customerId     String               @map("customer_id") @db.Uuid
+  subscriptionId String?              @map("subscription_id") @db.Uuid
+  mealLogId      String?              @map("meal_log_id") @db.Uuid
+  category       String               @default("Other") @db.VarChar(80)
+  subject        String               @db.VarChar(200)
+  description    String
+  status         TiffinComplaintStatus @default(OPEN)
+  resolutionNote String?              @map("resolution_note")
+  providerResponse String?            @map("provider_response")
+  resolvedAt     DateTime?            @map("resolved_at") @db.Timestamptz(6)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  kitchen      TiffinKitchen               @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+  subscription TiffinCustomerSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  mealLog      TiffinMealLog?              @relation(fields: [mealLogId], references: [id], onDelete: SetNull)
+
+  @@index([kitchenId, status])
+  @@map("tiffin_complaints")
+}
+
+// ─── ACTIVITY LOG & NOTIFICATIONS ───────────────────────────────────────
+
+model TiffinActivityLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kitchenId   String   @map("kitchen_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  kitchen TiffinKitchen @relation(fields: [kitchenId], references: [id], onDelete: Cascade)
+
+  @@index([kitchenId, createdAt])
+  @@map("tiffin_activity_logs")
+}
+
+model TiffinNotification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  kitchenId String?  @map("kitchen_id") @db.Uuid
+  title     String   @db.VarChar(200)
+  message   String
+  type      String   @db.VarChar(50)
+  isRead    Boolean  @default(false) @map("is_read")
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, isRead, createdAt])
+  @@map("tiffin_notifications")
 }

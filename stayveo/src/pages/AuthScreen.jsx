@@ -41,6 +41,7 @@ export default function AuthScreen() {
       const otpString = otp.join('');
       const res = await verifyOtp(phone, otpString);
       const { isProfileComplete, userId, data } = res.data;
+      const displayName = data?.fullName || data?.name || '';
 
       // Save user data to localStorage
       localStorage.setItem('userId', userId);
@@ -52,24 +53,35 @@ export default function AuthScreen() {
         userId,
         isAuthenticated: true,
         exists: isProfileComplete,
-        name: data?.name || '',
+        name: displayName,
       });
 
       if (isProfileComplete) {
         // ── Returning user → go straight to home ────────────────────
-        localStorage.setItem('userName', data.name);
-        localStorage.setItem('userCollege', data.college);
+        localStorage.setItem('userName', displayName);
+        localStorage.setItem('userCollege', data?.college || '');
         localStorage.setItem('profileComplete', 'true');
-        toast.success(`Welcome back, ${data.name}!`);
-        navigate('/home', { state: { welcomeBack: true, name: data.name } });
+        toast.success(`Welcome back, ${displayName || 'User'}!`);
+        const returnTo = localStorage.getItem('tiffinReservationReturn');
+        if (returnTo) {
+          localStorage.removeItem('tiffinReservationReturn');
+          navigate(returnTo);
+        } else {
+          navigate('/home', { state: { welcomeBack: true, name: displayName } });
+        }
       } else {
         // ── New user → go to college selection → onboarding ─────────
         toast.info('Please complete your profile');
         navigate('/college-select');
       }
     } catch (err) {
-      setError(err.message || 'Verification failed');
-      toast.error(err.message || 'Verification failed');
+      console.error('OTP verification failed', {
+        message: err?.message,
+        details: err?.details,
+      });
+      const message = err?.message || 'Verification failed';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

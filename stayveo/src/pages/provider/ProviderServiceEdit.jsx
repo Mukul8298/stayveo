@@ -54,12 +54,6 @@ export default function ProviderServiceEdit() {
   if (loading) {
     return (
       <div className="psf-page">
-        <div className="page-header">
-          <button className="back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={20} />
-          </button>
-          <h1>{config.editTitle}</h1>
-        </div>
         <div className="psf-loading">
           <Loader2 size={24} className="spinning" />
           <p>Loading service...</p>
@@ -70,13 +64,6 @@ export default function ProviderServiceEdit() {
 
   return (
     <div className="psf-page">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>{config.editTitle}</h1>
-      </div>
-
       <div className="psf-content">
         <DynamicServiceForm
           serviceType={serviceType}

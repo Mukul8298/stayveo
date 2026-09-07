@@ -5,6 +5,7 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { roomListingService } from './room-listing.service.js';
+import { roomListingRepository } from './room-listing.repository.js';
 import { sendSuccess, sendCreated } from '../../common/utils/response.js';
 import type { CreateRoomListingInput, UpdateRoomListingInput } from './room-listing.schema.js';
 
@@ -74,5 +75,25 @@ export const roomListingController = {
     const phone = getPhone(request);
     await roomListingService.remove(phone, request.params.id);
     return sendSuccess(reply, null, 'Listing removed');
+  },
+
+  async adjustInventory(
+    request: FastifyRequest<{ Params: { id: string }; Body: { delta: number } }>,
+    reply: FastifyReply
+  ) {
+    const phone = getPhone(request);
+    const delta = Number(request.body?.delta);
+    if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 100) {
+      throw { statusCode: 400, message: 'Inventory delta must be a non-zero integer between -100 and 100' };
+    }
+    const listing = await roomListingService.adjustInventory(phone, request.params.id, delta);
+    return sendSuccess(reply, listing, delta > 0 ? 'Beds added' : 'Beds removed');
+  },
+};
+
+export const publicRoomListingController = {
+  async list(_request: FastifyRequest, reply: FastifyReply) {
+    const listings = await roomListingRepository.findActiveForStudents();
+    return sendSuccess(reply, listings);
   },
 };

@@ -1,242 +1,149 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, BedDouble, Building2, Eye, EyeOff, Loader2, MapPin, Plus, RefreshCw, Settings2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bed, Edit3, Loader2, Plus, ToggleLeft, ToggleRight } from 'lucide-react';
-import EmptyStateCard from '../../components/provider/EmptyStateCard';
-import ServiceStatusChip from '../../components/provider/ServiceStatusChip';
+import { getRoomListings, toggleRoomListing } from '../../api/provider';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
-import {
-  getProviderServiceItems,
-  getRoomListings,
-  toggleProviderServiceItem,
-  toggleRoomListing,
-} from '../../api/provider';
-import {
-  getCreatePath,
-  getEditPath,
-  getProviderServiceTypes,
-  providerServiceConfig,
-  SERVICE_TYPES,
-} from '../../config/providerServices';
-import { calculateRoomInventory } from '../../lib/serviceVisibility';
 import './ProviderServices.css';
 
-function ServiceCard({ serviceType, item, onToggle, onEdit }) {
-  const config = providerServiceConfig[serviceType];
-  const title = item.title || item.name || item.planName || config.label;
-  const image = item.images?.[0] || item.coverImage;
-  const roomInventory = serviceType === SERVICE_TYPES.PG
-    ? calculateRoomInventory(item)
-    : null;
-  const status = roomInventory?.status || item.status || (item.isActive === false ? 'PAUSED' : 'ACTIVE');
+function validImage(value) {
+  return typeof value === 'string' && /^(https?:\/\/|data:image\/)/.test(value);
+}
 
-  return (
-    <div className={`ps-card ${item.isActive === false ? 'ps-card--disabled' : ''}`}>
-      {image ? (
-        <div className="ps-card-img"><img src={image} alt={title} /></div>
-      ) : (
-        <div className="ps-card-img ps-card-img--empty">{config.emoji}</div>
-      )}
-
-      <div className="ps-card-body">
-        <div className="ps-card-top">
-          <h3 className="ps-card-title">{title}</h3>
-          <ServiceStatusChip status={status} />
-        </div>
-
-        <div className="ps-card-meta">
-          <span className="ps-card-type">{item.roomType || item.mealType || item.washType || item.cleaningType || config.label}</span>
-          {item.genderPreference && <span className="ps-card-gender">{item.genderPreference}</span>}
-        </div>
-
-        <div className="ps-card-stats">
-          <div className="ps-card-price">
-            <span className="ps-price">₹{(item.price || item.monthlyPrice || item.kgPrice || 0).toLocaleString()}</span>
-            <span className="ps-unit">{serviceType === SERVICE_TYPES.PG ? '/month' : serviceType === SERVICE_TYPES.LAUNDRY ? '/kg' : ''}</span>
-          </div>
-          {roomInventory && (
-            <div className="ps-card-beds">
-              <Bed size={13} />
-              <span>{roomInventory.availableBeds}/{roomInventory.totalBeds} beds</span>
-            </div>
-          )}
-        </div>
-
-        {roomInventory && (
-          <div className="ps-inventory-bar">
-            <span style={{ width: `${roomInventory.occupancyPercent}%` }} />
-          </div>
-        )}
-      </div>
-
-      <div className="ps-card-actions">
-        <button className="ps-edit" onClick={onEdit} title="Edit service">
-          <Edit3 size={14} />
-        </button>
-        <button className="ps-toggle" onClick={onToggle} title={item.isActive === false ? 'Activate' : 'Pause'}>
-          {item.isActive !== false
-            ? <ToggleRight size={28} className="ps-toggle-on" />
-            : <ToggleLeft size={28} className="ps-toggle-off" />}
-        </button>
-      </div>
-    </div>
-  );
+function number(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
 export default function ProviderServices() {
   const navigate = useNavigate();
   const { provider } = useProvider();
   const toast = useToast();
-  const serviceTypes = useMemo(() => getProviderServiceTypes(provider), [provider]);
-  const [itemsByType, setItemsByType] = useState({});
+  const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [togglingId, setTogglingId] = useState('');
+
+  const loadListings = useCallback(async () => {
+    if (!provider.phone) {
+      setListings([]);
+      setLoadError('Provider authentication is missing. Please sign in again.');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError('');
+    try {
+      const response = await getRoomListings(provider.phone);
+      setListings(response?.data || []);
+    } catch (error) {
+      console.error('Failed to load provider properties:', error);
+      setLoadError(error.message || 'Unable to load your properties.');
+    } finally {
+      setLoading(false);
+    }
+  }, [provider.phone]);
 
   useEffect(() => {
-    if (!provider.phone) return;
+    queueMicrotask(() => void loadListings());
+  }, [loadListings]);
 
-    let cancelled = false;
-    async function fetchServices() {
-      setLoading(true);
-      const next = {};
+  const stats = useMemo(() => ({
+    totalManaged: listings.length,
+    activeListings: listings.filter((item) => item.isActive === true).length,
+    totalRooms: listings.reduce((sum, item) => sum + number(item.totalRooms ?? item.roomCount ?? 1), 0),
+  }), [listings]);
 
-      for (const type of serviceTypes) {
-        try {
-          const res = type === SERVICE_TYPES.PG
-            ? await getRoomListings(provider.phone)
-            : await getProviderServiceItems(provider.phone, type);
-          next[type] = res.data || [];
-        } catch {
-          next[type] = [];
-        }
-      }
-
-      if (!cancelled) {
-        setItemsByType(next);
-        setLoading(false);
-      }
-    }
-
-    fetchServices();
-    return () => { cancelled = true; };
-  }, [provider.phone, serviceTypes]);
-
-  const allItems = Object.values(itemsByType).flat();
-  const activeCount = allItems.filter((item) => item.isActive !== false && item.status !== 'FULL').length;
-
-  async function handleToggle(serviceType, item) {
+  async function handleToggle(item) {
     const nextActive = item.isActive === false;
-    setItemsByType((current) => ({
-      ...current,
-      [serviceType]: (current[serviceType] || []).map((existing) =>
-        existing.id === item.id ? { ...existing, isActive: nextActive } : existing
-      ),
-    }));
-
+    setTogglingId(item.id);
     try {
-      if (serviceType === SERVICE_TYPES.PG) {
-        await toggleRoomListing(provider.phone, item.id, nextActive);
-      } else {
-        await toggleProviderServiceItem(provider.phone, serviceType, item.id, nextActive);
-      }
-    } catch {
-      setItemsByType((current) => ({
-        ...current,
-        [serviceType]: (current[serviceType] || []).map((existing) =>
-          existing.id === item.id ? item : existing
-        ),
-      }));
-      toast.error('Could not update visibility');
+      const response = await toggleRoomListing(provider.phone, item.id, nextActive);
+      const updated = response?.data;
+      setListings((current) => current.map((listing) => listing.id === item.id ? { ...listing, ...(updated || {}), isActive: nextActive } : listing));
+      toast.success(nextActive ? 'Listing visible to students' : 'Listing hidden from students');
+    } catch (error) {
+      toast.error(error.message || 'Could not update listing visibility');
+    } finally {
+      setTogglingId('');
     }
   }
 
   return (
-    <div className="ps-page" id="provider-services">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/provider/dashboard')}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>My Services</h1>
-      </div>
+    <main className="ps-page" id="provider-services-root">
+      <header className="ps-page-header">
+        <div>
+          <span className="ps-kicker"><Building2 size={15} /> Property management</span>
+          <h1>Services</h1>
+          <p>Manage the properties, beds, and visibility connected to your provider account.</p>
+        </div>
+        <div className="ps-header-actions">
+          <button className="ps-refresh" type="button" onClick={() => void loadListings()} disabled={loading}><RefreshCw size={16} className={loading ? 'spinning' : ''} /> Refresh</button>
+          <button className="ps-add-property" type="button" onClick={() => navigate('/provider/listing/create')}><Plus size={17} /> Add property</button>
+        </div>
+      </header>
 
-      <div className="ps-body">
-        {!loading && (
-          <div className="ps-stats-row">
-            <div className="ps-stat">
-              <span className="ps-stat-num">{allItems.length}</span>
-              <span>Total</span>
-            </div>
-            <div className="ps-stat-line" />
-            <div className="ps-stat">
-              <span className="ps-stat-num ps-stat-num--green">{activeCount}</span>
-              <span>Active</span>
-            </div>
-            <div className="ps-stat-line" />
-            <div className="ps-stat">
-              <span className="ps-stat-num ps-stat-num--amber">{serviceTypes.length}</span>
-              <span>Categories</span>
-            </div>
-          </div>
-        )}
+      <section className="ps-stats-grid" aria-label="Property statistics">
+        <Stat label="Total managed" value={stats.totalManaged} />
+        <Stat label="Active listings" value={stats.activeListings} tone="green" />
+        <Stat label="Total rooms" value={stats.totalRooms} />
+        <Stat label="Waitlist" value="—" />
+      </section>
 
-        {serviceTypes.map((type) => {
-          const config = providerServiceConfig[type];
-          return (
-            <button
-              key={type}
-              className="ps-add-banner"
-              onClick={() => navigate(getCreatePath(type))}
-            >
-              <Plus size={20} />
-              <div>
-                <h3>{config.addLabel}</h3>
-                <p>{config.emptyDescription}</p>
-              </div>
-            </button>
-          );
-        })}
-
-        {loading && (
-          <div className="ps-loading">
-            <Loader2 size={24} className="ps-spinner" />
-            <p>Loading your services...</p>
-          </div>
-        )}
-
-        {!loading && serviceTypes.map((type) => {
-          const config = providerServiceConfig[type];
-          const items = itemsByType[type] || [];
-          return (
-            <section key={type} className="ps-group">
-              <h3 className="ps-group-title">
-                <span>{config.emoji}</span>
-                {config.groupTitle}
-              </h3>
-
-              {items.length > 0 ? (
-                <div className="ps-list">
-                  {items.map((item) => (
-                    <ServiceCard
-                      key={item.id}
-                      serviceType={type}
-                      item={item}
-                      onEdit={() => navigate(getEditPath(type, item.id))}
-                      onToggle={() => handleToggle(type, item)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <EmptyStateCard
-                  icon={config.emoji}
-                  title={config.emptyTitle}
-                  description={config.emptyDescription}
-                  ctaLabel={config.addLabel}
-                  onAction={() => navigate(getCreatePath(type))}
-                />
-              )}
-            </section>
-          );
-        })}
-      </div>
-    </div>
+      {loading ? (
+        <section className="ps-state-card"><Loader2 size={28} className="spinning" /><p>Loading your properties...</p></section>
+      ) : loadError ? (
+        <section className="ps-state-card ps-state-card--error"><AlertCircle size={28} /><h2>Unable to load properties</h2><p>{loadError}</p><button type="button" onClick={() => void loadListings()}>Try again</button></section>
+      ) : listings.length === 0 ? (
+        <section className="ps-state-card"><Building2 size={30} /><h2>No properties yet</h2><p>Add a room listing to start managing beds and reservations.</p><button type="button" onClick={() => navigate('/provider/listing/create')}>Add property</button></section>
+      ) : (
+        <section className="ps-listings" aria-label="Provider properties">
+          {listings.map((item) => <PropertyCard key={item.id} item={item} onToggle={() => void handleToggle(item)} toggling={togglingId === item.id} onManageBeds={() => navigate('/provider/manage-beds')} onEdit={() => navigate(`/provider/listing/${item.id}/edit`)} />)}
+        </section>
+      )}
+    </main>
   );
+}
+
+function Stat({ label, value, tone = '' }) {
+  return <article className={`ps-stat-card ${tone ? `ps-stat-card--${tone}` : ''}`}><span>{label}</span><strong>{String(value).padStart(2, '0')}</strong></article>;
+}
+
+function PropertyCard({ item, onToggle, toggling, onManageBeds, onEdit }) {
+  const image = item.images?.find(validImage);
+  const totalBeds = number(item.totalBeds);
+  const availableBeds = number(item.availableBeds);
+  const reservedBeds = number(item.reservedBeds);
+  const occupiedBeds = number(item.occupiedBeds);
+  const status = String(item.status || '').toLowerCase();
+  const visible = item.isActive === true;
+  return (
+    <article className={`ps-property-card ${visible ? '' : 'ps-property-card--disabled'}`}>
+      <div className="ps-property-image">
+        {image ? <img src={image} alt={item.title || 'Property'} /> : <div className="ps-property-image-placeholder"><Building2 size={32} /></div>}
+        <span>{item.roomType || 'Property'}</span>
+      </div>
+      <div className="ps-property-body">
+        <div className="ps-property-topline">
+          <div><h2>{item.title || 'Untitled property'}</h2><p className="ps-property-address"><MapPin size={14} /> {item.address || 'Address not provided'}</p></div>
+          <div className="ps-visibility-control"><span>{visible ? <><Eye size={13} /> Visible</> : <><EyeOff size={13} /> Hidden</>}</span><button type="button" className={`ps-switch ${visible ? 'is-on' : ''}`} onClick={onToggle} disabled={toggling} aria-label={`${visible ? 'Hide' : 'Show'} ${item.title || 'property'}`}><span /></button></div>
+        </div>
+        <div className="ps-property-divider" />
+        <div className="ps-property-metrics">
+          <Metric label="Rooms" value={number(item.totalRooms ?? item.roomCount ?? 1)} />
+          <Metric label="Total beds" value={totalBeds} />
+          <Metric label="Available" value={availableBeds} tone="green" />
+          <Metric label="Reserved" value={reservedBeds} tone="orange" />
+          <Metric label="Occupied" value={occupiedBeds} tone="blue" />
+        </div>
+        <div className="ps-property-footer">
+          <span className={`ps-full-state ${status === 'full' || availableBeds === 0 ? 'is-full' : ''}`}><BedDouble size={14} /> {status === 'full' || availableBeds === 0 ? 'No beds available' : `${availableBeds} bed${availableBeds === 1 ? '' : 's'} available`}</span>
+          <div className="ps-property-actions"><button type="button" onClick={onEdit}>Edit</button><button type="button" onClick={onManageBeds}><Settings2 size={14} /> Manage beds</button></div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function Metric({ label, value, tone = '' }) {
+  return <div className={`ps-metric ${tone ? `ps-metric--${tone}` : ''}`}><span>{label}</span><strong>{value}</strong></div>;
 }

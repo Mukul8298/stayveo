@@ -5,6 +5,7 @@ import { currentUser } from '../data/mockData';
 import Button from '../components/Button';
 import LocationPicker from '../components/maps/LocationPicker';
 import { getCurrentUserProfile, updateUserProfile } from '../api/client';
+import { uploadImage } from '../lib/storage';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import './ProfilePage.css';
@@ -16,11 +17,11 @@ const SLEEP_OPTIONS = ['Early Bird', 'Night Owl', 'Flexible'];
 const STUDY_OPTIONS = ['Quiet', 'Normal', 'Flexible'];
 const DEFAULT_BUDGET_RANGE = [5000, 10000];
 
-const YEAR_LABEL_FROM_NUMBER = {
-  1: '1st Year',
-  2: '2nd Year',
-  3: '3rd Year',
-  4: '4th Year',
+const YEAR_MAP = {
+  "1st year": '1st Year',
+  "2nd year": '2nd Year',
+  "3rd year": '3rd Year',
+  "4th year": '4th Year',
 };
 
 const DISPLAY_GENDER = {
@@ -64,14 +65,14 @@ const EMPTY_PROFILE = {
   budget: DEFAULT_BUDGET_RANGE,
   foodPreference: '',
   sleepSchedule: '',
-  cleanlinessLevel: 0,
-  studyHabits: '',
-  personalityType: 3,
+  cleanlinessLevel: null,
+  studyHabits: null,
+  personalityType: null,
   locationPreference: '',
-  currentAddress: '',
+  currentAddress: null,
   latitude: null,
   longitude: null,
-  profileImageUrl: '',
+  profileImageUrl: null,
 };
 
 function parseBudgetRange(budgetValue) {
@@ -100,23 +101,33 @@ function getSocialLabel(value) {
   return 'Extrovert';
 }
 
+function mapYearToForm(year) {
+  if (year === null || year === undefined || year === '') return '';
+  if (typeof year === 'number') {
+    const suffix = year === 1 ? 'st' : year === 2 ? 'nd' : year === 3 ? 'rd' : 'th';
+    return `${year}${suffix} Year`;
+  }
+  const trimmed = String(year).trim();
+  return YEAR_MAP[trimmed.toLowerCase()] || trimmed;
+}
+
 function mapProfileToForm(profile) {
   return {
     fullName: profile?.fullName || '',
     college: profile?.college || '',
-    year: YEAR_LABEL_FROM_NUMBER[profile?.year] || '',
+    year: mapYearToForm(profile?.year),
     gender: DISPLAY_GENDER[profile?.gender] || '',
     budget: parseBudgetRange(profile?.budget),
     foodPreference: DISPLAY_FOOD[profile?.foodPreference] || '',
     sleepSchedule: DISPLAY_SLEEP[profile?.sleepSchedule] || '',
-    cleanlinessLevel: profile?.cleanlinessLevel || 0,
-    studyHabits: DISPLAY_STUDY[profile?.studyHabits] || '',
-    personalityType: SOCIAL_LEVEL_TO_SLIDER[profile?.personalityType] || 3,
+    cleanlinessLevel: profile?.cleanlinessLevel ?? null,
+    studyHabits: profile?.studyHabits ? DISPLAY_STUDY[profile.studyHabits] || profile.studyHabits : null,
+    personalityType: profile?.personalityType ? SOCIAL_LEVEL_TO_SLIDER[profile.personalityType] ?? null : null,
     locationPreference: profile?.locationPreference || '',
-    currentAddress: profile?.currentAddress || '',
+    currentAddress: profile?.currentAddress || null,
     latitude: Number.isFinite(Number(profile?.latitude)) ? Number(profile.latitude) : null,
     longitude: Number.isFinite(Number(profile?.longitude)) ? Number(profile.longitude) : null,
-    profileImageUrl: profile?.profileImageUrl || '',
+    profileImageUrl: profile?.profileImageUrl || null,
   };
 }
 
@@ -128,18 +139,16 @@ function validateProfile(info, phone) {
   if (!info.gender) return 'Gender is required';
   if (!info.foodPreference) return 'Food preference is required';
   if (!info.sleepSchedule) return 'Sleep schedule is required';
-  if (!info.cleanlinessLevel) return 'Cleanliness level is required';
-  if (!info.studyHabits) return 'Study habits are required';
-  if (!info.personalityType) return 'Personality type is required';
+  if (!info.locationPreference.trim()) return 'Location preference is required';
   if (!info.budget?.[0] || !info.budget?.[1]) return 'Budget range is required';
   if (info.budget[0] >= info.budget[1]) return 'Budget range is invalid';
-  if (info.currentAddress.trim() && (!Number.isFinite(Number(info.latitude)) || !Number.isFinite(Number(info.longitude)))) {
+  if (info.currentAddress?.trim() && (!Number.isFinite(Number(info.latitude)) || !Number.isFinite(Number(info.longitude)))) {
     return 'Pin your current address on the map';
   }
   return '';
 }
 
-async function fileToDataUrl(file) {
+async function compressImageFile(file) {
   const rawDataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => resolve(event.target?.result);
@@ -171,7 +180,17 @@ async function fileToDataUrl(file) {
   }
 
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.82);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) resolve(result);
+      else reject(new Error('Failed to compress image'));
+    }, 'image/jpeg', 0.82);
+  });
+
+  return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'profile'}-compressed.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now(),
+  });
 }
 
 export default function ProfilePage() {
@@ -179,6 +198,7 @@ export default function ProfilePage() {
   const { authState, clearAuth, setAuth } = useAuth();
   const toast = useToast();
   const fileRef = useRef(null);
+  const loadedUserIdRef = useRef(null);
   const [profileImg, setProfileImg] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -190,8 +210,13 @@ export default function ProfilePage() {
     college: localStorage.getItem('userCollege') || localStorage.getItem('selectedCollege') || '',
   }));
 
-  const loadProfile = useCallback(async () => {
-    if (!authState?.userId) {
+  const loadProfile = useCallback(async ({ force = false } = {}) => {
+    if (!authState.userId) {
+      setIsLoadingProfile(false);
+      return;
+    }
+
+    if (!force && loadedUserIdRef.current === authState.userId) {
       setIsLoadingProfile(false);
       return;
     }
@@ -211,11 +236,12 @@ export default function ProfilePage() {
       }
 
       const nextInfo = mapProfileToForm(profile);
+      loadedUserIdRef.current = authState.userId;
       setInfo(nextInfo);
       setProfileImg(nextInfo.profileImageUrl || '');
       if (nextInfo.fullName) localStorage.setItem('userName', nextInfo.fullName);
       if (nextInfo.college) localStorage.setItem('userCollege', nextInfo.college);
-      setAuth({ name: nextInfo.fullName || authState?.name, exists: true });
+      setAuth(nextInfo.fullName ? { name: nextInfo.fullName, exists: true } : { exists: true });
     } catch (error) {
       console.error('Profile load error:', error);
       setLoadError(true);
@@ -223,25 +249,63 @@ export default function ProfilePage() {
     } finally {
       setIsLoadingProfile(false);
     }
-  }, [authState, setAuth, toast]);
+  }, [authState.userId, setAuth, toast]);
 
   useEffect(() => {
-    queueMicrotask(loadProfile);
+    loadedUserIdRef.current = null;
+  }, [authState.userId]);
+
+  useEffect(() => {
+    queueMicrotask(() => loadProfile());
   }, [loadProfile]);
 
-  const handlePhotoUpload = async (e) => {
-    if (!isEditing) return;
+  const buildProfilePayload = useCallback((nextInfo) => ({
+    phone: authState.phone,
+    fullName: nextInfo.fullName.trim(),
+    college: nextInfo.college.trim(),
+    year: nextInfo.year,
+    gender: nextInfo.gender,
+    foodPreference: nextInfo.foodPreference,
+    budget: serializeBudgetRange(nextInfo.budget),
+    cleanlinessLevel: nextInfo.cleanlinessLevel ?? null,
+    studyHabits: nextInfo.studyHabits || null,
+    personalityType: nextInfo.personalityType == null ? null : getSocialLabel(nextInfo.personalityType),
+    locationPreference: nextInfo.locationPreference.trim(),
+    currentAddress: nextInfo.currentAddress?.trim() || null,
+    latitude: Number.isFinite(Number(nextInfo.latitude)) ? Number(nextInfo.latitude) : null,
+    longitude: Number.isFinite(Number(nextInfo.longitude)) ? Number(nextInfo.longitude) : null,
+    sleepSchedule: nextInfo.sleepSchedule,
+    profileImageUrl: nextInfo.profileImageUrl || null,
+  }), [authState.phone]);
 
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
 
     if (file) {
       try {
-        const dataUrl = await fileToDataUrl(file);
-        setProfileImg(dataUrl);
-        setInfo((prev) => ({ ...prev, profileImageUrl: dataUrl }));
+        const validationError = validateProfile(info, authState.phone);
+        if (validationError) {
+          toast.error(validationError);
+          return;
+        }
+
+        setIsSavingProfile(true);
+        const compressedFile = await compressImageFile(file);
+        const upload = await uploadImage({
+          file: compressedFile,
+          providerId: authState.userId,
+          listingId: 'profile',
+          imageId: 'avatar',
+        });
+        const nextInfo = { ...info, profileImageUrl: upload.publicUrl };
+        await updateUserProfile(buildProfilePayload(nextInfo));
+        await loadProfile({ force: true });
+        toast.success('Profile photo updated');
       } catch (error) {
-        toast.error(error.message || 'Failed to process image');
+        toast.error(error.message || 'Failed to upload image');
+      } finally {
+        setIsSavingProfile(false);
       }
     }
   };
@@ -256,24 +320,7 @@ export default function ProfilePage() {
     setIsSavingProfile(true);
 
     try {
-      const payload = {
-        phone: authState.phone,
-        fullName: info.fullName.trim(),
-        college: info.college.trim(),
-        year: info.year,
-        gender: info.gender,
-        foodPreference: info.foodPreference,
-        budget: serializeBudgetRange(info.budget),
-        cleanlinessLevel: info.cleanlinessLevel,
-        studyHabits: info.studyHabits,
-        personalityType: getSocialLabel(info.personalityType),
-        locationPreference: info.locationPreference,
-        currentAddress: info.currentAddress.trim(),
-        latitude: Number.isFinite(Number(info.latitude)) ? Number(info.latitude) : null,
-        longitude: Number.isFinite(Number(info.longitude)) ? Number(info.longitude) : null,
-        sleepSchedule: info.sleepSchedule,
-        profileImageUrl: info.profileImageUrl || undefined,
-      };
+      const payload = buildProfilePayload(info);
 
       const response = await updateUserProfile(payload);
       const profile = response.data?.studentProfile;
@@ -281,12 +328,13 @@ export default function ProfilePage() {
       if (profile) {
         const nextInfo = mapProfileToForm(profile);
         setInfo(nextInfo);
-        setProfileImg(nextInfo.profileImageUrl);
+        setProfileImg(nextInfo.profileImageUrl || '');
         localStorage.setItem('userName', nextInfo.fullName);
         localStorage.setItem('userCollege', nextInfo.college);
         setAuth({ name: nextInfo.fullName, exists: true });
       }
 
+      await loadProfile({ force: true });
       toast.success('Profile updated successfully');
       setIsEditing(false);
     } catch (error) {
@@ -306,7 +354,7 @@ export default function ProfilePage() {
     <div className="page page-padded" id="profile-page">
       {/* ---- Profile Header with Photo Upload ---- */}
       <div className="profile-header">
-        <div className={`profile-photo-wrapper ${isEditing ? '' : 'is-readonly'}`} onClick={() => isEditing && fileRef.current?.click()}>
+        <div className={`profile-photo-wrapper ${isEditing ? '' : 'is-readonly'}`} onClick={() => fileRef.current?.click()}>
           {profileImg ? (
             <img src={profileImg} alt="Profile" className="profile-photo-img" />
           ) : (
@@ -326,7 +374,7 @@ export default function ProfilePage() {
           />
         </div>
         <h1>{info.fullName || authState?.name || 'Your Profile'}</h1>
-        <p>{info.year || 'Student'}{isLoadingProfile ? ' • Loading...' : ' • Student'}</p>
+        <p>{isLoadingProfile ? 'Student • Loading...' : `Student${info.year ? ` • ${info.year}` : ''}`}</p>
         {loadError && (
           <button className="retry-btn" onClick={loadProfile}>
             ⚠️ Failed to load — Tap to Retry
@@ -463,13 +511,13 @@ export default function ProfilePage() {
             <label>💬 Personality Type</label>
             <div className="pi-social-slider">
               <span className="pi-social-label">Introvert</span>
-              <input type="range" min="1" max="5" value={info.personalityType}
+              <input type="range" min="1" max="5" value={info.personalityType ?? 3}
                 onChange={e => isEditing && setInfo({ ...info, personalityType: +e.target.value })}
                 className="pi-range" disabled={!isEditing} />
               <span className="pi-social-label">Extrovert</span>
             </div>
             <div className="pi-social-value">
-              {getSocialLabel(info.personalityType)}
+              {info.personalityType == null ? 'Not set' : getSocialLabel(info.personalityType)}
             </div>
           </div>
 
@@ -492,7 +540,7 @@ export default function ProfilePage() {
               <textarea
                 className="pi-input pi-textarea"
                 placeholder={'Room 203, Boys Hostel,\nNear Shivaji College,\nRajouri Garden, Delhi'}
-                value={info.currentAddress}
+                value={info.currentAddress || ''}
                 onChange={e => setInfo({ ...info, currentAddress: e.target.value })}
                 rows={4}
               />

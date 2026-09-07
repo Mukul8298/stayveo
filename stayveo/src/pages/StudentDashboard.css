@@ -290,6 +290,64 @@
   box-shadow: var(--shadow-xs);
 }
 
+.dash-tiffin-space { margin-top: 28px; overflow: hidden; border: 1px solid #dbe8df; border-radius: 22px; background: #fff; box-shadow: 0 12px 32px rgba(31, 75, 48, .08); }
+.dash-tiffin-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 26px 20px; border-bottom: 1px solid #eef3ef; }
+.dash-tiffin-heading h2 { margin: 0; color: #18221b; font-size: 23px; letter-spacing: -.035em; }
+.dash-tiffin-heading p { margin: 7px 0 0; color: #66756b; font-size: 13px; }
+.dash-tiffin-status { display: inline-flex; min-height: 26px; align-items: center; padding: 0 10px; border-radius: 999px; background: #eaf8ee; color: #166534; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.dash-tiffin-status.paused { background: #fff5cc; color: #8a6900; }
+.dash-tiffin-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; padding: 20px 26px 0; }
+.dash-tiffin-meta span { display: grid; gap: 5px; color: #18221b; font-size: 14px; }
+.dash-tiffin-meta strong { color: #829087; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.dash-tiffin-badges { display: flex; flex-wrap: wrap; gap: 8px; padding: 18px 26px 22px; border-bottom: 1px solid #eef3ef; }
+.dash-tiffin-badges span { padding: 5px 10px; border-radius: 5px; background: #f0f3f1; color: #435048; font-size: 11px; }
+.dash-today-card, .dash-weekly-card, .dash-pause-card { margin: 22px 26px 0; border: 1px solid #e1e9e2; border-radius: 15px; overflow: hidden; }
+.dash-subsection-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 17px 20px; border-bottom: 1px solid #e5ece6; }
+.dash-subsection-heading h3 { margin: 0; color: #1c3024; font-size: 17px; }
+.dash-subsection-heading span { color: #718078; font-size: 12px; }
+.dash-today-meal { display: flex; align-items: center; gap: 13px; padding: 16px 20px; border-bottom: 1px solid #edf1ed; }
+.dash-today-meal:last-child { border-bottom: 0; }
+.dash-meal-icon { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 38px; border-radius: 50%; background: #d6f2df; color: #08723c; font-size: 20px; }
+.dash-today-meal > div { min-width: 0; flex: 1; }
+.dash-today-meal strong { color: #1c2920; font-size: 13px; text-transform: capitalize; }
+.dash-today-meal p { margin: 4px 0 0; color: #69776e; font-size: 13px; line-height: 1.5; }
+.dash-today-meal button { min-height: 34px; padding: 0 11px; border: 1px solid #dbe3dc; border-radius: 7px; background: #fff; color: #435048; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.dash-today-meal button:disabled { cursor: wait; opacity: .65; }
+.dash-meal-status { padding: 5px 9px; border-radius: 999px; background: #eef1ef; color: #53615a; font-size: 10px; text-transform: capitalize; white-space: nowrap; }
+.dash-meal-status.skipped, .dash-meal-status.cancelled { background: #ffe9e6; color: #a72727; }
+.dash-meal-status.delivered { background: #e3f1e8; color: #08723c; }
+.dash-tiffin-columns { display: grid; grid-template-columns: 1.6fr 1fr; gap: 22px; margin-top: 22px; padding: 0 26px; }
+.dash-weekly-card { margin: 0; }
+.dash-weekday-tabs { display: flex; gap: 7px; padding: 14px 20px; border-bottom: 1px solid #edf1ed; overflow-x: auto; }
+.dash-weekday-tabs button { min-width: 44px; min-height: 33px; padding: 0 9px; border: 1px solid #dae4db; border-radius: 7px; background: #fff; color: #435048; font: inherit; font-size: 11px; cursor: pointer; }
+.dash-weekday-tabs button.is-active { border-color: #0b4f39; background: #0b4f39; color: #fff; }
+.dash-selected-menu { display: grid; grid-template-columns: 1fr 1fr; }
+.dash-menu-meal { min-height: 100px; padding: 17px 20px; }
+.dash-menu-meal + .dash-menu-meal { border-left: 1px solid #edf1ed; }
+.dash-menu-meal strong { color: #1c3024; font-size: 13px; }
+.dash-menu-meal p { margin: 8px 0 0; color: #69776e; font-size: 12px; line-height: 1.55; }
+.dash-menu-meal p.is-muted { color: #9aa59e; }
+.dash-side-stack { display: grid; align-content: start; gap: 22px; }
+.dash-side-card { padding: 18px 20px; border: 1px solid #e1e9e2; border-radius: 15px; }
+.dash-side-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 13px; color: #18221b; font-size: 14px; }
+.dash-side-card h3 svg { color: #08723c; }
+.dash-side-card p { margin: 0; color: #66756b; font-size: 13px; line-height: 1.55; }
+.dash-side-card > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; color: #66756b; font-size: 13px; }
+.dash-side-card > div + div { border-top: 1px solid #edf1ed; }
+.dash-side-card strong { color: #1d291f; }
+.dash-side-card strong.paid { color: #08723c; }
+.dash-side-card small { display: block; margin-top: 8px; color: #829087; font-size: 10px; word-break: break-all; }
+.dash-pause-card { padding-bottom: 18px; }
+.dash-pause-card form { padding: 17px 20px 0; }
+.dash-pause-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.dash-pause-fields label { display: grid; gap: 6px; color: #53615a; font-size: 11px; font-weight: 700; }
+.dash-pause-fields input { min-height: 38px; padding: 0 9px; border: 1px solid #dbe3dc; border-radius: 7px; color: #27342b; font: inherit; font-size: 12px; }
+.dash-pause-card > .dash-primary-btn { margin: 17px 20px 0; }
+.dash-pause-card .dash-primary-btn { min-height: 38px; padding: 0 13px; border: 0; border-radius: 7px; font-size: 12px; cursor: pointer; }
+.dash-pause-card .dash-primary-btn:disabled { cursor: wait; opacity: .65; }
+.dash-tiffin-footer { display: flex; justify-content: space-between; gap: 14px; margin: 22px 26px 24px; padding-top: 16px; border-top: 1px solid #edf1ed; color: #718078; font-size: 11px; }
+.dash-tiffin-footer span { display: inline-flex; align-items: center; gap: 6px; }
+
 @media (max-width: 380px) {
   .dash-header {
     flex-direction: column;
@@ -298,4 +356,56 @@
   .dash-empty-actions {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 760px) {
+  .dash-tiffin-meta { grid-template-columns: repeat(2, 1fr); }
+  .dash-tiffin-columns { grid-template-columns: 1fr; padding: 0 18px; }
+  .dash-today-card, .dash-pause-card { margin-inline: 18px; }
+  .dash-tiffin-heading { padding-inline: 18px; }
+  .dash-tiffin-meta, .dash-tiffin-badges { padding-inline: 18px; }
+  .dash-tiffin-footer { margin-inline: 18px; flex-direction: column; }
+}
+
+@media (max-width: 480px) {
+  .dash-tiffin-meta { grid-template-columns: 1fr 1fr; gap: 13px; }
+  .dash-tiffin-heading { flex-direction: column; }
+  .dash-today-meal { align-items: flex-start; flex-wrap: wrap; }
+  .dash-today-meal > div { min-width: calc(100% - 55px); }
+  .dash-today-meal button { margin-left: 51px; }
+  .dash-selected-menu { grid-template-columns: 1fr; }
+  .dash-menu-meal + .dash-menu-meal { border-top: 1px solid #edf1ed; border-left: 0; }
+  .dash-pause-fields { grid-template-columns: 1fr; }
+}
+
+.dash-data-state { min-height: 250px; display: grid; place-items: center; align-content: center; gap: 10px; margin-top: 28px; padding: 24px; border: 1px dashed #cbded2; border-radius: 20px; color: #66756b; text-align: center; }
+.dash-data-state h2 { margin: 2px 0 0; color: #18221b; font-size: 18px; }
+.dash-data-state p { margin: 0; font-size: 14px; }
+.dash-data-state button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; margin-top: 4px; padding: 0 15px; border: 0; border-radius: 10px; background: #166534; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.dash-data-state--error { color: #b42318; }
+.dash-data-state--error h2 { color: #7a271a; }
+.dash-reservation-card { margin-top: 28px; overflow: hidden; border: 1px solid #dbe8df; border-radius: 22px; background: #fff; box-shadow: 0 12px 32px rgba(31, 75, 48, .08); }
+.dash-reservation-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 26px 20px; border-bottom: 1px solid #eef3ef; }
+.dash-reservation-kicker { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #166534; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.dash-reservation-heading h2 { margin: 0; color: #18221b; font-size: 23px; letter-spacing: -.035em; }
+.dash-reservation-heading p { display: flex; align-items: flex-start; gap: 5px; margin: 7px 0 0; color: #66756b; font-size: 13px; line-height: 1.4; }
+.dash-reservation-heading p svg { flex: 0 0 auto; margin-top: 1px; color: #166534; }
+.dash-booking-status { display: inline-flex; min-height: 26px; align-items: center; padding: 0 10px; border-radius: 999px; background: #eaf8ee; color: #166534; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.dash-reservation-content { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; padding: 22px 26px 26px; }
+.dash-reservation-image { min-height: 150px; overflow: hidden; border-radius: 15px; background: #eff8f1; display: grid; place-items: center; color: #166534; }
+.dash-reservation-image img { width: 100%; height: 100%; min-height: 150px; object-fit: cover; }
+.dash-reservation-details { min-width: 0; align-self: center; }
+.dash-reservation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 20px; }
+.dash-reservation-detail { min-width: 0; display: grid; gap: 5px; }
+.dash-reservation-detail--wide { grid-column: span 2; }
+.dash-reservation-detail span { color: #75857a; font-size: 11px; font-weight: 650; }
+.dash-reservation-detail strong { overflow-wrap: anywhere; color: #18221b; font-size: 13px; font-weight: 750; }
+.dash-reservation-detail--wide strong { color: #166534; }
+
+@media (max-width: 640px) {
+  .dash-reservation-heading { padding: 20px 18px 17px; }
+  .dash-reservation-heading h2 { font-size: 20px; }
+  .dash-reservation-content { grid-template-columns: 1fr; gap: 18px; padding: 18px; }
+  .dash-reservation-image { min-height: 145px; }
+  .dash-reservation-image img { min-height: 145px; }
 }

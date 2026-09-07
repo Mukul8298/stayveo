@@ -3,21 +3,34 @@
 // provider dashboard stats.
 // ────────────────────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+import { API_BASES } from '../config/api.js';
 
-async function request(endpoint, { method = 'GET', body, userId, providerId } = {}) {
+async function request(endpoint, { method = 'GET', body, userId, providerPhone } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (userId) headers['x-user-id'] = userId;
+  if (providerPhone) headers['x-provider-phone'] = providerPhone;
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let lastError;
 
-  const json = await res.json();
-  if (!json.success) throw new Error(json.message || 'Something went wrong');
-  return json;
+  for (const baseUrl of API_BASES) {
+    try {
+      const res = await fetch(`${baseUrl}${endpoint}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || `Request failed with status ${res.status}`);
+      }
+      return json;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to reach the booking API server');
 }
 
 // ── Bookings ────────────────────────────────────────────────────────────
@@ -30,12 +43,24 @@ export function getBooking(id) {
   return request(`/bookings/${id}`);
 }
 
+export function getBookingSummary(id) {
+  return request(`/bookings/${id}/summary`);
+}
+
 export function getProviderBookings(providerId, { status, page = 1, limit = 20 } = {}) {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   params.set('page', String(page));
   params.set('limit', String(limit));
   return request(`/bookings/provider/${providerId}?${params}`);
+}
+
+export function getCurrentProviderBookings(providerPhone, { status, page = 1, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  params.set('page', String(page));
+  params.set('limit', String(limit));
+  return request(`/bookings/provider/me?${params}`, { providerPhone });
 }
 
 export function getUserBookings(userId, { status, page = 1, limit = 20 } = {}) {
@@ -46,8 +71,8 @@ export function getUserBookings(userId, { status, page = 1, limit = 20 } = {}) {
   return request(`/bookings/user?${params}`, { userId });
 }
 
-export function updateBookingStatus(bookingId, status) {
-  return request(`/bookings/${bookingId}/status`, { method: 'PATCH', body: { status } });
+export function updateBookingStatus(bookingId, status, providerPhone) {
+  return request(`/bookings/${bookingId}/status`, { method: 'PATCH', body: { status }, providerPhone });
 }
 
 export function getBookingStats(providerId) {
@@ -74,8 +99,8 @@ export function updateVisitStatus(visitId, status) {
 
 // ── Payments & Earnings ─────────────────────────────────────────────────
 
-export function createPayment(paymentData) {
-  return request('/payments', { method: 'POST', body: paymentData });
+export function createPayment(paymentData, userId) {
+  return request('/payments', { method: 'POST', body: paymentData, userId });
 }
 
 export function getProviderPayments(providerId) {
@@ -100,14 +125,14 @@ export function getProfileViewCount(providerId) {
 
 export async function getProviderDashboardStats(providerId) {
   const [bookingStats, viewCount, earnings] = await Promise.all([
-    getBookingStats(providerId).then(r => r.data).catch(() => ({ total: 0, new: 0, accepted: 0, in_progress: 0, completed: 0 })),
-    getProfileViewCount(providerId).then(r => r.data).catch(() => ({ total: 0, unique: 0 })),
-    getProviderEarnings(providerId).then(r => r.data).catch(() => ({ total: 0, thisMonth: 0, lastMonth: 0 })),
+    getBookingStats(providerId).then(r => r?.data ?? { total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 }).catch(() => ({ total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 })),
+    getProfileViewCount(providerId).then(r => r?.data ?? { total: 0, unique: 0 }).catch(() => ({ total: 0, unique: 0 })),
+    getProviderEarnings(providerId).then(r => r?.data ?? { total: 0, thisMonth: 0, lastMonth: 0 }).catch(() => ({ total: 0, thisMonth: 0, lastMonth: 0 })),
   ]);
 
   return {
-    bookings: bookingStats,
-    profileViews: viewCount,
-    earnings,
+    bookings: bookingStats ?? { total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 },
+    profileViews: viewCount ?? { total: 0, unique: 0 },
+    earnings: earnings ?? { total: 0, thisMonth: 0, lastMonth: 0 },
   };
 }

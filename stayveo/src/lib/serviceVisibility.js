@@ -19,18 +19,6 @@ export function calculateRoomInventory({ totalBeds = 0, availableBeds = 0, isAct
   };
 }
 
-export function getServiceVisibility({ status, isActive = true, availableBeds, totalBeds, serviceType }) {
-  if (serviceType === 'PG') {
-    return calculateRoomInventory({ totalBeds, availableBeds, isActive });
-  }
-
-  const derivedStatus = isActive ? (status || SERVICE_STATUS.ACTIVE) : SERVICE_STATUS.PAUSED;
-  return {
-    status: derivedStatus,
-    isVisible: derivedStatus === SERVICE_STATUS.ACTIVE,
-  };
-}
-
 export function statusLabel(status) {
   return {
     ACTIVE: 'Active',

@@ -21,7 +21,7 @@ export default function RoleSelection() {
         <button className="role-card" onClick={() => navigate('/provider/login')} id="role-broker">
           <div className="role-icon role-icon-broker"><Building2 size={36} /></div>
           <h2>I'm a Provider</h2>
-          <p>PG owner, tiffin, laundry or cleaning service</p>
+          <p>PG owner or tiffin provider</p>
           <div className="role-arrow">→</div>
         </button>
       </div>

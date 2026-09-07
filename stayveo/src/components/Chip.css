@@ -1,15 +1,58 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Chip — StayVeo Design System v2
+   Tight pill · subtle active state · no border on inactive
+   ═══════════════════════════════════════════════════════════════════════ */
+
 .chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  border-radius: var(--radius-full); font-weight: 500; white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--neutral-600);
+  background: var(--neutral-100);
+  border: 1px solid transparent;
   transition: all var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
 }
-.chip-sm { padding: 4px 10px; font-size: var(--text-xs); }
-.chip-md { padding: 6px 14px; font-size: var(--text-sm); }
-.chip-icon { display: flex; align-items: center; font-size: 12px; }
-.chip-default { background: var(--neutral-100); color: var(--neutral-600); }
-.chip-primary { background: var(--primary-50); color: var(--primary-600); border: 1px solid var(--primary-100); }
-.chip-accent { background: var(--accent-50); color: var(--accent-600); }
-.chip-distance { background: #FFF7ED; color: #EA580C; border: 1px solid #FFEDD5; }
-.chip-clickable { cursor: pointer; }
-.chip-clickable:hover { opacity: 0.85; }
-.chip-active { background: var(--primary-500); color: white; border-color: var(--primary-500); }
+
+.chip-clickable {
+  cursor: pointer;
+}
+
+.chip-clickable:active {
+  transform: scale(0.96);
+}
+
+.chip.active,
+.chip-clickable.active {
+  background: var(--neutral-900);
+  color: white;
+  border-color: transparent;
+}
+
+.chip-icon {
+  display: flex;
+  align-items: center;
+}
+
+.chip-count {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.chip-sm {
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+}
+
+.chip-lg {
+  padding: 8px 18px;
+  font-size: var(--text-base);
+}

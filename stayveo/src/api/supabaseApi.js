@@ -14,6 +14,7 @@
 
 import supabase from '../lib/supabase.js';
 import { SERVICE_IMAGES_BUCKET } from '../lib/storage.js';
+import { request as backendRequest } from './client.js';
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -71,12 +72,10 @@ export async function safeFetch(queryFn, { signal, label = 'query', timeoutMs = 
       return { data: null, error: errorInfo, aborted: false };
     }
 
-    console.log(`✅ safeFetch [${label}]: returned ${Array.isArray(data) ? data.length : 1} result(s)`);
     return { data, error: null, aborted: false };
   } catch (err) {
     // Check if this was an abort
     if (signal?.aborted || err.name === 'AbortError') {
-      console.log(`🚫 safeFetch [${label}]: aborted (component unmounted or navigation)`);
       return { data: null, error: null, aborted: true };
     }
 
@@ -189,7 +188,6 @@ function resolveStoragePath(path) {
 
     const { data } = supabase.storage.from(possibleBucket).getPublicUrl(filePath);
     if (data?.publicUrl) {
-      console.log(`🖼️ Resolved storage path: ${path} → ${data.publicUrl}`);
       return data.publicUrl;
     }
   }
@@ -198,7 +196,6 @@ function resolveStoragePath(path) {
   for (const bucket of STORAGE_BUCKETS) {
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     if (data?.publicUrl) {
-      console.log(`🖼️ Resolved storage path (bucket: ${bucket}): ${path} → ${data.publicUrl}`);
       return data.publicUrl;
     }
   }
@@ -255,7 +252,6 @@ function extractImages(pg) {
 
   // If no images found at all, use fallback
   if (images.length === 0) {
-    console.log(`📷 No images found for PG "${pg?.pg_name || pg?.id}", using fallback`);
     images.push(FALLBACK_IMAGE);
   }
 
@@ -270,43 +266,53 @@ function extractImages(pg) {
  *  REAL DATA ONLY — no mock values for distance/rating.
  *  Uses database values with safe defaults for missing columns.
  */
-function mapPGToListing(pg, index = 0) {
-  const provider = pg?.provider_services?.provider_profiles;
-
-  // Extract images from all possible sources
-  const images = extractImages(pg);
+function mapRoomListingToListing(record, index = 0) {
+  const images = Array.isArray(record?.images)
+    ? record.images.map(resolveImageUrl).filter(Boolean)
+    : [];
+  if (!images.length) images.push(FALLBACK_IMAGE);
 
   return {
-    id: pg?.id || `pg-${index}`,
-    title: pg?.pg_name || pg?.name || pg?.title || 'PG Room',
-    type: pg?.type || 'PG',
-    price: pg?.min_price || pg?.price || 0,
-    securityDeposit: pg?.security_deposit ?? pg?.securityDeposit ?? null,
-    foodCharges: pg?.food_charges ?? pg?.foodCharges ?? pg?.meal_charges ?? null,
-    electricityCharges: pg?.electricity_charges ?? pg?.electricityCharges ?? null,
-    slotReservationFee: pg?.slot_reservation_fee ?? pg?.slotReservationFee ?? null,
-    platformFee: pg?.platform_fee ?? pg?.platformFee ?? null,
-    distance: pg?.distance ?? pg?.distance_km ?? null,
-    distanceKm: pg?.distance ?? pg?.distance_km ?? null,
+    id: record?.id || `room-listing-${index}`,
+    roomId: record?.id || null,
+    title: record?.title || 'PG Room',
+    type: 'PG',
+    price: Number(record?.price || 0),
+    securityDeposit: Number(record?.securityDeposit || 0),
+    reservationFee: Number(record?.reservationFee || 0),
+    minimumStayMonths: Number(record?.minimumStayMonths || 1),
+    numberOfBeds: Number(record?.numberOfBeds || 1),
+    totalBeds: Number(record?.totalBeds || 0),
+    availableBeds: Number(record?.availableBeds || 0),
+    reservedBeds: Number(record?.reservedBeds || 0),
+    occupiedBeds: Number(record?.occupiedBeds || 0),
+    foodCharges: Number(record?.foodCharges || 0),
+    electricityCharges: Number(record?.electricityCharges || 0),
+    waterCharges: Number(record?.waterCharges || 0),
+    maintenanceCharges: Number(record?.maintenanceCharges || 0),
+    parkingCharges: Number(record?.parkingCharges || 0),
+    otherCharges: Number(record?.otherCharges || 0),
+    platformFee: Number(record?.platformFee || 0),
+    distance: null,
+    distanceKm: null,
     distanceLabel: null,
-    // Use real rating if available from the database
-    rating: pg?.rating ?? pg?.avg_rating ?? 0,
-    reviews: pg?.review_count ?? pg?.reviews ?? 0,
-    verified: pg?.verified ?? pg?.is_verified ?? true,
-    available: pg?.available ?? pg?.is_available ?? true,
+    rating: 0,
+    reviews: 0,
+    verified: true,
+    available: Number(record?.availableBeds || 0) > 0,
     images,
-    roomType: pg?.room_type || 'shared',
-    capacity: pg?.capacity || pg?.max_occupancy || 2,
-    gender: pg?.gender || pg?.gender_preference || 'any',
-    services: mapAmenities(pg?.amenities),
-    amenities: Array.isArray(pg?.amenities) ? pg.amenities : [],
-    address: pg?.address || 'Address not available',
-    owner: provider?.name || pg?.owner_name || 'Property Owner',
-    providerId: pg?.provider_services?.provider_id || pg?.provider_id || null,
-    providerPhone: provider?.phone || pg?.owner_phone || null,
-    latitude: pg?.latitude ? Number(pg.latitude) : null,
-    longitude: pg?.longitude ? Number(pg.longitude) : null,
-    description: pg?.description || `${pg?.pg_name || 'PG'} located at ${pg?.address || 'N/A'}. Contact owner for details.`,
+    roomType: record?.roomType || 'shared',
+    capacity: Number(record?.numberOfBeds || 1),
+    gender: record?.genderPreference || 'unisex',
+    services: mapAmenities(record?.amenities),
+    amenities: Array.isArray(record?.amenities) ? record.amenities : [],
+    address: record?.address || 'Address not available',
+    owner: record?.provider?.name || 'Property Owner',
+    providerId: record?.providerId || record?.provider?.id || null,
+    providerPhone: record?.provider?.phone || null,
+    latitude: record?.latitude ? Number(record.latitude) : null,
+    longitude: record?.longitude ? Number(record.longitude) : null,
+    description: record?.description || `${record?.title || 'PG'} near your campus.`,
   };
 }
 
@@ -316,9 +322,7 @@ function mapAmenities(amenities) {
   const serviceKeys = [];
   const lower = amenities.map(a => (a || '').toLowerCase());
   if (lower.some(a => a.includes('wifi') || a.includes('internet'))) serviceKeys.push('wifi');
-  if (lower.some(a => a.includes('food') || a.includes('meal') || a.includes('tiffin'))) serviceKeys.push('food');
-  if (lower.some(a => a.includes('laundry') || a.includes('wash'))) serviceKeys.push('laundry');
-  if (lower.some(a => a.includes('clean'))) serviceKeys.push('cleaning');
+  if (lower.some(a => a.includes('food') || a.includes('meal'))) serviceKeys.push('food');
   // Always include wifi if nothing matched (most PGs have wifi)
   if (serviceKeys.length === 0) serviceKeys.push('wifi');
   return serviceKeys;
@@ -329,246 +333,30 @@ function mapAmenities(amenities) {
 /** Fetch all PG listings with joined provider info.
  *  Uses safeFetch for error handling and AbortController support. */
 export async function fetchPGListings({ signal } = {}) {
-  const { data, error, aborted } = await safeFetch(
-    () =>
-      supabase
-        .from('pg_details')
-        .select(`
-          *,
-          provider_services (
-            id,
-            provider_id,
-            provider_profiles (
-              id,
-              name,
-              phone
-            )
-          )
-        `)
-        .order('id', { ascending: false }),
-    { signal, label: 'fetchPGListings' }
-  );
-
-  if (aborted) return { data: [], error: null, aborted: true };
-  if (error) return { data: [], error };
-
-  const listings = (data || []).map((pg, i) => mapPGToListing(pg, i));
-
-  console.log('📋 fetchPGListings: mapped', listings.length, 'listings', {
-    sample: listings[0] ? {
-      id: listings[0].id,
-      title: listings[0].title,
-      imageCount: listings[0].images?.length,
-      firstImage: listings[0].images?.[0]?.substring(0, 60) + '...',
-    } : 'none',
-  });
-
-  return { data: listings, error: null, aborted: false };
+  if (signal?.aborted) return { data: [], error: null, aborted: true };
+  try {
+    const response = await backendRequest('/room-listings/public', { signal });
+    return {
+      data: (response?.data || []).map((record, index) => mapRoomListingToListing(record, index)),
+      error: null,
+      aborted: false,
+    };
+  } catch (error) {
+    if (signal?.aborted) return { data: [], error: null, aborted: true };
+    console.error('fetchPGListings failed:', error);
+    return { data: [], error, aborted: false };
+  }
 }
 
 /** Search PG listings by name or address */
 export async function searchPGListings(query, { signal } = {}) {
-  if (!query?.trim()) return fetchPGListings({ signal });
-
-  const searchTerm = `%${query.trim()}%`;
-
-  const { data, error, aborted } = await safeFetch(
-    () =>
-      supabase
-        .from('pg_details')
-        .select(`
-          *,
-          provider_services (
-            id,
-            provider_id,
-            provider_profiles (
-              id,
-              name,
-              phone
-            )
-          )
-        `)
-        .or(`pg_name.ilike.${searchTerm},address.ilike.${searchTerm}`)
-        .order('id', { ascending: false }),
-    { signal, label: `searchPGListings("${query}")` }
-  );
-
-  if (aborted) return { data: [], error: null, aborted: true };
-  if (error) return { data: [], error };
-
-  const listings = (data || []).map((pg, i) => mapPGToListing(pg, i));
-  return { data: listings, error: null, aborted: false };
-}
-
-// ── Services (Tiffin, Laundry, Cleaning) ────────────────────────────────
-
-/** Fetch tiffin services */
-export async function fetchTiffinServices({ signal } = {}) {
-  const { data, error, aborted } = await safeFetch(
-    () =>
-      supabase
-        .from('tiffin_details')
-        .select(`
-          *,
-          provider_services (
-            id,
-            provider_id,
-            provider_profiles ( id, name, phone )
-          )
-        `)
-        .order('id', { ascending: false }),
-    { signal, label: 'fetchTiffinServices' }
-  );
-
-  if (aborted) return { data: [], error: null, aborted: true };
-  if (error) return { data: [], error };
-
-  const services = (data || []).map((t, i) => ({
-    id: t?.id || `tiffin-${i}`,
-    name: t?.name || 'Tiffin Service',
-    category: 'tiffin',
-    price: t?.price || 0,
-    unit: '/month',
-    rating: t?.rating ?? t?.avg_rating ?? 0,
-    reviews: t?.review_count ?? 0,
-    distance: null,
-    distanceKm: null,
-    distanceLabel: null,
-    verified: t?.verified ?? true,
-    image: '🍱',
-    description: `${t?.name || 'Tiffin'} - ${t?.meals_per_day || 2} meals/day`,
-    plans: [
-      { name: 'Monthly', price: t?.price || 2500, details: `${t?.meals_per_day || 2} meals/day` },
-    ],
-    provider: t?.provider_services?.provider_profiles?.name || 'Provider',
-    providerId: t?.provider_services?.provider_id || t?.provider_id || null,
-    providerPhone: t?.provider_services?.provider_profiles?.phone || null,
-    address: t?.address || t?.service_area || 'Address not available',
-    latitude: t?.latitude === null || t?.latitude === undefined ? null : Number(t.latitude),
-    longitude: t?.longitude === null || t?.longitude === undefined ? null : Number(t.longitude),
-  }));
-
-  return { data: services, error: null };
-}
-
-/** Fetch laundry services */
-export async function fetchLaundryServices({ signal } = {}) {
-  const { data, error, aborted } = await safeFetch(
-    () =>
-      supabase
-        .from('laundry_details')
-        .select(`
-          *,
-          provider_services (
-            id,
-            provider_id,
-            provider_profiles ( id, name, phone )
-          )
-        `)
-        .order('id', { ascending: false }),
-    { signal, label: 'fetchLaundryServices' }
-  );
-
-  if (aborted) return { data: [], error: null, aborted: true };
-  if (error) return { data: [], error };
-
-  const services = (data || []).map((l, i) => ({
-    id: l?.id || `laundry-${i}`,
-    name: l?.provider_services?.provider_profiles?.name
-      ? `${l.provider_services.provider_profiles.name} Laundry`
-      : 'Laundry Service',
-    category: 'laundry',
-    price: parsePricing(l?.pricing, 149),
-    unit: '/kg',
-    rating: l?.rating ?? l?.avg_rating ?? 0,
-    reviews: l?.review_count ?? 0,
-    distance: null,
-    distanceKm: null,
-    distanceLabel: null,
-    verified: l?.verified ?? true,
-    image: '🧺',
-    description: 'Wash, dry & fold service with pickup and delivery.',
-    plans: [
-      { name: 'Per Kg', price: parsePricing(l?.pricing, 149), details: 'Wash + Fold' },
-    ],
-    provider: l?.provider_services?.provider_profiles?.name || 'Provider',
-    providerId: l?.provider_services?.provider_id || l?.provider_id || null,
-    providerPhone: l?.provider_services?.provider_profiles?.phone || null,
-    address: l?.address || l?.service_area || 'Address not available',
-    latitude: l?.latitude === null || l?.latitude === undefined ? null : Number(l.latitude),
-    longitude: l?.longitude === null || l?.longitude === undefined ? null : Number(l.longitude),
-  }));
-
-  return { data: services, error: null };
-}
-
-/** Fetch cleaning services */
-export async function fetchCleaningServices({ signal } = {}) {
-  const { data, error, aborted } = await safeFetch(
-    () =>
-      supabase
-        .from('cleaning_details')
-        .select(`
-          *,
-          provider_services (
-            id,
-            provider_id,
-            provider_profiles ( id, name, phone )
-          )
-        `)
-        .order('id', { ascending: false }),
-    { signal, label: 'fetchCleaningServices' }
-  );
-
-  if (aborted) return { data: [], error: null, aborted: true };
-  if (error) return { data: [], error };
-
-  const services = (data || []).map((c, i) => ({
-    id: c?.id || `cleaning-${i}`,
-    name: c?.provider_services?.provider_profiles?.name
-      ? `${c.provider_services.provider_profiles.name} Cleaning`
-      : 'Cleaning Service',
-    category: 'cleaning',
-    price: parsePricing(c?.pricing, 299),
-    unit: '/visit',
-    rating: c?.rating ?? c?.avg_rating ?? 0,
-    reviews: c?.review_count ?? 0,
-    distance: null,
-    distanceKm: null,
-    distanceLabel: null,
-    verified: c?.verified ?? true,
-    image: '🧹',
-    description: 'Room cleaning, bathroom cleaning, and laundry pickup.',
-    plans: [
-      { name: 'Basic', price: parsePricing(c?.pricing, 299), details: 'Room sweep + mop' },
-    ],
-    provider: c?.provider_services?.provider_profiles?.name || 'Provider',
-    providerId: c?.provider_services?.provider_id || c?.provider_id || null,
-    providerPhone: c?.provider_services?.provider_profiles?.phone || null,
-    address: c?.address || c?.service_area || 'Address not available',
-    latitude: c?.latitude === null || c?.latitude === undefined ? null : Number(c.latitude),
-    longitude: c?.longitude === null || c?.longitude === undefined ? null : Number(c.longitude),
-  }));
-
-  return { data: services, error: null };
-}
-
-/** Fetch ALL services (tiffin + laundry + cleaning) */
-export async function fetchAllServices({ signal } = {}) {
-  const [tiffin, laundry, cleaning] = await Promise.all([
-    fetchTiffinServices({ signal }),
-    fetchLaundryServices({ signal }),
-    fetchCleaningServices({ signal }),
-  ]);
-
-  const all = [
-    ...(tiffin.data || []),
-    ...(laundry.data || []),
-    ...(cleaning.data || []),
-  ];
-
-  const hasError = tiffin.error || laundry.error || cleaning.error;
-  return { data: all, error: hasError || null };
+  const result = await fetchPGListings({ signal });
+  if (result.aborted || result.error || !query?.trim()) return result;
+  const term = query.trim().toLowerCase();
+  return {
+    ...result,
+    data: result.data.filter((listing) => `${listing.title} ${listing.address}`.toLowerCase().includes(term)),
+  };
 }
 
 // ── Real-time Subscription ──────────────────────────────────────────────
@@ -581,7 +369,6 @@ export function subscribeToPGChanges(callback) {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'pg_details' },
       (payload) => {
-        console.log('📡 PG change detected:', payload.eventType);
         callback?.(payload);
       }
     )
@@ -594,13 +381,6 @@ export function subscribeToPGChanges(callback) {
 }
 
 // ── Utility ─────────────────────────────────────────────────────────────
-
-function parsePricing(pricing, fallback = 0) {
-  if (!pricing) return fallback;
-  if (typeof pricing === 'number') return pricing;
-  const match = String(pricing).match(/\d+/);
-  return match ? parseInt(match[0], 10) : fallback;
-}
 
 // ── Exports for direct image resolution ─────────────────────────────────
 export { FALLBACK_IMAGE, resolveImageUrl, extractImages };

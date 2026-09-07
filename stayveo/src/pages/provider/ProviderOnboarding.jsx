@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, Check, Loader2, X, CheckCircle2, Camera, MapPin, ImagePlus, AlertCircle } from 'lucide-react';
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { ArrowLeft, Check, Loader2, X, Camera, MapPin, ImagePlus, AlertCircle } from 'lucide-react';
 import Button from '../../components/Button';
 import LocationPicker from '../../components/maps/LocationPicker';
 import { useProvider } from '../../context/ProviderContext';
@@ -23,11 +23,15 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const SERVICE_CONFIG = {
   PG: { emoji: '🏠', label: 'PG / Hostel', desc: 'Rooms & accommodation' },
   TIFFIN: { emoji: '🍱', label: 'Tiffin', desc: 'Meal delivery service' },
-  LAUNDRY: { emoji: '🧺', label: 'Laundry', desc: 'Wash & fold service' },
-  CLEANING: { emoji: '🧹', label: 'Cleaning', desc: 'Room cleaning service' },
 };
 
-const AMENITY_OPTIONS = ['WiFi', 'AC', 'Food', 'Laundry', 'Geyser', 'Parking', 'CCTV', 'Study Hall', 'Power Backup'];
+function normalizeServiceTypes(types = []) {
+  return types
+    .map((type) => String(type).toUpperCase())
+    .filter((type) => SERVICE_CONFIG[type]);
+}
+
+const AMENITY_OPTIONS = ['WiFi', 'AC', 'Food', 'Geyser', 'Parking', 'CCTV', 'Study Hall', 'Power Backup'];
 
 // ── Dynamic form definitions ────────────────────────────────────────────
 function getServiceFields(type) {
@@ -36,7 +40,11 @@ function getServiceFields(type) {
       { key: 'pgName', label: 'PG Name', type: 'text', placeholder: 'e.g. Sunshine PG for Boys', required: true },
       { key: 'address', label: 'Full Address', type: 'text', placeholder: 'Address with landmark', required: true },
       { key: 'roomType', label: 'Room Type', type: 'text', placeholder: 'e.g. Single / Shared (2) / Triple', required: true },
-      { key: 'minPrice', label: 'Min Price (₹/month)', type: 'number', placeholder: '4000', required: true },
+      { key: 'minPrice', label: 'Monthly Rent (₹/month)', type: 'number', placeholder: '4000', required: true },
+      { key: 'securityDeposit', label: 'Security Deposit (₹)', type: 'number', placeholder: '8000', required: true },
+      { key: 'reservationFee', label: 'Reservation Fee (₹)', type: 'number', placeholder: '500', required: true },
+      { key: 'minimumStayMonths', label: 'Minimum Stay (months)', type: 'number', placeholder: '3', required: true },
+      { key: 'numberOfBeds', label: 'Number of Beds', type: 'number', placeholder: '2', required: true },
       { key: 'amenities', label: 'Amenities', type: 'chips', options: AMENITY_OPTIONS },
       { key: 'photos', label: 'Photos', type: 'photos' },
     ];
@@ -44,14 +52,6 @@ function getServiceFields(type) {
       { key: 'name', label: 'Kitchen Name', type: 'text', placeholder: 'e.g. Maa Bhojan Kitchen', required: true },
       { key: 'price', label: 'Monthly Price (₹)', type: 'number', placeholder: '2800', required: true },
       { key: 'mealsPerDay', label: 'Meals Per Day', type: 'number', placeholder: '2', required: true },
-      { key: 'photos', label: 'Photos', type: 'photos' },
-    ];
-    case 'LAUNDRY': return [
-      { key: 'pricing', label: 'Pricing Details', type: 'text', placeholder: 'e.g. ₹149/kg or ₹999/month', required: true },
-      { key: 'photos', label: 'Photos', type: 'photos' },
-    ];
-    case 'CLEANING': return [
-      { key: 'pricing', label: 'Pricing Details', type: 'text', placeholder: 'e.g. ₹299/visit basic, ₹599 deep clean', required: true },
       { key: 'photos', label: 'Photos', type: 'photos' },
     ];
     default: return [];
@@ -78,6 +78,7 @@ function getUploadFolderId(provider) {
 
 export default function ProviderOnboarding() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const { provider, updateProvider } = useProvider();
 
@@ -90,7 +91,14 @@ export default function ProviderOnboarding() {
   const [email, setEmail] = useState(provider.email || '');
 
   // Service selection
-  const [selectedServices, setSelectedServices] = useState(provider.services || []);
+  // ProviderTypeSelect sends lowercase keys (pg/tiffin/...), while the
+  // onboarding form and API use uppercase service types (PG/TIFFIN/...).
+  // Prefer the freshly selected types so an old saved Tiffin service cannot
+  // override a new PG selection.
+  const initialServiceTypes = location.state?.types?.length
+    ? location.state.types
+    : provider.services;
+  const [selectedServices, setSelectedServices] = useState(() => normalizeServiceTypes(initialServiceTypes));
 
   // Service details: { PG: { pgName, address, ... }, TIFFIN: { name, price, ... } }
   const [serviceData, setServiceData] = useState({});
@@ -105,7 +113,7 @@ export default function ProviderOnboarding() {
   const uploadSessionIdRef = useRef(crypto.randomUUID());
 
   // ── Service-specific location state ─────────────────────────────────
-  // { PG: { latitude, longitude, address }, TIFFIN: {...}, LAUNDRY: {...}, CLEANING: {...} }
+  // { PG: { latitude, longitude, address }, TIFFIN: {...} }
   const [serviceLocations, setServiceLocations] = useState({});
 
   // Verification
@@ -420,9 +428,6 @@ export default function ProviderOnboarding() {
 
   // ── Mapbox Location Handler ───────────────────────────────────────────
   const handleLocationChange = useCallback((serviceType, location) => {
-    // TODO: Reverse geocode location.latitude/location.longitude into a clean postal address.
-    // TODO: Auto-fill/confirm the address field after the provider accepts the geocoded result.
-    // TODO: Add service availability zones and radius checks around this coordinate.
     setServiceLocations((prev) => ({
       ...prev,
       [serviceType]: {
@@ -485,9 +490,9 @@ export default function ProviderOnboarding() {
             }
 
             // Coerce numbers
-            if (data.minPrice) data.minPrice = Number(data.minPrice);
-            if (data.price) data.price = Number(data.price);
-            if (data.mealsPerDay) data.mealsPerDay = Number(data.mealsPerDay);
+            ['minPrice', 'price', 'mealsPerDay', 'securityDeposit', 'reservationFee', 'minimumStayMonths', 'numberOfBeds'].forEach((key) => {
+              if (data[key] !== undefined && data[key] !== '') data[key] = Number(data[key]);
+            });
 
             // ── Attach uploaded photo URLs ────────────────────────
             // PostgreSQL stores URLs only; the binary files live in Supabase Storage.
@@ -502,7 +507,6 @@ export default function ProviderOnboarding() {
             data.photos = photos.map((photo) => photo.uploadedUrl).filter(Boolean);
 
             // ── Attach Mapbox geolocation data ───────────────────
-            // TODO: Use these coordinates for distance filters, nearby colleges, and map search.
             const selectedLocation = serviceLocations[type];
             if (
               typeof selectedLocation?.latitude === 'number' &&
@@ -522,8 +526,9 @@ export default function ProviderOnboarding() {
       if (stepIndex < totalSteps - 1) {
         setStepIndex((s) => s + 1);
       } else {
-        // Onboarding complete!
-        setStepIndex(totalSteps); // triggers success view
+        // Onboarding complete — all providers use the shared dashboard.
+        navigate('/provider/dashboard', { replace: true });
+        return; // skip setLoading(false) since we're navigating away
       }
     } catch (err) {
       setError(err.message);
@@ -700,24 +705,9 @@ export default function ProviderOnboarding() {
     );
   };
 
-  // ── Success State ─────────────────────────────────────────────────────
+  // ── Success State (fallback — normally we navigate directly from handleNext) ──
   if (stepIndex >= totalSteps) {
-    return (
-      <div className="po-page">
-        <div className="po-content">
-          <div className="po-success">
-            <div className="po-success-icon">
-              <CheckCircle2 size={44} />
-            </div>
-            <h1>Welcome, {provider.name}! 🎉</h1>
-            <p>Your provider account is set up. You can now manage your services from the dashboard.</p>
-            <Button variant="accent" fullWidth size="lg" onClick={() => navigate('/provider/dashboard')}>
-              Go to Dashboard
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+    return <Navigate to="/provider/dashboard" replace />;
   }
 
   // Redirect if not OTP-verified. This must stay after hooks to preserve hook order.

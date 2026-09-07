@@ -93,4 +93,10 @@ export const roomListingService = {
     await roomListingService.assertOwnership(listingId, profile.id);
     return roomListingRepository.softDelete(listingId);
   },
+
+  async adjustInventory(phone: string, listingId: string, delta: number) {
+    const profile = await roomListingService.resolveProvider(phone);
+    await roomListingService.assertOwnership(listingId, profile.id);
+    return roomListingRepository.adjustInventory(listingId, delta);
+  },
 };

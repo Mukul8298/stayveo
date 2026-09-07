@@ -1,44 +1,115 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Button Component — StayVeo Design System v2
+   Flat solid colors · :active scale · no gradient slop
+   ═══════════════════════════════════════════════════════════════════════ */
+
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
-  font-family: var(--font-body); font-weight: 600; border-radius: var(--radius-md);
-  transition: all var(--duration-fast) var(--ease-out); white-space: nowrap;
-  -webkit-tap-highlight-color: transparent; position: relative; overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-base);
+  letter-spacing: -0.005em;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms var(--ease-out),
+              box-shadow 160ms var(--ease-out),
+              background-color 160ms var(--ease-out),
+              border-color 160ms var(--ease-out),
+              color 160ms var(--ease-out),
+              filter 160ms var(--ease-out);
 }
-.btn::after {
-  content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.1);
-  opacity: 0; transition: opacity var(--duration-fast);
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
-.btn:active::after { opacity: 1; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-sm { padding: var(--space-2) var(--space-4); font-size: var(--text-sm); }
-.btn-md { padding: var(--space-3) var(--space-6); font-size: var(--text-base); }
-.btn-lg { padding: var(--space-4) var(--space-8); font-size: var(--text-lg); }
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+
+/* ── Sizes ────────────────────────────────────────────────────────────── */
+
+.btn-sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  min-height: 34px;
+}
+
+.btn-md {
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-base);
+  min-height: 40px;
+}
+
+.btn-lg {
+  padding: var(--space-4) var(--space-8);
+  font-size: var(--text-base);
+  min-height: 48px;
+  border-radius: var(--radius-lg);
+}
+
 .btn-full { width: 100%; }
 .btn-icon { display: flex; align-items: center; }
 
+
+/* ── Variants ─────────────────────────────────────────────────────────── */
+
 .btn-primary {
-  background: var(--gradient-primary); color: white; box-shadow: var(--shadow-primary);
+  background: var(--neutral-900);
+  color: white;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.btn-primary:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(99,102,241,0.4); transform: translateY(-1px); }
-.btn-primary:active:not(:disabled) { transform: translateY(0); }
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--neutral-800);
+  box-shadow: var(--shadow-md);
+}
 
 .btn-accent {
-  background: var(--gradient-accent); color: white; box-shadow: var(--shadow-accent);
+  background: var(--accent-600);
+  color: white;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
-.btn-accent:hover:not(:disabled) { box-shadow: 0 6px 24px rgba(34,197,94,0.4); transform: translateY(-1px); }
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-500);
+  box-shadow: var(--shadow-md);
+}
 
 .btn-secondary {
-  background: var(--neutral-100); color: var(--neutral-800);
+  background: var(--neutral-100);
+  color: var(--neutral-800);
 }
-.btn-secondary:hover:not(:disabled) { background: var(--neutral-200); }
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--neutral-200);
+}
 
 .btn-outline {
-  background: transparent; color: var(--primary-500);
-  border: 1.5px solid var(--primary-200);
+  background: transparent;
+  color: var(--neutral-700);
+  border: 1px solid var(--border-default);
 }
-.btn-outline:hover:not(:disabled) { background: var(--primary-50); border-color: var(--primary-300); }
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--neutral-50);
+  border-color: var(--neutral-300);
+}
 
 .btn-ghost {
-  background: transparent; color: var(--neutral-600);
+  background: transparent;
+  color: var(--neutral-600);
 }
-.btn-ghost:hover:not(:disabled) { background: var(--neutral-100); }
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--neutral-100);
+}

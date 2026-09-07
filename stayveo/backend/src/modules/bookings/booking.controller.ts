@@ -23,8 +23,24 @@ export const bookingController = {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    const booking = await bookingService.getById(request.params.id);
+    const userId = request.headers[USER_ID_HEADER] as string | undefined;
+    const providerHeader = request.headers['x-provider-phone'];
+    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
+    if (!userId && !providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Authentication required' });
+    const booking = await bookingService.getByIdForActor(request.params.id, { userId, providerPhone });
     return sendSuccess(reply, booking);
+  },
+
+  async getSummary(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply
+  ) {
+    const userId = request.headers[USER_ID_HEADER] as string | undefined;
+    const providerHeader = request.headers['x-provider-phone'];
+    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
+    if (!userId && !providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Authentication required' });
+    await bookingService.getByIdForActor(request.params.id, { userId, providerPhone });
+    return sendSuccess(reply, await bookingService.getSummary(request.params.id));
   },
 
   /** GET /bookings/provider/:providerId — List provider bookings */
@@ -32,10 +48,28 @@ export const bookingController = {
     request: FastifyRequest<{ Params: { providerId: string }; Querystring: BookingFilterInput }>,
     reply: FastifyReply
   ) {
+    const providerHeader = request.headers['x-provider-phone'];
+    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
+    if (!providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
+    const providerIds = await bookingService.resolveProviderIds(providerPhone);
+    if (!providerIds.includes(request.params.providerId)) {
+      return reply.status(403).send({ success: false, data: null, message: 'You do not own this provider account' });
+    }
     const result = await bookingService.listByProvider(
       request.params.providerId,
       request.query as BookingFilterInput
     );
+    return sendSuccess(reply, result);
+  },
+
+  async listByCurrentProvider(
+    request: FastifyRequest<{ Querystring: BookingFilterInput }>,
+    reply: FastifyReply
+  ) {
+    const providerHeader = request.headers['x-provider-phone'];
+    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
+    if (!providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
+    const result = await bookingService.listByProviderPhone(providerPhone, request.query as BookingFilterInput);
     return sendSuccess(reply, result);
   },
 
@@ -55,7 +89,10 @@ export const bookingController = {
     request: FastifyRequest<{ Params: { id: string }; Body: { status: string } }>,
     reply: FastifyReply
   ) {
-    const booking = await bookingService.updateStatus(request.params.id, request.body);
+    const providerHeader = request.headers['x-provider-phone'];
+    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
+    if (!providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
+    const booking = await bookingService.updateStatus(request.params.id, request.body, providerPhone);
     return sendSuccess(reply, booking, 'Booking status updated');
   },
 

@@ -1,9 +1,9 @@
 import {
   Bed,
+  Building2,
   Bubbles,
   Home,
   MapPin,
-  Shirt,
   Soup,
   Sparkles,
   Timer,
@@ -13,8 +13,6 @@ import {
 export const SERVICE_TYPES = {
   PG: 'PG',
   TIFFIN: 'TIFFIN',
-  LAUNDRY: 'LAUNDRY',
-  CLEANING: 'CLEANING',
 };
 
 export const SERVICE_STATUS = {
@@ -47,6 +45,22 @@ export const providerServiceConfig = {
     routeBase: '/provider/listing',
     accent: '#4F46E5',
     bg: '#EEF2FF',
+    persona: {
+      label: 'PG Service',
+      shortLabel: 'PG',
+      icon: Building2,
+      settingsSubtitle: 'Manage your PG Service information and preferences.',
+      businessDetailsSubtitle: 'Update your property registry, room layouts and warden contacts.',
+      businessProfileDescription: 'This information is shown to students and customers on your property listings.',
+      businessNameLabel: 'Property / PG Name',
+      businessNamePlaceholder: 'e.g. North Campus Homes',
+      businessAddressLabel: 'Property Address',
+      descriptionLabel: 'Property Description',
+      descriptionPlaceholder: 'Tell students about your property, rooms, amenities, and house rules...',
+      locationNote: 'Used for geo-mapping and student enquiries',
+      specificSectionTitle: 'Property & Occupancy',
+      specificSectionNote: 'Keep your room inventory details up to date',
+    },
   },
   TIFFIN: {
     type: SERVICE_TYPES.TIFFIN,
@@ -64,6 +78,22 @@ export const providerServiceConfig = {
     routeBase: '/provider/services/tiffin',
     accent: '#EA580C',
     bg: '#FFF7ED',
+    persona: {
+      label: 'Tiffin Service',
+      shortLabel: 'Tiffin',
+      icon: Utensils,
+      settingsSubtitle: 'Manage your Tiffin Service information and preferences.',
+      businessDetailsSubtitle: 'Update your business profile, kitchen details and contact information.',
+      businessProfileDescription: 'This information is shown to students and customers on your public listings.',
+      businessNameLabel: 'Business Name',
+      businessNamePlaceholder: 'e.g. Sunny Leone Tiffin & Homely Meals',
+      businessAddressLabel: 'Business Address',
+      descriptionLabel: 'Description',
+      descriptionPlaceholder: 'Tell students about your meals, portions, delivery rules, and service...',
+      locationNote: 'Used for geo-mapping and delivery',
+      specificSectionTitle: 'Kitchen & Delivery',
+      specificSectionNote: 'Service information used for delivery and verification',
+    },
     fields: [
       { name: 'name', label: 'Plan Name', type: 'text', placeholder: 'Monthly Veg Plan', required: true, section: 'basics' },
       { name: 'mealType', label: 'Meal Type', type: 'chips', options: ['Breakfast', 'Lunch', 'Dinner', 'Lunch + Dinner', 'Full Day'], section: 'basics' },
@@ -97,96 +127,6 @@ export const providerServiceConfig = {
       longitude: null,
     },
   },
-  LAUNDRY: {
-    type: SERVICE_TYPES.LAUNDRY,
-    icon: Shirt,
-    emoji: '🧺',
-    label: 'Laundry',
-    groupTitle: 'Laundry Services',
-    addLabel: 'Add Laundry Service',
-    emptyTitle: 'No laundry services yet',
-    emptyDescription: 'Offer a new laundry package',
-    createTitle: 'Create Laundry Service',
-    editTitle: 'Edit Laundry Service',
-    submitCreate: 'Publish Service',
-    submitEdit: 'Update Service',
-    routeBase: '/provider/services/laundry',
-    accent: '#0891B2',
-    bg: '#ECFEFF',
-    fields: [
-      { name: 'name', label: 'Service Name', type: 'text', placeholder: 'Campus Laundry Express', required: true, section: 'basics' },
-      { name: 'washType', label: 'Wash Type', type: 'chips', options: ['Wash + Fold', 'Wash + Iron', 'Dry Clean', 'Iron Only'], section: 'basics' },
-      { name: 'kgPrice', label: 'KG Pricing', type: 'number', placeholder: '80', required: true, section: 'pricing' },
-      { name: 'perClothPrice', label: 'Per Cloth Pricing', type: 'number', placeholder: '12', section: 'pricing' },
-      { name: 'pickupAvailable', label: 'Pickup Available', type: 'toggle', section: 'operations' },
-      { name: 'expressDelivery', label: 'Express Delivery', type: 'toggle', section: 'operations' },
-      { name: 'estimatedTime', label: 'Estimated Time', type: 'text', placeholder: '24-48 hours', section: 'operations' },
-      ...commonLocationFields,
-      { name: 'description', label: 'Description', type: 'textarea', placeholder: 'Pickup rules, stains policy, delivery promise...', section: 'details' },
-    ],
-    initialValues: {
-      name: '',
-      washType: '',
-      kgPrice: '',
-      perClothPrice: '',
-      pickupAvailable: true,
-      expressDelivery: false,
-      estimatedTime: '',
-      address: '',
-      serviceRadiusKm: '3',
-      description: '',
-      images: [],
-      coverImage: '',
-      isActive: true,
-      latitude: null,
-      longitude: null,
-    },
-  },
-  CLEANING: {
-    type: SERVICE_TYPES.CLEANING,
-    icon: Sparkles,
-    emoji: '🧹',
-    label: 'Cleaning',
-    groupTitle: 'Cleaning Services',
-    addLabel: 'Add Cleaning Service',
-    emptyTitle: 'No cleaning services yet',
-    emptyDescription: 'Create a new cleaning offering',
-    createTitle: 'Create Cleaning Service',
-    editTitle: 'Edit Cleaning Service',
-    submitCreate: 'Publish Service',
-    submitEdit: 'Update Service',
-    routeBase: '/provider/services/cleaning',
-    accent: '#7C3AED',
-    bg: '#F5F3FF',
-    fields: [
-      { name: 'name', label: 'Service Name', type: 'text', placeholder: 'Hostel Room Deep Clean', required: true, section: 'basics' },
-      { name: 'cleaningType', label: 'Cleaning Type', type: 'chips', options: ['Basic Room', 'Deep Cleaning', 'Bathroom', 'Move-in Cleaning'], section: 'basics' },
-      { name: 'deepCleaning', label: 'Deep Cleaning', type: 'toggle', section: 'basics' },
-      { name: 'equipmentIncluded', label: 'Equipment Included', type: 'toggle', section: 'operations' },
-      { name: 'roomSize', label: 'Room Size', type: 'chips', options: ['Small', 'Medium', 'Large', '2 Rooms'], section: 'pricing' },
-      { name: 'price', label: 'Pricing', type: 'number', placeholder: '499', required: true, section: 'pricing' },
-      { name: 'availableSlots', label: 'Available Slots', type: 'multiChips', options: ['Morning', 'Afternoon', 'Evening', 'Weekend'], section: 'operations' },
-      ...commonLocationFields,
-      { name: 'description', label: 'Description', type: 'textarea', placeholder: 'What is included, timing, material policy...', section: 'details' },
-    ],
-    initialValues: {
-      name: '',
-      cleaningType: '',
-      deepCleaning: false,
-      equipmentIncluded: true,
-      roomSize: '',
-      price: '',
-      availableSlots: [],
-      address: '',
-      serviceRadiusKm: '3',
-      description: '',
-      images: [],
-      coverImage: '',
-      isActive: true,
-      latitude: null,
-      longitude: null,
-    },
-  },
 };
 
 export const serviceSectionLabels = {
@@ -200,9 +140,60 @@ export const serviceSectionLabels = {
 
 export function normalizeServiceType(type) {
   if (!type) return SERVICE_TYPES.PG;
-  const upper = String(type).replace('-', '_').toUpperCase();
+  const rawType = type && typeof type === 'object'
+    ? type.type || type.serviceType || type.service_type
+    : type;
+  const upper = String(rawType).replace('-', '_').toUpperCase();
   if (upper === 'HOSTEL' || upper === 'ROOM' || upper === 'ROOMS') return SERVICE_TYPES.PG;
   return providerServiceConfig[upper] ? upper : SERVICE_TYPES.PG;
+}
+
+function knownServiceType(type) {
+  const rawType = type && typeof type === 'object'
+    ? type.type || type.serviceType || type.service_type
+    : type;
+  if (!rawType) return '';
+  const upper = String(rawType).replace('-', '_').toUpperCase();
+  if (upper === 'HOSTEL' || upper === 'ROOM' || upper === 'ROOMS') return SERVICE_TYPES.PG;
+  return providerServiceConfig[upper] ? upper : '';
+}
+
+export function getActiveProviderServiceType(provider) {
+  const candidates = [
+    provider?.activeServiceType,
+    provider?.active_service_type,
+    provider?.serviceType,
+    provider?.service_type,
+    ...(Array.isArray(provider?.services) ? provider.services : []),
+  ];
+
+  return candidates.map(knownServiceType).find(Boolean) || '';
+}
+
+export function getProviderPersona(provider) {
+  const type = getActiveProviderServiceType(provider);
+  if (!type) {
+    return {
+      type: '',
+      label: 'Provider account',
+      shortLabel: 'Provider',
+      icon: Building2,
+      settingsSubtitle: 'Manage your provider information and preferences.',
+      businessDetailsSubtitle: 'Update your business profile and contact information.',
+      businessProfileDescription: 'This information is shown to students and customers on your public listings.',
+      businessNameLabel: 'Business Name',
+      businessNamePlaceholder: 'Enter your business name',
+      businessAddressLabel: 'Business Address',
+      descriptionLabel: 'Description',
+      descriptionPlaceholder: 'Tell students and customers about your business...',
+      locationNote: 'Used for geo-mapping and enquiries',
+      specificSectionTitle: 'Service Information',
+      specificSectionNote: 'Service details will appear once your provider type is available.',
+      isUnknown: true,
+    };
+  }
+
+  return { type, ...providerServiceConfig[type].persona, isUnknown: false };
 }
 
 export function getProviderServiceTypes(provider) {

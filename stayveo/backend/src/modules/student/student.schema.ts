@@ -1,6 +1,7 @@
 // ─── Student Profile Zod Schemas ────────────────────────────────────────
 
 import { z } from 'zod';
+import { parseYear } from '../../common/utils/year.js';
 
 const prismaEnum = <T extends string>(values: Record<string, T>) => (value: unknown) => {
   if (typeof value !== 'string') return value;
@@ -63,7 +64,7 @@ const studentProfileFields = z.object({
   college: z.string().min(1).max(200),
   collegeId: z.string().uuid().optional(),
   collegeName: z.string().min(1).max(200).optional(),
-  year: z.coerce.number().int().min(1).max(6).optional(),
+  year: z.preprocess(parseYear, z.number().int().min(1).max(6).nullable().optional()),
   gender: z.preprocess(
     genderEnum,
     z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).optional()

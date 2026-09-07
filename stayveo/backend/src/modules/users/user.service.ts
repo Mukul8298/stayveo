@@ -4,13 +4,7 @@ import { userRepository } from './user.repository.js';
 import { createUserSchema, updateUserProfileSchema, updateUserSchema } from './user.schema.js';
 import type { CreateUserInput, UpdateUserInput, UpdateUserProfileInput } from './user.schema.js';
 import { FoodPreference, GenderType, LifestyleType, SocialLevel, StudyHabit } from '../../common/enums.js';
-
-const YEAR_TO_NUMBER: Record<UpdateUserProfileInput['year'], number> = {
-  '1st Year': 1,
-  '2nd Year': 2,
-  '3rd Year': 3,
-  '4th Year': 4,
-};
+import { parseYear } from '../../common/utils/year.js';
 
 const GENDER_TO_ENUM: Record<UpdateUserProfileInput['gender'], GenderType> = {
   Male: GenderType.MALE,
@@ -26,13 +20,13 @@ const FOOD_TO_ENUM: Record<UpdateUserProfileInput['foodPreference'], FoodPrefere
   Vegan: FoodPreference.VEGAN,
 };
 
-const STUDY_TO_ENUM: Record<UpdateUserProfileInput['studyHabits'], StudyHabit> = {
+const STUDY_TO_ENUM: Record<string, StudyHabit> = {
   Quiet: StudyHabit.QUIET,
   Normal: StudyHabit.NORMAL,
   Flexible: StudyHabit.FLEXIBLE,
 };
 
-const PERSONALITY_TO_ENUM: Record<UpdateUserProfileInput['personalityType'], SocialLevel> = {
+const PERSONALITY_TO_ENUM: Record<string, SocialLevel> = {
   Introvert: SocialLevel.INTROVERT,
   Ambivert: SocialLevel.AMBIVERT,
   Extrovert: SocialLevel.EXTROVERT,
@@ -79,24 +73,28 @@ export const userService = {
 
   /** Update a student profile using the phone number as the stable lookup key */
   async updateProfile(input: UpdateUserProfileInput) {
+    const rawYear = input.year;
+    const mappedYear = parseYear(rawYear);
     const data = updateUserProfileSchema.parse(input);
+    const validatedYear = data.year;
+    const prismaYear = data.year;
 
     const existingUser = await userRepository.findWithProfileByPhone(data.phone);
     if (!existingUser) {
       throw { statusCode: 404, message: 'User not found for the provided phone number' };
     }
 
-    return userRepository.updateProfileByPhone(data.phone, {
+    const result = await userRepository.updateProfileByPhone(data.phone, {
       userId: existingUser.id,
       fullName: data.fullName.trim(),
       college: data.college.trim(),
-      year: YEAR_TO_NUMBER[data.year],
+      year: data.year,
       gender: GENDER_TO_ENUM[data.gender],
       foodPreference: FOOD_TO_ENUM[data.foodPreference],
       sleepSchedule: SLEEP_TO_ENUM[data.sleepSchedule],
-      cleanlinessLevel: data.cleanlinessLevel,
-      studyHabits: STUDY_TO_ENUM[data.studyHabits],
-      personalityType: PERSONALITY_TO_ENUM[data.personalityType],
+      cleanlinessLevel: data.cleanlinessLevel ?? null,
+      studyHabits: data.studyHabits ? STUDY_TO_ENUM[data.studyHabits] : null,
+      personalityType: data.personalityType ? PERSONALITY_TO_ENUM[data.personalityType] : null,
       locationPreference: data.locationPreference?.trim() || null,
       currentAddress: data.currentAddress?.trim() || null,
       latitude: data.latitude ?? null,
@@ -104,5 +102,17 @@ export const userService = {
       budget: data.budget.trim(),
       profileImageUrl: data.profileImageUrl?.trim() || null,
     });
+
+    const storedDbYear = result.studentProfile?.year;
+
+    console.log(`\n--- Verification for PUT /user/update-profile ---`);
+    console.log(`Incoming year: ${rawYear}`);
+    console.log(`Mapped year: ${mappedYear}`);
+    console.log(`Validated year: ${validatedYear}`);
+    console.log(`Prisma year: ${prismaYear}`);
+    console.log(`Stored database year: ${storedDbYear}`);
+    console.log(`-------------------------------------------\n`);
+
+    return result;
   },
 };

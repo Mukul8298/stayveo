@@ -20,12 +20,6 @@ export default function ProviderCalendar() {
 
   return (
     <div className="pc-page" id="provider-calendar">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/provider/dashboard', { state: { types } })}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Calendar</h1>
-      </div>
 
       <div className="pc-date-nav">
         <button className="pc-nav-btn" onClick={() => setSelectedDate(d => Math.max(0, d - 1))}>

@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Wifi, UtensilsCrossed, WashingMachine, Sparkles, BadgeCheck, Heart } from 'lucide-react';
+import { MapPin, Wifi, UtensilsCrossed, BadgeCheck, Heart, Home } from 'lucide-react';
 import Rating from './Rating';
+import { useSavedListings } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import './ListingCard.css';
 
 // ── ListingCard ─────────────────────────────────────────────────────────
@@ -14,7 +17,6 @@ import './ListingCard.css';
 
 const serviceIcons = {
   wifi: <Wifi size={12} />, food: <UtensilsCrossed size={12} />,
-  laundry: <WashingMachine size={12} />, cleaning: <Sparkles size={12} />,
 };
 
 const FALLBACK_IMG = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop';
@@ -34,6 +36,9 @@ const PLACEHOLDER_STYLE = {
 
 export default function ListingCard({ listing, variant = 'horizontal' }) {
   const navigate = useNavigate();
+  const { authState } = useAuth();
+  const toast = useToast();
+  const { isSaved, savingIds, toggleSaved } = useSavedListings(authState?.userId);
 
   // Defensive destructuring — handle completely missing listing
   const {
@@ -66,13 +71,49 @@ export default function ListingCard({ listing, variant = 'horizontal' }) {
     }
   }, [imgError, title]);
 
+  const openListing = () => navigate(`/room/${id}`);
+  const saved = isSaved(id);
+  const saving = savingIds.has(String(id));
+
+  const handleFavoriteClick = async (event) => {
+    event.stopPropagation();
+
+    if (!authState?.userId) {
+      toast.error('Please login first');
+      return;
+    }
+
+    try {
+      const result = await toggleSaved(listing);
+      toast.success(result.saved ? 'Listing saved' : 'Listing removed');
+    } catch (err) {
+      console.error('ListingCard: saved listing toggle failed:', err);
+      toast.error(err?.message || 'Failed to update saved listing');
+    }
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openListing();
+    }
+  };
+
   return (
-    <div className={`listing-card listing-card-${variant}`} onClick={() => navigate(`/room/${id}`)} id={`listing-${id}`}>
+    <article
+      className={`listing-card listing-card-${variant}`}
+      onClick={openListing}
+      onKeyDown={handleKeyDown}
+      id={`listing-${id}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${title}`}
+    >
       <div className="listing-card-image">
         {fallbackError ? (
           // All images failed — show styled placeholder
           <div style={PLACEHOLDER_STYLE} aria-label="No image available">
-            🏠
+            <Home size={30} />
           </div>
         ) : (
           <img
@@ -85,8 +126,15 @@ export default function ListingCard({ listing, variant = 'horizontal' }) {
         {verified && (
           <span className="listing-badge"><BadgeCheck size={12} /> Verified</span>
         )}
-        <button className="listing-fav" onClick={e => { e.stopPropagation(); }}>
-          <Heart size={18} />
+        <button
+          className="listing-fav"
+          onClick={handleFavoriteClick}
+          onKeyDown={(event) => event.stopPropagation()}
+          aria-label={saved ? `Unsave ${title}` : `Save ${title}`}
+          aria-pressed={saved}
+          disabled={saving}
+        >
+          <Heart size={18} fill={saved ? 'currentColor' : 'none'} />
         </button>
         <div className="listing-price-tag">₹{(price || 0).toLocaleString()}<span>/mo</span></div>
       </div>
@@ -105,6 +153,6 @@ export default function ListingCard({ listing, variant = 'horizontal' }) {
           <span className="listing-room-type">{roomType === 'shared' ? 'Shared' : 'Single'}</span>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

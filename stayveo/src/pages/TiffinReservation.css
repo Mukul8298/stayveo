@@ -1,0 +1,97 @@
+.tiffin-reservation-page .tiffin-topbar { margin-bottom: 34px; }
+.tiffin-reservation-heading { margin-bottom: 24px; }
+.tiffin-reservation-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+.tiffin-reservation-main { display: grid; gap: 18px; min-width: 0; }
+.tiffin-reservation-card { border: 1px solid #e4ece8; border-radius: 13px; background: rgba(255,255,255,.82); box-shadow: 0 8px 24px rgba(25,73,57,.035); padding: 22px; }
+.tiffin-reservation-card-heading { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 20px; }
+.tiffin-reservation-card-heading h2 { margin: 0; color: #26473b; font-size: 17px; letter-spacing: -.025em; }
+.tiffin-reservation-card-heading p { margin: 5px 0 0; color: #829089; font-size: 11px; line-height: 1.45; }
+.tiffin-reservation-step { display: inline-flex; align-items: center; justify-content: center; width: 25px; height: 25px; flex: 0 0 auto; border-radius: 50%; background: #e4f0eb; color: #187453; font-size: 11px; font-weight: 700; }
+.tiffin-reservation-service { display: flex; align-items: center; gap: 14px; padding: 13px; border: 1px solid #edf2ef; border-radius: 9px; background: #fbfdfc; }
+.tiffin-reservation-service img { width: 66px; height: 66px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; }
+.tiffin-reservation-service h3 { margin: 0 0 7px; color: #23473a; font-size: 16px; }
+.tiffin-reservation-service p, .tiffin-reservation-service span { display: flex; align-items: center; gap: 5px; margin: 0; color: #7b8982; font-size: 11px; line-height: 1.5; }
+.tiffin-reservation-service span { display: block; margin-top: 4px; color: #9aa7a1; font-size: 10px; }
+.tiffin-reservation-plans { display: grid; gap: 8px; margin-top: 15px; }
+.tiffin-reservation-plan { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; padding: 12px 13px; border: 1px solid #e3ece7; border-radius: 8px; background: #fff; color: #315548; font: inherit; text-align: left; cursor: pointer; }
+.tiffin-reservation-plan.is-selected { border-color: #8bc3a8; background: #f1f9f4; box-shadow: 0 0 0 2px rgba(81,146,107,.08); }
+.tiffin-reservation-plan span { display: grid; gap: 4px; }
+.tiffin-reservation-plan strong { font-size: 12px; }
+.tiffin-reservation-plan small { color: #92a099; font-size: 10px; }
+.tiffin-reservation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.tiffin-reservation-fields label { display: grid; gap: 7px; color: #4b6258; font-size: 11px; font-weight: 650; }
+.tiffin-reservation-fields label em { color: #a0aaa5; font-size: 9px; font-style: normal; font-weight: 400; }
+.tiffin-reservation-fields input, .tiffin-reservation-fields textarea, .tiffin-reservation-fields select { width: 100%; box-sizing: border-box; border: 1px solid #dfe9e4; border-radius: 7px; outline: 0; background: #fff; color: #29483b; font: inherit; font-size: 12px; font-weight: 400; }
+.tiffin-reservation-fields input, .tiffin-reservation-fields select { min-height: 39px; padding: 0 11px; }
+.tiffin-reservation-fields textarea { padding: 11px; resize: vertical; }
+.tiffin-reservation-fields input:focus, .tiffin-reservation-fields textarea:focus, .tiffin-reservation-fields select:focus { border-color: #8fc4a9; box-shadow: 0 0 0 3px rgba(97,163,123,.1); }
+.tiffin-reservation-fields input[readonly] { background: #f8fbf9; color: #71827a; }
+.tiffin-reservation-fields .is-wide { grid-column: 1 / -1; }
+.tiffin-reservation-schedule { align-items: end; }
+.tiffin-reservation-input-icon { position: relative; display: flex; align-items: center; }
+.tiffin-reservation-input-icon svg { position: absolute; left: 11px; color: #6e907f; pointer-events: none; }
+.tiffin-reservation-input-icon input { padding-left: 34px; }
+.tiffin-reservation-meals { display: grid; gap: 8px; color: #4b6258; font-size: 11px; font-weight: 650; }
+.tiffin-reservation-meals > div { display: flex; gap: 14px; min-height: 39px; align-items: center; }
+.tiffin-reservation-meals label { display: flex; align-items: center; gap: 6px; color: #63766d; font-size: 11px; font-weight: 500; }
+.tiffin-reservation-summary { position: sticky; top: 20px; }
+.tiffin-reservation-summary .tiffin-reservation-card-heading svg { flex: 0 0 auto; color: #187453; }
+.tiffin-reservation-summary-row { display: flex; justify-content: space-between; gap: 15px; padding: 12px 0; border-bottom: 1px solid #edf2ef; color: #809088; font-size: 11px; }
+.tiffin-reservation-summary-row strong { color: #345b4c; font-size: 11px; text-align: right; }
+.tiffin-reservation-total { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 15px; color: #345b4c; font-size: 13px; }
+.tiffin-reservation-total strong { color: #123e32; font-size: 20px; }
+.tiffin-reservation-submit { width: 100%; min-height: 42px; }
+.tiffin-reservation-submit:disabled { opacity: .55; cursor: not-allowed; }
+.tiffin-reservation-payment-note { margin: 13px 0 0; padding: 10px; border-radius: 7px; background: #eef7f2; color: #6c8579; font-size: 10px; line-height: 1.5; }
+.tiffin-reservation-alert { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 17px; padding: 11px 13px; border: 1px solid #f0d8d1; border-radius: 8px; background: #fff8f6; color: #a05243; font-size: 11px; line-height: 1.45; }
+.tiffin-reservation-result { width: min(100%, 620px); margin: 40px auto; padding: 42px 34px; border: 1px solid #dcebe2; border-radius: 15px; background: rgba(255,255,255,.86); box-shadow: 0 12px 30px rgba(25,73,57,.06); text-align: center; }
+.tiffin-reservation-result-icon { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-bottom: 15px; border-radius: 50%; background: #e5f5ea; color: #23804e; }
+.tiffin-reservation-result.is-pending .tiffin-reservation-result-icon { background: #eef5f1; color: #4b7764; }
+.tiffin-reservation-result.is-error .tiffin-reservation-result-icon { background: #fff1ed; color: #b45c4b; }
+.tiffin-reservation-result-kicker { margin: 0 0 7px; color: #328052; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tiffin-reservation-result h1 { margin: 0; color: #1c4235; font-size: 28px; letter-spacing: -.04em; }
+.tiffin-reservation-result > p:not(.tiffin-reservation-result-kicker) { max-width: 480px; margin: 12px auto 24px; color: #71827a; font-size: 12px; line-height: 1.6; }
+.tiffin-reservation-result-details { max-width: 420px; margin: 0 auto 22px; text-align: left; }
+.tiffin-reservation-result .tiffin-subscribe-button { min-width: 190px; }
+.tiffin-reservation-result small { display: block; margin-top: 15px; color: #8b9b93; font-size: 10px; }
+.tiffin-reservation-secondary-button { margin-top: 14px; border: 0; background: transparent; color: #4a7462; font: inherit; font-size: 11px; cursor: pointer; }
+.tiffin-reservation-result .tiffin-reservation-alert { max-width: 420px; margin: 0 auto 14px; text-align: left; }
+
+@media (max-width: 800px) {
+  .tiffin-reservation-layout { grid-template-columns: 1fr; }
+  .tiffin-reservation-summary { position: static; }
+}
+
+@media (max-width: 560px) {
+  .tiffin-reservation-card { padding: 17px; }
+  .tiffin-reservation-fields { grid-template-columns: 1fr; }
+  .tiffin-reservation-fields .is-wide { grid-column: auto; }
+  .tiffin-reservation-result { padding: 32px 20px; }
+}
+
+.tiffin-mock-payment-card { max-width: 620px; padding: 46px 42px; }
+.tiffin-mock-payment-icon { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; margin-bottom: 15px; border-radius: 50%; background: #eef7f2; color: #32775d; }
+.tiffin-mock-payment-badge { display: inline-flex; margin: 2px auto 17px; padding: 6px 10px; border: 1px solid #b9ddc7; border-radius: 999px; background: #f0faf3; color: #237b50; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.tiffin-mock-payment-card h1 { margin-top: 0; font-size: 23px; }
+.tiffin-mock-payment-amount { display: block; margin: 9px 0 25px; color: #123e32; font-size: 30px; letter-spacing: -.04em; }
+.tiffin-mock-payment-reference { display: grid; gap: 6px; max-width: 410px; margin: 0 auto 18px; padding: 14px 16px; border: 1px solid #e5eee9; border-radius: 9px; background: #fbfdfc; text-align: left; }
+.tiffin-mock-payment-reference span { color: #8a9992; font-size: 10px; }
+.tiffin-mock-payment-reference strong { color: #345b4c; font-size: 12px; letter-spacing: .04em; }
+.tiffin-mock-payment-notice { display: flex; align-items: flex-start; gap: 8px; max-width: 440px; margin: 0 auto 22px; padding: 12px 14px; border-radius: 8px; background: #eef7f2; color: #668176; font-size: 11px; line-height: 1.55; text-align: left; }
+.tiffin-mock-payment-notice svg { flex: 0 0 auto; margin-top: 1px; color: #328052; }
+.tiffin-mock-payment-actions { display: grid; gap: 10px; max-width: 330px; margin: 0 auto; }
+.tiffin-mock-payment-actions button { min-height: 42px; }
+.tiffin-mock-outline-button, .tiffin-mock-secondary-button, .tiffin-mock-processing-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 7px; font: inherit; font-size: 11px; cursor: pointer; }
+.tiffin-mock-outline-button { border: 1px solid #e4bdb6; background: #fff; color: #a05243; }
+.tiffin-mock-secondary-button { border: 1px solid #dce8e1; background: #fff; color: #507263; }
+.tiffin-mock-processing-button { border: 0; background: transparent; color: #4a7462; }
+.tiffin-mock-outline-button:disabled, .tiffin-mock-secondary-button:disabled, .tiffin-mock-processing-button:disabled { cursor: not-allowed; opacity: .55; }
+.tiffin-reservation-result.is-processing .tiffin-reservation-result-icon { background: #eef5f1; color: #4b7764; }
+.tiffin-reservation-result.is-failed .tiffin-reservation-result-icon { background: #fff1ed; color: #b45c4b; }
+.tiffin-reservation-result.is-cancelled .tiffin-reservation-result-icon { background: #f3f1ed; color: #897b68; }
+.tiffin-reservation-result.is-failed .tiffin-reservation-result-kicker { color: #a05243; }
+.tiffin-reservation-result.is-cancelled .tiffin-reservation-result-kicker { color: #897b68; }
+.tiffin-reservation-debug { display: grid; gap: 5px; max-width: 420px; margin: 0 auto 22px; padding: 12px 14px; border: 1px dashed #bad7c6; border-radius: 8px; background: #f5fbf7; color: #71877a; font-size: 10px; line-height: 1.45; text-align: left; }
+.tiffin-reservation-debug strong { color: #2f7953; }
+.tiffin-mock-result-actions { display: grid; justify-items: center; gap: 7px; }
+.tiffin-mock-result-actions .tiffin-subscribe-button { min-width: 160px; }

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check } from 'lucide-react';
 import Button from '../../components/Button';
 import { providerTypes } from '../../data/mockData';
+import { useProvider } from '../../context/ProviderContext';
 import './ProviderTypeSelect.css';
 
 export default function ProviderTypeSelect() {
   const navigate = useNavigate();
+  const { updateProvider } = useProvider();
   const [selected, setSelected] = useState([]);
 
   const toggle = (key) => {
@@ -14,6 +16,21 @@ export default function ProviderTypeSelect() {
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     );
   };
+
+  function continueToSelectedService() {
+    const types = selected.map((type) => type.toUpperCase());
+    updateProvider({
+      services: types,
+      activeServiceType: types.length === 1 ? types[0] : '',
+    });
+    // Keep the existing PG onboarding branch exactly as-is for PG providers.
+    // A Tiffin-only provider gets the isolated Tiffin onboarding workspace.
+    if (types.length === 1 && types[0] === 'TIFFIN') {
+      navigate('/provider/tiffin/onboarding');
+      return;
+    }
+    navigate('/provider/onboarding', { state: { types } });
+  }
 
   return (
     <div className="pts-page" id="provider-type-select">
@@ -60,7 +77,7 @@ export default function ProviderTypeSelect() {
           fullWidth
           size="lg"
           disabled={selected.length === 0}
-          onClick={() => navigate('/provider/onboarding', { state: { types: selected } })}
+          onClick={continueToSelectedService}
         >
           Continue ({selected.length} selected)
         </Button>

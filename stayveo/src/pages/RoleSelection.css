@@ -1,30 +1,35 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Role Selection — StayVeo Design System v2
+   ═══════════════════════════════════════════════════════════════════════ */
+
 .role-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   padding: var(--space-10) var(--space-6);
-  background: white;
+  background: var(--surface);
 }
 
 .role-header {
   margin-bottom: var(--space-10);
-  animation: fadeInUp 0.5s var(--ease-out);
+  animation: fadeInUp 0.4s var(--ease-out);
 }
 
 .role-header h1 {
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: var(--text-3xl);
   font-weight: 700;
   line-height: 1.2;
   margin-bottom: var(--space-2);
+  letter-spacing: -0.03em;
 }
 
 .role-header h1 span {
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--neutral-900);
+  -webkit-text-fill-color: var(--neutral-900);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
 }
 
 .role-header p {
@@ -44,36 +49,33 @@
   align-items: flex-start;
   padding: var(--space-6);
   border-radius: var(--radius-xl);
-  border: 1.5px solid var(--neutral-200);
-  background: white;
+  border: 1px solid var(--border-default);
+  background: var(--surface);
   text-align: left;
-  transition: all var(--duration-normal) var(--ease-out);
+  transition: border-color var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
   position: relative;
   overflow: hidden;
-  animation: fadeInUp 0.5s var(--ease-out) both;
+  animation: fadeInUp 0.4s var(--ease-out) both;
 }
 
-.role-card:nth-child(1) {
-  animation-delay: 0.1s;
-}
-
-.role-card:nth-child(2) {
-  animation-delay: 0.2s;
-}
+.role-card:nth-child(1) { animation-delay: 0.1s; }
+.role-card:nth-child(2) { animation-delay: 0.2s; }
 
 .role-card:hover {
-  border-color: var(--primary-300);
-  box-shadow: var(--shadow-md);
+  border-color: var(--neutral-300);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-2px);
 }
 
 .role-card:active {
-  transform: translateY(0);
+  transform: scale(0.98);
 }
 
 .role-icon {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -82,20 +84,21 @@
 }
 
 .role-icon-student {
-  background: var(--primary-50);
-  color: var(--primary-500);
+  background: var(--neutral-100);
+  color: var(--neutral-600);
 }
 
 .role-icon-broker {
-  background: var(--accent-50);
-  color: var(--accent-600);
+  background: var(--neutral-100);
+  color: var(--neutral-600);
 }
 
 .role-card h2 {
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: var(--text-xl);
   font-weight: 600;
   margin-bottom: var(--space-1);
+  letter-spacing: -0.01em;
 }
 
 .role-card p {
@@ -110,10 +113,11 @@
   transform: translateY(-50%);
   font-size: var(--text-2xl);
   color: var(--neutral-300);
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
 }
 
 .role-card:hover .role-arrow {
-  color: var(--primary-500);
+  color: var(--neutral-600);
   transform: translateY(-50%) translateX(4px);
 }

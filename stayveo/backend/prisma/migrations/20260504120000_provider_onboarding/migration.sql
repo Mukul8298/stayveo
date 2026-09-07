@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "provider_service_type" AS ENUM ('PG', 'TIFFIN', 'LAUNDRY', 'CLEANING');
+CREATE TYPE "provider_service_type" AS ENUM ('PG', 'TIFFIN');
 
 -- CreateTable
 CREATE TABLE "provider_profiles" (
@@ -51,26 +51,6 @@ CREATE TABLE "tiffin_details" (
 );
 
 -- CreateTable
-CREATE TABLE "laundry_details" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "service_id" UUID NOT NULL,
-    "pricing" TEXT NOT NULL,
-    "photos" TEXT[],
-
-    CONSTRAINT "laundry_details_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "cleaning_details" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "service_id" UUID NOT NULL,
-    "pricing" TEXT NOT NULL,
-    "photos" TEXT[],
-
-    CONSTRAINT "cleaning_details_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "provider_verifications" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "provider_id" UUID NOT NULL,
@@ -97,11 +77,7 @@ CREATE UNIQUE INDEX "pg_details_service_id_key" ON "pg_details"("service_id");
 CREATE UNIQUE INDEX "tiffin_details_service_id_key" ON "tiffin_details"("service_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "laundry_details_service_id_key" ON "laundry_details"("service_id");
-
 -- CreateIndex
-CREATE UNIQUE INDEX "cleaning_details_service_id_key" ON "cleaning_details"("service_id");
-
 -- CreateIndex
 CREATE UNIQUE INDEX "provider_verifications_provider_id_id_type_key" ON "provider_verifications"("provider_id", "id_type");
 
@@ -116,12 +92,6 @@ ALTER TABLE "pg_details" ADD CONSTRAINT "pg_details_service_id_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "tiffin_details" ADD CONSTRAINT "tiffin_details_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "provider_services"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "laundry_details" ADD CONSTRAINT "laundry_details_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "provider_services"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cleaning_details" ADD CONSTRAINT "cleaning_details_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "provider_services"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "provider_verifications" ADD CONSTRAINT "provider_verifications_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "provider_profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;

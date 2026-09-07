@@ -46,7 +46,10 @@ export default function ProviderLogin() {
       updateProvider({
         phone,
         providerId: d.providerId,
+        userId: d.userId,
         name: d.name || '',
+        services: d.services || (d.nextStep?.startsWith('tiffin') ? ['TIFFIN'] : []),
+        activeServiceType: d.nextStep?.startsWith('tiffin') ? 'TIFFIN' : '',
         otpVerified: true,
         isVerified: d.isVerified,
         isExistingUser: d.nextStep === 'dashboard',
@@ -55,9 +58,15 @@ export default function ProviderLogin() {
       if (d.nextStep === 'dashboard') {
         toast.success(`Welcome back, ${d.name}!`);
         navigate('/provider/dashboard');
+      } else if (d.nextStep === 'tiffin_dashboard') {
+        toast.success(`Welcome back, ${d.name}!`);
+        navigate('/provider/tiffin/dashboard');
+      } else if (d.nextStep === 'tiffin_onboarding') {
+        toast.info('Continue your Tiffin service setup');
+        navigate('/provider/tiffin/onboarding');
       } else {
         toast.info('Let\'s set up your provider profile');
-        navigate('/provider/onboarding');
+        navigate('/provider/select');
       }
     } catch (err) {
       setError(err.message);

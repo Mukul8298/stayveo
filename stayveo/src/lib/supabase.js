@@ -78,16 +78,11 @@ export function cleanStaleSupabaseSessions() {
       const keyRef = key.replace('sb-', '').replace('-auth-token', '');
       if (keyRef !== currentRef) {
         keysToRemove.push(key);
-        console.log(`🧹 Removing stale auth token for old project: ${keyRef}`);
       }
     }
   }
 
   keysToRemove.forEach((key) => localStorage.removeItem(key));
-
-  if (keysToRemove.length > 0) {
-    console.log(`✅ Cleaned ${keysToRemove.length} stale Supabase session(s)`);
-  }
 }
 
 // Run stale session cleanup on module load (once per page load)

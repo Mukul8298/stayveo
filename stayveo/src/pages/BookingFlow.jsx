@@ -21,16 +21,21 @@ import {
   Zap,
 } from 'lucide-react';
 import { fetchPGListings, FALLBACK_IMAGE } from '../api/supabaseApi';
-import { createBooking } from '../api/booking';
+import { createBooking, createPayment } from '../api/booking';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import './BookingFlow.css';
 
-const DEFAULT_SLOT_RESERVATION_FEE = 500;
 const DEFAULT_PLATFORM_FEE = 299;
-const DEFAULT_FOOD_CHARGES = 2000;
 
 const formatCurrency = value => `₹${Number(value || 0).toLocaleString('en-IN')}`;
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const firstNumber = (...values) => {
   for (const value of values) {
@@ -64,6 +69,9 @@ export default function BookingFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [bookingId, setBookingId] = useState('');
   const [reserved, setReserved] = useState(false);
+  const [step, setStep] = useState('visit');
+  const [visitDate, setVisitDate] = useState('');
+  const [visitDateError, setVisitDateError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,21 +96,31 @@ export default function BookingFlow() {
 
   const pricing = useMemo(() => {
     const monthlyRent = firstNumber(room?.price);
-    const securityDeposit = firstNumber(room?.securityDeposit) ?? monthlyRent;
-    const foodCharges = firstNumber(room?.foodCharges) ?? DEFAULT_FOOD_CHARGES;
-    const electricityCharges = firstNumber(room?.electricityCharges);
-    const slotReservationFee = firstNumber(room?.slotReservationFee) ?? DEFAULT_SLOT_RESERVATION_FEE;
+    const securityDeposit = firstNumber(room?.securityDeposit) ?? 0;
+    const foodCharges = firstNumber(room?.foodCharges) ?? 0;
+    const electricityCharges = firstNumber(room?.electricityCharges) ?? 0;
+    const waterCharges = firstNumber(room?.waterCharges) ?? 0;
+    const maintenanceCharges = firstNumber(room?.maintenanceCharges) ?? 0;
+    const parkingCharges = firstNumber(room?.parkingCharges) ?? 0;
+    const otherCharges = firstNumber(room?.otherCharges) ?? 0;
+    const reservationFee = firstNumber(room?.reservationFee) ?? 0;
     const platformFee = firstNumber(room?.platformFee) ?? DEFAULT_PLATFORM_FEE;
-    const totalPayableNow = slotReservationFee + platformFee;
+    const totalPayableNow = reservationFee + platformFee;
+    const totalMonthlyCost = monthlyRent + foodCharges + electricityCharges + waterCharges + maintenanceCharges + parkingCharges + otherCharges;
 
     return {
       monthlyRent,
       securityDeposit,
       foodCharges,
       electricityCharges,
-      slotReservationFee,
+      waterCharges,
+      maintenanceCharges,
+      parkingCharges,
+      otherCharges,
+      reservationFee,
       platformFee,
       totalPayableNow,
+      totalMonthlyCost,
     };
   }, [room]);
 
@@ -116,7 +134,32 @@ export default function BookingFlow() {
     : 'High demand near your campus';
   const imgSrc = room?.images?.[0] || FALLBACK_IMAGE;
 
+  const handleVisitDateContinue = () => {
+    const today = getLocalDateString();
+    if (!visitDate) {
+      setVisitDateError('Please select a visit date.');
+      return;
+    }
+    if (visitDate < today) {
+      setVisitDateError('Please select a valid visit date.');
+      return;
+    }
+    setVisitDateError('');
+    setStep('reservation');
+  };
+
   const handleReserveSlot = async () => {
+    const today = getLocalDateString();
+    if (!visitDate) {
+      setStep('visit');
+      setVisitDateError('Please select a visit date.');
+      return;
+    }
+    if (visitDate < today) {
+      setStep('visit');
+      setVisitDateError('Please select a valid visit date.');
+      return;
+    }
     if (!authState?.userId) {
       toast.error('Please login first');
       navigate('/');
@@ -125,20 +168,46 @@ export default function BookingFlow() {
 
     setSubmitting(true);
     try {
+      if (!room?.providerId || !room?.roomId) {
+        throw new Error('This property is not available for online reservation right now.');
+      }
       const today = new Date().toISOString().split('T')[0];
       const res = await createBooking(authState.userId, {
-        provider_id: room?.providerId || crypto.randomUUID(),
-        room_id: room?.roomId || undefined,
+        provider_id: room.providerId,
+        room_id: room.roomId,
         service_type: 'PG Room',
         room_type: roomTypeLabel,
         booking_date: today,
         booking_time: '10:00 AM',
         price: pricing.totalPayableNow,
+        move_in_date: visitDate,
+        monthly_rent: pricing.monthlyRent,
+        security_deposit: pricing.securityDeposit,
+        reservation_fee: pricing.reservationFee,
+        platform_fee: pricing.platformFee,
+        minimum_stay_months: Number(room?.minimumStayMonths) || 1,
+        number_of_beds: 1,
+        food_charges: pricing.foodCharges,
+        electricity_charges: pricing.electricityCharges,
+        water_charges: pricing.waterCharges,
+        maintenance_charges: pricing.maintenanceCharges,
+        parking_charges: pricing.parkingCharges,
+        other_charges: pricing.otherCharges,
         student_name: displayName || authState?.name || 'Student',
         student_phone: authState?.phone || '',
         notes: `Slot reservation for ${room?.title || 'PG Room'}; monthly rent ${formatCurrency(pricing.monthlyRent)} paid directly to owner.`,
       });
-      setBookingId(res?.data?.id?.slice(0, 8) || Math.floor(Math.random() * 9000 + 1000));
+      const payment = await createPayment({
+        booking_id: res.data.id,
+        user_id: authState.userId,
+        provider_id: room?.providerId,
+        amount: pricing.totalPayableNow,
+        type: 'reservation',
+        status: 'paid',
+        payment_method: 'UPI',
+        transaction_id: `SV-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      }, authState.userId);
+      setBookingId(payment?.data?.reservation?.booking?.reservationId || res?.data?.reservationId || 'Processing');
       toast.success('Slot reserved successfully');
       setReserved(true);
     } catch (err) {
@@ -155,6 +224,14 @@ export default function BookingFlow() {
       return;
     }
     window.location.href = `tel:${room.providerPhone}`;
+  };
+
+  const handleBack = () => {
+    if (step === 'reservation') {
+      setStep('visit');
+      return;
+    }
+    navigate(-1);
   };
 
   if (roomLoading) {
@@ -177,6 +254,63 @@ export default function BookingFlow() {
           <h3>Room not found</h3>
           <p>This listing may have been removed.</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!reserved && step === 'visit') {
+    const today = getLocalDateString();
+    return (
+      <div className="booking-page" id="booking-visit-date">
+        <div className="page-header booking-header">
+          <button className="back-btn" onClick={handleBack} aria-label="Go back"><ArrowLeft size={22} /></button>
+          <h1>Visit Date</h1>
+        </div>
+
+        <main className="booking-content">
+          <BookingCard className="booking-property-card">
+            <img
+              className="booking-property-image"
+              src={imgSrc}
+              alt={room?.title || 'Room'}
+              onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }}
+            />
+            <div className="booking-property-info">
+              <div className="booking-property-title-row"><h2>{room?.title || 'PG Room'}</h2></div>
+              <p><BedDouble size={15} /> {roomTypeLabel}</p>
+              <strong>{formatCurrency(pricing.monthlyRent)}<span>/month</span></strong>
+            </div>
+          </BookingCard>
+
+          <BookingCard className="booking-visit-date-card">
+            <div className="booking-card-heading">
+              <div>
+                <h2>Visit Date</h2>
+                <p>Select the date you want to visit this property.</p>
+              </div>
+              <CalendarCheck2 size={22} />
+            </div>
+            <label className="booking-date-field">
+              <span>Visit Date</span>
+              <input
+                type="date"
+                value={visitDate}
+                min={today}
+                onChange={(event) => {
+                  setVisitDate(event.target.value);
+                  setVisitDateError('');
+                }}
+              />
+            </label>
+            {visitDateError && <p className="booking-date-error" role="alert">{visitDateError}</p>}
+          </BookingCard>
+
+          <div className="booking-sticky-cta">
+            <button className="booking-primary-action" type="button" onClick={handleVisitDateContinue}>
+              Continue
+            </button>
+          </div>
+        </main>
       </div>
     );
   }
@@ -213,7 +347,7 @@ export default function BookingFlow() {
               <div>
                 <span>Amount Paid</span>
                 <strong>{formatCurrency(pricing.totalPayableNow)}</strong>
-                {bookingId && <small>Booking ID #{bookingId}</small>}
+                {bookingId && <small>Reservation ID #{bookingId}</small>}
               </div>
               <span className="booking-paid-pill">Paid via UPI</span>
             </div>
@@ -240,7 +374,7 @@ export default function BookingFlow() {
   return (
     <div className="booking-page" id="booking-flow">
       <div className="page-header booking-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back"><ArrowLeft size={22} /></button>
+        <button className="back-btn" onClick={handleBack} aria-label="Go back"><ArrowLeft size={22} /></button>
         <h1>Reserve Your Slot</h1>
       </div>
 
@@ -274,12 +408,20 @@ export default function BookingFlow() {
           <div className="booking-price-list">
             <PricingRow label="Monthly Rent" value={pricing.monthlyRent} />
             <PricingRow label="Security Deposit" value={pricing.securityDeposit} />
-            <PricingRow label="Food Charges (optional)" value={pricing.foodCharges} muted />
-            <PricingRow label="Electricity (optional)" value={pricing.electricityCharges ?? 'As per usage'} muted />
+            <PricingRow label="Minimum Stay" value={`${Number(room?.minimumStayMonths) || 1} month${Number(room?.minimumStayMonths) === 1 ? '' : 's'}`} />
+            <PricingRow label="Number of Beds" value={Number(room?.numberOfBeds) || 1} />
+            <PricingRow label="Food Charges" value={pricing.foodCharges} muted />
+            <PricingRow label="Electricity Charges" value={pricing.electricityCharges} muted />
+            <PricingRow label="Water Charges" value={pricing.waterCharges} muted />
+            <PricingRow label="Maintenance Charges" value={pricing.maintenanceCharges} muted />
+            <PricingRow label="Parking Charges" value={pricing.parkingCharges} muted />
+            <PricingRow label="Other Charges" value={pricing.otherCharges} muted />
+            <div className="booking-divider" />
+            <PricingRow label="Total Monthly Cost" value={pricing.totalMonthlyCost} strong />
           </div>
           <div className="booking-info-note">
             <Info size={18} />
-            <p>These charges are paid directly to the property owner after your visit or final confirmation.</p>
+            <p>Rent and Security Deposit are payable directly during move-in.</p>
           </div>
         </BookingCard>
 
@@ -292,10 +434,10 @@ export default function BookingFlow() {
             <CreditCard size={22} />
           </div>
           <div className="booking-price-list">
-            <PricingRow label="Slot Reservation Fee" value={pricing.slotReservationFee} />
+            <PricingRow label="Reservation Fee" value={pricing.reservationFee} />
             <PricingRow label="Platform Fee" value={pricing.platformFee} />
             <div className="booking-divider" />
-            <PricingRow label="Total Payable Now" value={pricing.totalPayableNow} strong />
+            <PricingRow label="Total Payable" value={pricing.totalPayableNow} strong />
           </div>
         </BookingCard>
 

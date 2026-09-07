@@ -1,271 +1,247 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Check, X, Clock, Eye, Calendar, MapPin, Loader } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  BedDouble,
+  Building2,
+  CalendarDays,
+  Check,
+  DollarSign,
+  MapPin,
+  RefreshCw,
+  UserRound,
+  X,
+} from 'lucide-react';
+import { getCurrentProviderBookings, updateBookingStatus } from '../../api/booking';
 import { useProvider } from '../../context/ProviderContext';
-import { getProviderBookings, updateBookingStatus, createVisitRequest } from '../../api/booking';
+import { useToast } from '../../context/ToastContext';
 import './ProviderBookings.css';
 
-const tabs = ['new', 'accepted', 'in_progress', 'completed'];
-const tabLabels = { new: 'New', accepted: 'Accepted', in_progress: 'In Progress', completed: 'Completed' };
+const STATUS_LABELS = {
+  NEW: 'New',
+  ACCEPTED: 'Accepted',
+  IN_PROGRESS: 'In progress',
+  COMPLETED: 'Completed',
+  REJECTED: 'Rejected',
+};
 
-const timeSlots = [
-  '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-  '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM',
-  '05:00 PM', '06:00 PM',
-];
+function formatCurrency(value) {
+  return `₹${Number(value || 0).toLocaleString('en-IN')}`;
+}
+
+function formatDate(value) {
+  if (!value) return 'Not provided';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? String(value)
+    : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function statusLabel(status) {
+  return STATUS_LABELS[String(status || '').toUpperCase()] || String(status || 'Unknown').replace(/_/g, ' ');
+}
+
+function BookingStatus({ status }) {
+  const key = String(status || '').toLowerCase();
+  return <span className={`pb-status pb-status--${key}`}>{statusLabel(status)}</span>;
+}
+
+function BookingValue({ label, children, wide = false }) {
+  return (
+    <div className={`pb-value ${wide ? 'pb-value--wide' : ''}`}>
+      <span>{label}</span>
+      <strong>{children || 'Not available'}</strong>
+    </div>
+  );
+}
 
 export default function ProviderBookings() {
-  const navigate = useNavigate();
   const { provider } = useProvider();
-  const providerId = provider.providerId;
-  const [activeTab, setActiveTab] = useState('new');
+  const toast = useToast();
   const [bookings, setBookings] = useState([]);
+  const [selectedBooking, setSelectedBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tabCounts, setTabCounts] = useState({ new: 0, accepted: 0, in_progress: 0, completed: 0 });
+  const [loadError, setLoadError] = useState('');
+  const [updatingId, setUpdatingId] = useState('');
 
-  // Visit modal state
-  const [visitModal, setVisitModal] = useState(null); // booking object or null
-  const [visitDate, setVisitDate] = useState('');
-  const [visitTime, setVisitTime] = useState('');
-  const [visitSubmitting, setVisitSubmitting] = useState(false);
-
-  const fetchBookings = async (status) => {
-    if (!providerId) return;
-    setLoading(true);
-    try {
-      const res = await getProviderBookings(providerId, { status, limit: 50 });
-      setBookings(res.data?.items || []);
-    } catch (err) {
-      console.error('Failed to fetch bookings:', err);
+  const loadBookings = useCallback(async () => {
+    if (!provider.phone) {
       setBookings([]);
+      setLoading(false);
+      setLoadError('Provider authentication is missing. Please sign in again.');
+      return;
+    }
+
+    setLoading(true);
+    setLoadError('');
+    try {
+      const response = await getCurrentProviderBookings(provider.phone, { limit: 100 });
+      setBookings(response?.data?.items || []);
+    } catch (error) {
+      console.error('Failed to load provider bookings:', error);
+      setLoadError(error.message || 'Unable to load bookings.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Fetch counts for all tabs
-  useEffect(() => {
-    if (!providerId) return;
-    Promise.all(
-      tabs.map(tab =>
-        getProviderBookings(providerId, { status: tab, limit: 1 })
-          .then(r => ({ tab, count: r.data?.pagination?.total || 0 }))
-          .catch(() => ({ tab, count: 0 }))
-      )
-    ).then(results => {
-      const counts = {};
-      results.forEach(r => { counts[r.tab] = r.count; });
-      setTabCounts(counts);
-    });
-  }, [providerId]);
+  }, [provider.phone]);
 
   useEffect(() => {
-    fetchBookings(activeTab);
-  }, [activeTab, providerId]);
+    queueMicrotask(() => void loadBookings());
+  }, [loadBookings]);
 
-  const handleStatusChange = async (id, newStatus) => {
-    try {
-      await updateBookingStatus(id, newStatus);
-      fetchBookings(activeTab);
-      // Refresh counts
-      const countRes = await getProviderBookings(providerId, { status: activeTab, limit: 1 });
-      setTabCounts(prev => ({ ...prev, [activeTab]: countRes.data?.pagination?.total || 0 }));
-    } catch (err) {
-      console.error('Status update failed:', err);
-    }
-  };
+  async function changeStatus(booking, nextStatus) {
+    if (updatingId) return;
 
-  const handleVisitSubmit = async () => {
-    if (!visitDate || !visitTime || !visitModal) return;
-    setVisitSubmitting(true);
+    setUpdatingId(booking.id);
     try {
-      await createVisitRequest(visitModal.userId, {
-        booking_id: visitModal.id,
-        provider_id: providerId,
-        visit_date: visitDate,
-        visit_time: visitTime,
-        instructions: `Visit PG for review. Contact owner before arriving.`,
-      });
-      setVisitModal(null);
-      setVisitDate('');
-      setVisitTime('');
-    } catch (err) {
-      console.error('Visit request failed:', err);
+      await updateBookingStatus(booking.id, nextStatus, provider.phone);
+      toast.success(`Booking marked ${statusLabel(nextStatus)}`);
+      await loadBookings();
+      setSelectedBooking(null);
+    } catch (error) {
+      toast.error(error.message || 'Could not update booking status');
     } finally {
-      setVisitSubmitting(false);
+      setUpdatingId('');
     }
-  };
-
-  const formatDate = (dateStr) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-    } catch { return dateStr; }
-  };
+  }
 
   return (
-    <div className="pb-page" id="provider-bookings">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/provider/dashboard')}>
-          <ArrowLeft size={20} />
+    <main className="pb-page" id="provider-bookings">
+      <header className="pb-page-header">
+        <div>
+          <span className="pb-kicker"><Building2 size={15} /> Property reservations</span>
+          <h1>Bookings</h1>
+          <p>Every reservation connected to your properties, with payment and student details.</p>
+        </div>
+        <button className="pb-refresh" type="button" onClick={() => void loadBookings()} disabled={loading}>
+          <RefreshCw size={16} className={loading ? 'spinning' : ''} /> Refresh
         </button>
-        <h1>Bookings</h1>
-      </div>
+      </header>
 
-      <div className="pb-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab}
-            className={`pb-tab ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tabLabels[tab]}
-            {tabCounts[tab] > 0 && (
-              <span className="pb-tab-badge">{tabCounts[tab]}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <div className="pb-list">
-        {loading ? (
-          <div className="empty-state">
-            <Loader size={32} className="spinning" />
-            <p style={{ marginTop: 12 }}>Loading bookings...</p>
-          </div>
-        ) : bookings.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon"><Clock size={32} /></div>
-            <h3>No {tabLabels[activeTab]} bookings</h3>
-            <p>Bookings will appear here when students book your services</p>
-          </div>
-        ) : (
-          bookings.map((booking, i) => (
-            <div key={booking.id} className="pb-card" style={{ animationDelay: `${i * 0.05}s` }}>
-              <div className="pb-card-top">
-                <div className="pb-card-user">
-                  <span className="pb-avatar">👤</span>
-                  <div>
-                    <h3>{booking.studentName || 'Student'}</h3>
-                    <p>{booking.serviceType || 'Room Booking'}</p>
+      {loading ? (
+        <section className="pb-state-card"><RefreshCw size={26} className="spinning" /><p>Loading bookings...</p></section>
+      ) : loadError ? (
+        <section className="pb-state-card pb-state-card--error">
+          <AlertCircle size={28} />
+          <h2>Unable to load bookings</h2>
+          <p>{loadError}</p>
+          <button type="button" onClick={() => void loadBookings()}>Try again</button>
+        </section>
+      ) : bookings.length === 0 ? (
+        <section className="pb-state-card">
+          <CalendarDays size={30} />
+          <h2>No bookings yet</h2>
+          <p>Successful student reservations will appear here automatically.</p>
+        </section>
+      ) : (
+        <section className="pb-booking-list" aria-label="Provider bookings">
+          {bookings.map((booking) => {
+            const property = booking.property || {};
+            const student = booking.student || {};
+            const payment = booking.payment || {};
+            const status = String(booking.status || '').toUpperCase();
+            return (
+            <article
+                className="pb-booking-card"
+                key={booking.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedBooking(booking)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') setSelectedBooking(booking);
+                }}
+              >
+                <div className="pb-booking-card-main">
+                  <div className="pb-student-block">
+                    <span className="pb-avatar"><UserRound size={19} /></span>
+                    <div>
+                      <h2>{student.name || booking.studentName || 'Student'}</h2>
+                      <span className="pb-muted-id">Reservation {booking.reservationId || 'Pending payment'}</span>
+                    </div>
+                  </div>
+                  <div className="pb-property-block">
+                    <strong>{property.name || 'Property details pending'}</strong>
+                    <span><MapPin size={13} /> {property.address || 'Address not available'}</span>
+                    <span><BedDouble size={13} /> {booking.room?.type || booking.roomType || 'Room'}</span>
+                  </div>
+                  <div className="pb-booking-meta">
+                    <span className="pb-meta-label">Booking date</span>
+                    <strong>{formatDate(booking.bookingDate)}</strong>
+                    <BookingStatus status={booking.status} />
+                  </div>
+                  <div className="pb-payment-block">
+                    <span className="pb-meta-label">Amount paid</span>
+                    <strong>{formatCurrency(booking.amountPaid || payment.amount || 0)}</strong>
+                    <span>{String(booking.paymentStatus || payment.status || 'PENDING').toLowerCase()}</span>
                   </div>
                 </div>
-                <span className="pb-amount">₹{Number(booking.price).toLocaleString()}</span>
-              </div>
-
-              <div className="pb-card-details">
-                <span>📅 {formatDate(booking.bookingDate)}</span>
-                <span>⏰ {booking.bookingTime}</span>
-                {booking.roomType && <span>🏠 {booking.roomType}</span>}
-              </div>
-
-              <div className="pb-card-bottom">
-                {booking.studentPhone && (
-                  <a href={`tel:${booking.studentPhone}`} className="pb-call-btn">
-                    <Phone size={14} /> Call
-                  </a>
-                )}
-
-                <button className="pb-visit-btn" onClick={() => setVisitModal(booking)}>
-                  <Eye size={14} /> Visit for Review
-                </button>
-
-                {activeTab === 'new' && (
-                  <div className="pb-actions">
-                    <button className="pb-reject" onClick={() => handleStatusChange(booking.id, 'rejected')}>
-                      <X size={16} /> Reject
-                    </button>
-                    <button className="pb-accept" onClick={() => handleStatusChange(booking.id, 'accepted')}>
-                      <Check size={16} /> Accept
-                    </button>
+                <div className="pb-booking-card-footer">
+                  <span>Booking ID <b>{booking.id}</b></span>
+                  <div className="pb-card-actions">
+                    {['NEW', 'PENDING', 'ACCEPTED'].includes(status) && (
+                      <button
+                        className="pb-action pb-action--accept"
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); void changeStatus(booking, 'in_progress'); }}
+                        disabled={updatingId === booking.id}
+                        aria-busy={updatingId === booking.id}
+                      >
+                        Start Service
+                      </button>
+                    )}
+                    {status === 'IN_PROGRESS' && (
+                      <>
+                        <button
+                          className="pb-action pb-action--accept"
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); void changeStatus(booking, 'completed'); }}
+                          disabled={updatingId === booking.id}
+                          aria-busy={updatingId === booking.id}
+                        >
+                          <Check size={15} /> Completed
+                        </button>
+                        <button
+                          className="pb-action pb-action--reject"
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); void changeStatus(booking, 'rejected'); }}
+                          disabled={updatingId === booking.id}
+                          aria-busy={updatingId === booking.id}
+                        >
+                          <X size={15} /> Rejected
+                        </button>
+                      </>
+                    )}
                   </div>
-                )}
-
-                {activeTab === 'accepted' && (
-                  <button className="pb-start" onClick={() => handleStatusChange(booking.id, 'in_progress')}>
-                    Start Service →
-                  </button>
-                )}
-
-                {activeTab === 'in_progress' && (
-                  <button className="pb-complete" onClick={() => handleStatusChange(booking.id, 'completed')}>
-                    <Check size={14} /> Mark Complete
-                  </button>
-                )}
-
-                {activeTab === 'completed' && (
-                  <span className="pb-done-badge">✅ Completed</span>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* ─── Visit Request Modal ─────────────────────────────────────── */}
-      {visitModal && (
-        <>
-          <div className="overlay" onClick={() => setVisitModal(null)} />
-          <div className="pb-visit-modal">
-            <div className="pb-visit-modal-header">
-              <h2>📋 Schedule Visit</h2>
-              <button onClick={() => setVisitModal(null)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="pb-visit-modal-info">
-              <p><strong>Student:</strong> {visitModal.studentName || 'Student'}</p>
-              <p><strong>Service:</strong> {visitModal.serviceType || 'Room Booking'}</p>
-              {visitModal.roomType && <p><strong>Room:</strong> {visitModal.roomType}</p>}
-            </div>
-
-            <div className="pb-visit-field">
-              <label><Calendar size={14} /> Select Visit Date</label>
-              <input
-                type="date"
-                value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="input-field"
-              />
-            </div>
-
-            <div className="pb-visit-field">
-              <label><Clock size={14} /> Select Time Slot</label>
-              <div className="pb-visit-time-grid">
-                {timeSlots.map(slot => (
-                  <button
-                    key={slot}
-                    className={`pb-visit-time-slot ${visitTime === slot ? 'active' : ''}`}
-                    onClick={() => setVisitTime(slot)}
-                  >
-                    {slot}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="pb-visit-instructions">
-              <h3><MapPin size={14} /> Visit Instructions</h3>
-              <ul>
-                <li>📍 Contact the PG owner before arriving</li>
-                <li>🪪 Carry a valid ID proof</li>
-                <li>⏰ Be on time for your slot</li>
-                <li>📱 Keep your phone charged for directions</li>
-                <li>🚫 No entry without prior confirmation</li>
-              </ul>
-            </div>
-
-            <button
-              className="pb-visit-submit"
-              onClick={handleVisitSubmit}
-              disabled={!visitDate || !visitTime || visitSubmitting}
-            >
-              {visitSubmitting ? 'Scheduling...' : '✅ Schedule Visit'}
-            </button>
-          </div>
-        </>
+                </div>
+              </article>
+            );
+          })}
+        </section>
       )}
+
+      {selectedBooking && <BookingDetail booking={selectedBooking} onClose={() => setSelectedBooking(null)} />}
+    </main>
+  );
+}
+
+function BookingDetail({ booking, onClose }) {
+  const property = booking.property || {};
+  const student = booking.student || {};
+  const payment = booking.payment || {};
+  return (
+    <div className="pb-modal-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="pb-detail-modal" role="dialog" aria-modal="true" aria-labelledby="booking-detail-title">
+        <header className="pb-detail-header">
+          <div><span className="pb-kicker">Reservation details</span><h2 id="booking-detail-title">{property.name || 'Booking details'}</h2></div>
+          <button type="button" className="pb-close" onClick={onClose} aria-label="Close booking details"><X size={20} /></button>
+        </header>
+        <div className="pb-detail-id-row"><span>Reservation ID</span><strong>{booking.reservationId || 'Pending payment'}</strong></div>
+        <div className="pb-detail-sections">
+          <section><h3><UserRound size={16} /> Student</h3><div className="pb-detail-grid"><BookingValue label="Name">{student.name || booking.studentName}</BookingValue><BookingValue label="Phone"><a href={student.phone ? `tel:${student.phone}` : undefined}>{student.phone || 'Not available'}</a></BookingValue><BookingValue label="Email">{student.email || 'Not available'}</BookingValue></div></section>
+          <section><h3><Building2 size={16} /> Property</h3><div className="pb-detail-grid"><BookingValue label="PG / property">{property.name}</BookingValue><BookingValue label="Address" wide>{property.address}</BookingValue><BookingValue label="Room">{booking.room?.type || booking.roomType}</BookingValue><BookingValue label="Bed">{booking.numberOfBeds || 1}</BookingValue></div></section>
+          <section><h3><CalendarDays size={16} /> Booking</h3><div className="pb-detail-grid"><BookingValue label="Booking ID" wide>{booking.id}</BookingValue><BookingValue label="Booking date">{formatDate(booking.bookingDate)}</BookingValue><BookingValue label="Visit Date">{formatDate(booking.moveInDate)}</BookingValue><BookingValue label="Status"><BookingStatus status={booking.status} /></BookingValue></div></section>
+          <section><h3><DollarSign size={16} /> Payment</h3><div className="pb-detail-grid"><BookingValue label="Reservation fee">{formatCurrency(booking.reservationFee)}</BookingValue><BookingValue label="Platform fee">{formatCurrency(booking.platformFee)}</BookingValue><BookingValue label="Total paid">{formatCurrency(booking.amountPaid || payment.amount)}</BookingValue><BookingValue label="Payment status">{String(booking.paymentStatus || payment.status || 'PENDING').toLowerCase()}</BookingValue><BookingValue label="Transaction ID" wide>{booking.transactionId || payment.transactionId}</BookingValue><BookingValue label="Payment date">{formatDate(booking.paymentDate || payment.createdAt)}</BookingValue><BookingValue label="Monthly rent">{formatCurrency(booking.monthlyRent)}</BookingValue><BookingValue label="Security deposit">{formatCurrency(booking.securityDeposit)}</BookingValue><BookingValue label="Minimum stay">{booking.minimumStayMonths || 1} month(s)</BookingValue></div></section>
+        </div>
+      </section>
     </div>
   );
 }

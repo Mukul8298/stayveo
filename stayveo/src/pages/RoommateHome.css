@@ -1,35 +1,552 @@
-.rm-hero { text-align: center; padding: var(--space-10) 0 var(--space-6); animation: fadeInUp 0.5s var(--ease-out); }
-.rm-hero-icon {
-  width: 72px; height: 72px; border-radius: var(--radius-xl); background: var(--primary-50);
-  color: var(--primary-500); display: flex; align-items: center; justify-content: center;
-  margin: 0 auto var(--space-5);
+/* ═══════════════════════════════════════════════════════════════════════
+   Roommate Matching — Student coming-soon experience
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.rm-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding-top: 28px;
+  padding-bottom: 40px;
+  background: #fff;
 }
-.rm-hero h1 { font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 700; margin-bottom: var(--space-2); }
-.rm-hero p { color: var(--neutral-500); font-size: var(--text-sm); }
-.rm-compat-card {
-  background: var(--gradient-primary); border-radius: var(--radius-xl);
-  padding: var(--space-4); margin-bottom: var(--space-5); color: white;
-  animation: fadeInUp 0.5s var(--ease-out) 0.1s both;
+
+.rm-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 1240px);
+  min-height: 660px;
+  overflow: hidden;
+  padding: 56px 72px;
+  border: 1px solid #e8ebe7;
+  border-radius: 38px;
+  background: #f5f7f4;
+  box-shadow: 0 10px 28px rgba(28, 55, 40, 0.035);
 }
-.rm-compat-header { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); font-weight: 600; opacity: 0.8; margin-bottom: var(--space-3); }
-.rm-compat-body { display: flex; align-items: center; gap: var(--space-3); }
-.rm-compat-avatar { font-size: 36px; }
-.rm-compat-body h3 { font-family: var(--font-display); font-weight: 600; }
-.rm-compat-body p { font-size: var(--text-xs); opacity: 0.7; }
-.rm-compat-pct {
-  margin-left: auto; font-family: var(--font-display); font-size: var(--text-2xl);
-  font-weight: 800; background: rgba(255,255,255,0.2); padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+
+.rm-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 560px);
+  text-align: center;
 }
-.rm-stats {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);
-  margin-bottom: var(--space-6); animation: fadeInUp 0.5s var(--ease-out) 0.2s both;
+
+.rm-hero-mark,
+.rm-benefit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e7e9e7;
+  background: #fff;
+  color: #123c28;
+  box-shadow: 0 3px 8px rgba(35, 62, 46, 0.06);
 }
-.rm-stat {
-  padding: var(--space-5); background: var(--neutral-50); border-radius: var(--radius-lg);
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
-  color: var(--primary-500);
+
+.rm-hero-mark {
+  width: 70px;
+  height: 70px;
+  margin-bottom: 19px;
+  border-radius: 19px;
 }
-.rm-stat-num { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; color: var(--neutral-900); }
-.rm-stat-label { font-size: var(--text-xs); color: var(--neutral-500); }
-.rm-actions { display: flex; flex-direction: column; gap: var(--space-3); animation: fadeInUp 0.5s var(--ease-out) 0.3s both; }
+
+.rm-eyebrow {
+  margin: 0 0 12px;
+  color: #66746c;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+}
+
+.rm-content h1 {
+  margin: 0;
+  color: #092519;
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.rm-coming-soon {
+  position: relative;
+  margin: 12px 0 17px;
+  color: #163f2b;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: 52px;
+  font-weight: 600;
+  line-height: 1;
+  transform: rotate(-2deg);
+}
+
+.rm-coming-soon::after {
+  position: absolute;
+  right: -2px;
+  bottom: -7px;
+  left: -2px;
+  height: 3px;
+  border-radius: 50%;
+  background: #789481;
+  content: '';
+  transform: rotate(-1deg);
+}
+
+.rm-description {
+  max-width: 530px;
+  margin: 0;
+  color: #52645a;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.rm-benefits {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(84px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 550px;
+  margin: 43px 0 34px;
+}
+
+.rm-benefit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #15281d;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.rm-benefit-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 17px;
+}
+
+.rm-notify {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 208px;
+  min-height: 54px;
+  padding: 0 26px;
+  border: 1px solid #0b281a;
+  border-radius: 999px;
+  background: #143c28;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 7px 16px rgba(18, 60, 40, 0.16);
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.rm-notify:hover:not(:disabled) {
+  background: #0d2e1e;
+  box-shadow: 0 10px 20px rgba(18, 60, 40, 0.2);
+  transform: translateY(-1px);
+}
+
+.rm-notify:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.rm-notify:disabled {
+  cursor: default;
+  opacity: 1;
+  background: #65816f;
+  border-color: #65816f;
+}
+
+.rm-notify:focus-visible {
+  outline: 3px solid rgba(39, 121, 80, 0.35);
+  outline-offset: 3px;
+}
+
+.rm-notify-caption {
+  margin: 12px 0 0;
+  color: #6d7d73;
+  font-size: 13px;
+}
+
+/* ── Editorial decoration ────────────────────────────────────────────── */
+
+.rm-polaroid {
+  position: absolute;
+  z-index: 2;
+  width: 190px;
+  padding: 13px 13px 18px;
+  border: 1px solid #edf0ec;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(21, 46, 32, 0.08), 0 3px 6px rgba(21, 46, 32, 0.04);
+  color: #173d2a;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.rm-polaroid img {
+  width: 100%;
+  height: 145px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.rm-polaroid span {
+  display: block;
+  margin-top: 10px;
+}
+
+.rm-polaroid-one {
+  top: 51px;
+  left: 75px;
+  transform: rotate(-6deg);
+}
+
+.rm-polaroid-two {
+  bottom: 116px;
+  left: 144px;
+  transform: rotate(3deg);
+}
+
+.rm-tape {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 70px;
+  height: 23px;
+  background: rgba(226, 221, 206, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transform: translateX(-50%) rotate(2deg);
+}
+
+.rm-side-note {
+  position: absolute;
+  z-index: 2;
+  top: 55px;
+  right: 69px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 157px;
+  padding: 29px 16px 23px;
+  background: #fff;
+  box-shadow: 2px 4px 14px rgba(0, 0, 0, 0.06);
+  color: #163f2b;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.45;
+  transform: rotate(5deg);
+}
+
+.rm-side-note::before {
+  position: absolute;
+  top: -14px;
+  left: 65px;
+  width: 61px;
+  height: 24px;
+  background: rgba(226, 221, 206, 0.78);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  content: '';
+}
+
+.rm-side-note small,
+.rm-side-copy small,
+.rm-mini-card small {
+  font-family: Georgia, serif;
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.rm-side-note small {
+  margin-top: 11px;
+  color: #64806e;
+}
+
+.rm-side-copy {
+  position: absolute;
+  z-index: 2;
+  bottom: 65px;
+  left: 69px;
+  display: flex;
+  flex-direction: column;
+  color: #5c7767;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.35;
+  transform: rotate(-4deg);
+}
+
+.rm-side-copy small {
+  margin-left: 20px;
+  color: #65806e;
+}
+
+.rm-mini-card {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 190px;
+  height: 180px;
+  border-radius: 20px 20px 38px 20px;
+  background: #173f2b;
+  color: #eef6f0;
+  font-family: 'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive;
+  text-align: center;
+  transform: rotate(-3deg);
+}
+
+.rm-mini-card strong {
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.rm-mini-card span {
+  margin-top: 11px;
+  color: #c2d4c8;
+  font-size: 15px;
+}
+
+.rm-mini-card small {
+  margin-top: 9px;
+  color: #b8ccb9;
+}
+
+.rm-botanical {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.rm-botanical-left {
+  top: 105px;
+  left: -18px;
+  width: 125px;
+  height: 300px;
+  opacity: 0.82;
+}
+
+.rm-botanical-left::before {
+  position: absolute;
+  top: 22px;
+  left: 44px;
+  width: 3px;
+  height: 280px;
+  border-radius: 99px;
+  background: #55735e;
+  content: '';
+  transform: rotate(24deg);
+  transform-origin: top;
+}
+
+.rm-botanical-right {
+  top: -7px;
+  right: -8px;
+  width: 125px;
+  height: 170px;
+  opacity: 0.7;
+}
+
+.rm-botanical-right::before {
+  position: absolute;
+  top: -8px;
+  right: 32px;
+  width: 2px;
+  height: 195px;
+  border-radius: 99px;
+  background: #55735e;
+  content: '';
+  transform: rotate(28deg);
+  transform-origin: top;
+}
+
+.rm-leaf {
+  position: absolute;
+  display: block;
+  width: 54px;
+  height: 25px;
+  border-radius: 100% 0 100% 0;
+  background: #6f9478;
+}
+
+.rm-botanical-left .rm-leaf-a { top: 61px; left: 17px; transform: rotate(48deg); }
+.rm-botanical-left .rm-leaf-b { top: 120px; left: 43px; transform: rotate(-22deg); }
+.rm-botanical-left .rm-leaf-c { top: 179px; left: 4px; transform: rotate(48deg); }
+.rm-botanical-left .rm-leaf-d { top: 234px; left: 39px; transform: rotate(-22deg); }
+.rm-botanical-right .rm-leaf-a { top: 16px; right: 6px; transform: rotate(12deg); }
+.rm-botanical-right .rm-leaf-b { top: 79px; right: 35px; transform: rotate(162deg); }
+.rm-botanical-right .rm-leaf-c { top: 116px; right: 1px; transform: rotate(12deg); }
+
+.rm-mobile-polaroids {
+  display: none;
+}
+
+@media (max-width: 1080px) {
+  .rm-stage {
+    padding-right: 34px;
+    padding-left: 34px;
+  }
+
+  .rm-polaroid-one { left: 35px; }
+  .rm-polaroid-two { left: 88px; }
+  .rm-side-note { right: 30px; }
+  .rm-side-copy { left: 35px; }
+}
+
+@media (max-width: 860px) {
+  .rm-page {
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+
+  .rm-stage {
+    min-height: auto;
+    padding: 40px 24px 32px;
+    border-radius: 28px;
+  }
+
+  .rm-polaroid,
+  .rm-side-note,
+  .rm-side-copy,
+  .rm-mini-card,
+  .rm-botanical {
+    display: none;
+  }
+
+  .rm-mobile-polaroids {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: min(100%, 440px);
+    margin-top: 38px;
+  }
+
+  .rm-polaroid-mobile-one,
+  .rm-polaroid-mobile-two {
+    position: relative;
+    inset: auto;
+    display: block;
+    width: auto;
+    padding: 8px 8px 12px;
+    font-size: 14px;
+  }
+
+  .rm-polaroid-mobile-one { transform: rotate(-3deg); }
+  .rm-polaroid-mobile-two { transform: rotate(3deg); }
+
+  .rm-polaroid-mobile-one img,
+  .rm-polaroid-mobile-two img {
+    height: 120px;
+  }
+
+  .rm-tape { display: none; }
+}
+
+@media (max-width: 560px) {
+  .rm-page {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .rm-stage {
+    padding: 32px 17px 27px;
+    border-radius: 24px;
+  }
+
+  .rm-hero-mark {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 16px;
+  }
+
+  .rm-eyebrow {
+    margin-bottom: 11px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+  }
+
+  .rm-content h1 {
+    font-size: 38px;
+    line-height: 1;
+  }
+
+  .rm-coming-soon {
+    margin-top: 10px;
+    font-size: 38px;
+  }
+
+  .rm-description {
+    max-width: 340px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .rm-benefits {
+    gap: 8px;
+    margin: 33px 0 28px;
+  }
+
+  .rm-benefit {
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .rm-benefit-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .rm-notify {
+    min-width: 190px;
+    min-height: 50px;
+    font-size: 15px;
+  }
+
+  .rm-notify-caption {
+    max-width: 260px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .rm-mobile-polaroids {
+    gap: 11px;
+    margin-top: 29px;
+  }
+
+  .rm-polaroid-mobile-one,
+  .rm-polaroid-mobile-two {
+    font-size: 12px;
+  }
+
+  .rm-polaroid-mobile-one img,
+  .rm-polaroid-mobile-two img {
+    height: 96px;
+  }
+}
+
+@media (max-width: 360px) {
+  .rm-benefits {
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 18px;
+  }
+
+  .rm-benefit {
+    font-size: 11px;
+  }
+}

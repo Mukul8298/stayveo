@@ -27,7 +27,23 @@ export const authRepository = {
     return prisma.user.findUnique({
       where: { phone_number },
       include: {
-        studentProfile: true,
+        studentProfile: {
+          select: {
+            id: true,
+            fullName: true,
+            college: true,
+            year: true,
+            gender: true,
+            foodPreference: true,
+            sleepSchedule: true,
+            cleanlinessLevel: true,
+            studyHabits: true,
+            personalityType: true,
+            locationPreference: true,
+            budget: true,
+            profileImageUrl: true,
+          },
+        },
       },
     });
   },

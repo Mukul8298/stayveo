@@ -12,7 +12,5 @@ export {
   SocialLevel,
   ServiceCategory,
   FoodType,
-  PricingModel,
-  CleanType,
   DocType,
 } from '@prisma/client';

@@ -1,49 +1,86 @@
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { API_BASES } from '../config/api.js';
+
 // ─── StayVeo API Client ─────────────────────────────────────────────────
 // Central HTTP client for all backend calls.
 // All responses follow { success, data, message } format.
 // ────────────────────────────────────────────────────────────────────────
 
-const LOCAL_API_BASE = 'http://localhost:3000/api/v1';
-const ENV_API_BASE = import.meta.env.VITE_API_URL;
-const isLocalFrontend =
-  typeof window !== 'undefined' &&
-  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+class ApiRequestError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.details = details;
+  }
+}
 
-const API_BASES = [
-  ...(isLocalFrontend ? [LOCAL_API_BASE] : []),
-  ENV_API_BASE,
-  ...(!isLocalFrontend ? [LOCAL_API_BASE] : []),
-].filter(Boolean);
+async function parseResponse(res) {
+  const text = await res.text();
 
-async function request(endpoint, options = {}) {
-  const { method = 'GET', body, userId } = options;
+  if (!text) {
+    return null;
+  }
 
-  const headers = { 'Content-Type': 'application/json' };
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new ApiRequestError('Backend returned an invalid JSON response', {
+      status: res.status,
+      responsePreview: text.slice(0, 200),
+    });
+  }
+}
+
+export async function request(endpoint, options = {}) {
+  const { method = 'GET', body, userId, providerPhone, signal } = options;
+  const hasBody = body !== undefined;
+
+  const headers = {};
+  if (hasBody) headers['Content-Type'] = 'application/json';
   if (userId) headers['x-user-id'] = userId;
+  if (providerPhone) headers['x-provider-phone'] = providerPhone;
 
-  let lastError;
+  const networkErrors = [];
 
   for (const baseUrl of API_BASES) {
+    const url = `${baseUrl}${endpoint}`;
+
     try {
-      const res = await fetch(`${baseUrl}${endpoint}`, {
+      const res = await fetch(url, {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: hasBody ? JSON.stringify(body) : undefined,
+        signal,
       });
 
-      const json = await res.json();
+      const json = await parseResponse(res);
 
-      if (!json.success) {
-        throw new Error(json.message || 'Something went wrong');
+      if (!res.ok || !json?.success) {
+        throw new ApiRequestError(json?.message || `Request failed with status ${res.status}`, {
+          status: res.status,
+          url,
+          response: json,
+        });
       }
 
       return json;
     } catch (err) {
-      lastError = err;
+      if (err instanceof ApiRequestError) {
+        throw err;
+      }
+
+      networkErrors.push({
+        url,
+        message: err?.message || 'Network request failed',
+      });
     }
   }
 
-  throw lastError || new Error('Something went wrong');
+  throw new ApiRequestError('Unable to reach the API server. Check that the backend is running and VITE_API_URL is correct.', {
+    endpoint,
+    attemptedUrls: networkErrors.map(error => error.url),
+    networkErrors,
+  });
 }
 
 // ── Auth ────────────────────────────────────────────────────────────────
@@ -56,18 +93,8 @@ export function verifyOtp(phone_number, otp) {
   return request('/auth/verify-otp', { method: 'POST', body: { phone_number, otp } });
 }
 
-// ── Student Profile ─────────────────────────────────────────────────────
-
 export function createStudentProfile(userId, profileData) {
   return request('/student/profile', { method: 'POST', body: profileData, userId });
-}
-
-export function getStudentProfile(userId) {
-  return request('/student/profile', { method: 'GET', userId });
-}
-
-export function updateStudentProfile(userId, profileData) {
-  return request('/student/profile', { method: 'PUT', body: profileData, userId });
 }
 
 export function getCurrentUserProfile(userId) {
@@ -78,5 +105,221 @@ export function updateUserProfile(profileData) {
   return request('/user/update-profile', { method: 'PUT', body: profileData });
 }
 
-// ── Alias for spec compatibility ────────────────────────────────────────
-export const updateProfile = updateUserProfile;
+// ── Saved Listings ─────────────────────────────────────────────────────
+
+function getRoomId(roomOrId) {
+  const id = typeof roomOrId === 'object' ? roomOrId?.id : roomOrId;
+  return id === null || id === undefined ? '' : String(id);
+}
+
+function buildSavedSnapshot(userId, listings = [], patch = {}) {
+  return {
+    userId,
+    listings,
+    ids: new Set(listings.map(getRoomId).filter(Boolean)),
+    loading: false,
+    loaded: false,
+    savingIds: new Set(),
+    error: null,
+    version: 0,
+    ...patch,
+  };
+}
+
+let savedSnapshot = buildSavedSnapshot(null);
+const savedListeners = new Set();
+const savedLoadRequests = new Map();
+let savedMutationVersion = 0;
+
+function emitSavedSnapshot(nextSnapshot) {
+  savedSnapshot = {
+    ...nextSnapshot,
+    version: savedSnapshot.version + 1,
+  };
+  savedListeners.forEach((listener) => listener());
+}
+
+function subscribeSavedListings(listener) {
+  savedListeners.add(listener);
+  return () => savedListeners.delete(listener);
+}
+
+function getSavedSnapshot() {
+  return savedSnapshot;
+}
+
+export async function getSavedListings(userId) {
+  if (!userId) return [];
+  const response = await request('/saved', { method: 'GET', userId });
+  return response?.data?.listings || [];
+}
+
+export async function saveListing(roomId, userId) {
+  return request(`/saved/${encodeURIComponent(roomId)}`, { method: 'POST', userId });
+}
+
+export async function removeSavedListing(roomId, userId) {
+  return request(`/saved/${encodeURIComponent(roomId)}`, { method: 'DELETE', userId });
+}
+
+export async function loadSavedListings(userId, { force = false } = {}) {
+  if (!userId) {
+    emitSavedSnapshot(buildSavedSnapshot(null));
+    return [];
+  }
+
+  if (!force && savedSnapshot.userId === userId && savedSnapshot.loaded) {
+    return savedSnapshot.listings;
+  }
+
+  const pendingLoad = savedLoadRequests.get(userId);
+  if (!force && pendingLoad) {
+    return pendingLoad.promise;
+  }
+
+  const currentUserSnapshot = savedSnapshot.userId === userId
+    ? savedSnapshot
+    : buildSavedSnapshot(userId);
+
+  emitSavedSnapshot({
+    ...currentUserSnapshot,
+    userId,
+    loading: true,
+    error: null,
+  });
+
+  const requestKey = Symbol(userId);
+  const loadVersion = savedMutationVersion;
+  const requestPromise = getSavedListings(userId)
+    .then((listings) => {
+      if (savedSnapshot.userId === userId && loadVersion === savedMutationVersion) {
+        emitSavedSnapshot(buildSavedSnapshot(userId, listings, {
+          loaded: true,
+          savingIds: savedSnapshot.savingIds,
+        }));
+      }
+      return listings;
+    })
+    .catch((error) => {
+      if (
+        savedSnapshot.userId === userId &&
+        loadVersion === savedMutationVersion &&
+        savedLoadRequests.get(userId)?.requestKey === requestKey
+      ) {
+        emitSavedSnapshot({
+          ...savedSnapshot,
+          loading: false,
+          error,
+        });
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (savedLoadRequests.get(userId)?.requestKey === requestKey) {
+        savedLoadRequests.delete(userId);
+      }
+    });
+
+  savedLoadRequests.set(userId, { promise: requestPromise, requestKey });
+  return requestPromise;
+}
+
+export function refreshSavedListings(userId) {
+  return loadSavedListings(userId, { force: true });
+}
+
+export async function toggleSavedListing(userId, listing) {
+  const roomId = getRoomId(listing);
+  if (!userId) throw new Error('Please login first');
+  if (!roomId) throw new Error('Room id is required');
+
+  const baseSnapshot = savedSnapshot.userId === userId
+    ? savedSnapshot
+    : buildSavedSnapshot(userId);
+  const wasSaved = baseSnapshot.ids.has(roomId);
+  const previousSnapshot = savedSnapshot;
+  const nextIds = new Set(baseSnapshot.ids);
+  const nextSavingIds = new Set(baseSnapshot.savingIds);
+  const withoutListing = baseSnapshot.listings.filter((item) => getRoomId(item) !== roomId);
+  let nextListings = withoutListing;
+
+  savedMutationVersion += 1;
+  nextSavingIds.add(roomId);
+  if (wasSaved) {
+    nextIds.delete(roomId);
+  } else {
+    nextIds.add(roomId);
+    nextListings = [{ ...(listing || {}), id: roomId, saved: true }, ...withoutListing];
+  }
+
+  emitSavedSnapshot({
+    ...baseSnapshot,
+    userId,
+    ids: nextIds,
+    listings: nextListings,
+    savingIds: nextSavingIds,
+    error: null,
+  });
+
+  try {
+    if (wasSaved) {
+      await removeSavedListing(roomId, userId);
+    } else {
+      await saveListing(roomId, userId);
+    }
+
+    const savingIds = new Set(savedSnapshot.savingIds);
+    savingIds.delete(roomId);
+    emitSavedSnapshot({
+      ...savedSnapshot,
+      savingIds,
+    });
+    loadSavedListings(userId, { force: true }).catch(() => {});
+
+    return { roomId, saved: !wasSaved };
+  } catch (error) {
+    emitSavedSnapshot(previousSnapshot);
+    throw error;
+  }
+}
+
+export function useSavedListings(userId) {
+  const snapshot = useSyncExternalStore(
+    subscribeSavedListings,
+    getSavedSnapshot,
+    getSavedSnapshot
+  );
+
+  useEffect(() => {
+    if (!userId) {
+      emitSavedSnapshot(buildSavedSnapshot(null));
+      return;
+    }
+
+    loadSavedListings(userId).catch(() => {});
+  }, [userId]);
+
+  const userSnapshot = userId && snapshot.userId === userId
+    ? snapshot
+    : buildSavedSnapshot(userId || null);
+
+  const isSaved = useCallback((roomOrId) => (
+    userSnapshot.ids.has(getRoomId(roomOrId))
+  ), [userSnapshot.ids]);
+
+  const toggleSaved = useCallback((listing) => (
+    toggleSavedListing(userId, listing)
+  ), [userId]);
+
+  const refresh = useCallback(() => (
+    userId ? refreshSavedListings(userId) : Promise.resolve([])
+  ), [userId]);
+
+  return {
+    ...userSnapshot,
+    savedIds: userSnapshot.ids,
+    isSaved,
+    toggleSaved,
+    refresh,
+  };
+}

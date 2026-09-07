@@ -2,14 +2,11 @@ import { supabase } from './supabase';
 
 export const SERVICE_IMAGES_BUCKET = 'pg-images';
 
-// Backward-compatible export for older room upload code.
-export const PG_IMAGES_BUCKET = SERVICE_IMAGES_BUCKET;
+
 
 export const STORAGE_SERVICE_TYPES = {
   PG: 'pg',
   TIFFIN: 'tiffin',
-  LAUNDRY: 'laundry',
-  CLEANING: 'cleaning',
 };
 
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -182,23 +179,4 @@ export function parseStoragePath(pathOrStoragePath, fallbackBucket = SERVICE_IMA
   }
 
   return { bucket: fallbackBucket, path: raw };
-}
-
-export async function verifyStorageConnection(bucket = SERVICE_IMAGES_BUCKET) {
-  const diagnostics = {
-    bucket,
-    supabaseUrlPresent: Boolean(import.meta.env.VITE_SUPABASE_URL),
-    anonKeyPresent: Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY),
-    canListBucket: false,
-    error: '',
-  };
-
-  const { error } = await supabase.storage.from(bucket).list('', { limit: 1 });
-  if (error) {
-    diagnostics.error = classifyStorageError(error, bucket).message;
-    return diagnostics;
-  }
-
-  diagnostics.canListBucket = true;
-  return diagnostics;
 }

@@ -79,12 +79,6 @@ export default function ProviderEditListing() {
   if (loading) {
     return (
       <div className="pel-page" id="provider-edit-listing">
-        <div className="page-header">
-          <button className="back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={20} />
-          </button>
-          <h1>Edit Room</h1>
-        </div>
         <div className="pel-loading">
           <Loader2 size={24} className="pel-spinner" />
           <p>Loading listing…</p>
@@ -95,25 +89,20 @@ export default function ProviderEditListing() {
 
   return (
     <div className="pel-page" id="provider-edit-listing">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Edit Room</h1>
-        <button className="pel-delete-btn" onClick={handleDelete} title="Delete this listing">
-          <Trash2 size={18} />
-        </button>
-      </div>
-
       {/* ── Status badge ──────────────────────────────────────── */}
       {listing && (
         <div className="pel-status-bar">
-          <span className={`pel-status pel-status--${listing.status?.toLowerCase()}`}>
-            {listing.status}
-          </span>
-          <span className="pel-beds-label">
-            {listing.availableBeds}/{listing.totalBeds} beds available
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span className={`pel-status pel-status--${listing.status?.toLowerCase()}`}>
+              {listing.status}
+            </span>
+            <span className="pel-beds-label">
+              {listing.availableBeds}/{listing.totalBeds} beds available
+            </span>
+          </div>
+          <button className="pel-delete-btn" onClick={handleDelete} title="Delete this listing">
+            <Trash2 size={18} />
+          </button>
         </div>
       )}
 

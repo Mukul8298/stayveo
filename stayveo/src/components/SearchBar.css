@@ -1,12 +1,42 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Search Bar — StayVeo Design System v2
+   Pill shape · neutral bg · focus lift
+   ═══════════════════════════════════════════════════════════════════════ */
+
 .search-bar {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4); background: var(--neutral-50);
-  border: 1.5px solid var(--neutral-200); border-radius: var(--radius-lg);
-  transition: all var(--duration-fast) var(--ease-out); cursor: text;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 48px;
+  padding: 0 var(--space-4);
+  background: var(--neutral-100);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xl);
+  transition: background-color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
 }
-.search-bar:focus-within { border-color: var(--primary-400); background: white; box-shadow: 0 0 0 3px rgba(99,102,241,0.08); }
-.search-bar-icon { color: var(--neutral-400); flex-shrink: 0; }
-.search-bar-input {
-  flex: 1; font-size: var(--text-base); color: var(--neutral-900); background: transparent;
+
+.search-bar:focus-within {
+  background: var(--surface);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
 }
-.search-bar-input::placeholder { color: var(--neutral-400); }
+
+.search-icon {
+  color: var(--neutral-400);
+  flex-shrink: 0;
+}
+
+.search-bar input {
+  flex: 1;
+  font-size: var(--text-base);
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--neutral-900);
+}
+
+.search-bar input::placeholder {
+  color: var(--neutral-400);
+}

@@ -1,11 +1,23 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import ListingCard from '../components/ListingCard';
-import { currentUser } from '../data/mockData';
+import { useSavedListings } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import './SavedListings.css';
 
 export default function SavedListings() {
   const navigate = useNavigate();
+  const { authState } = useAuth();
+  const { listings, loading, refresh } = useSavedListings(authState?.userId);
+  const savedListings = authState?.userId ? listings : [];
+
+  useEffect(() => {
+    if (!authState?.userId) return;
+    refresh().catch((err) => {
+      console.error('SavedListings: failed to load saved listings:', err);
+    });
+  }, [authState?.userId, refresh]);
 
   return (
     <div className="page" id="saved-listings">
@@ -14,9 +26,15 @@ export default function SavedListings() {
         <h1>Saved Listings</h1>
       </div>
       <div className="saved-grid">
-        {currentUser.savedListings.map(l => (
-          <ListingCard key={l.id} listing={l} variant="vertical" />
-        ))}
+        {loading && savedListings.length === 0 ? (
+          <p>Loading saved listings...</p>
+        ) : savedListings.length > 0 ? (
+          savedListings.map(l => (
+            <ListingCard key={l.id} listing={l} variant="vertical" />
+          ))
+        ) : (
+          <p>No saved listings yet.</p>
+        )}
       </div>
     </div>
   );

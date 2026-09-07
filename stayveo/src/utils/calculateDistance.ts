@@ -46,13 +46,3 @@ export function formatDistance(
   if ((distanceKm as number) < 1) return `${Math.round((distanceKm as number) * 1000)}m`;
   return `${(distanceKm as number).toFixed(1)}km`;
 }
-
-export default function calculateDistance(
-  sourceLat: unknown,
-  sourceLng: unknown,
-  destinationLat: unknown,
-  destinationLng: unknown
-): string {
-  const distanceKm = calculateDistanceKm(sourceLat, sourceLng, destinationLat, destinationLng);
-  return formatDistance(distanceKm);
-}

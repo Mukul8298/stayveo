@@ -6,14 +6,18 @@ import type { CreatePaymentInput } from './payment.schema.js';
 
 const TYPE_MAP: Record<string, PaymentType> = {
   rent: 'RENT',
-  laundry: 'LAUNDRY',
-  cleaning: 'CLEANING',
+  reservation: 'RESERVATION',
   tiffin: 'TIFFIN',
 };
 
 const STATUS_MAP: Record<string, PaymentStatus> = {
   paid: 'PAID',
+  success: 'PAID',
+  captured: 'PAID',
+  completed: 'PAID',
   pending: 'PENDING',
+  processing: 'PENDING',
+  failed: 'FAILED',
 };
 
 export const paymentRepository = {
@@ -27,6 +31,8 @@ export const paymentRepository = {
         amount: data.amount,
         type: TYPE_MAP[data.type] || data.type as PaymentType,
         status: STATUS_MAP[data.status || 'pending'] || 'PENDING',
+        paymentMethod: data.payment_method,
+        transactionId: data.transaction_id,
       },
     });
   },

@@ -25,6 +25,7 @@ import type {
   VerifyOtpInput,
 } from './provider.schema.js';
 import { userService } from '../users/user.service.js';
+import prisma from '../../common/db/prisma.js';
 
 export const providerService = {
   /** Get provider by user ID */
@@ -87,12 +88,22 @@ export const providerService = {
 
     const verifiedProfile = await providerRepository.markOtpVerified(data.phone);
 
+    const selectedTypes = verifiedProfile.services.map((service) => service.type);
+    const tiffinOnly = selectedTypes.includes('TIFFIN') && !selectedTypes.includes('PG');
+    let nextStep: 'dashboard' | 'basic_info' | 'tiffin_dashboard' | 'tiffin_onboarding' = profile.name ? 'dashboard' : 'basic_info';
+    if (profile.name && tiffinOnly) {
+      const kitchen = await prisma.tiffinKitchen.findUnique({ where: { ownerId: verifiedProfile.id }, select: { id: true } });
+      nextStep = kitchen ? 'tiffin_dashboard' : 'tiffin_onboarding';
+    }
+
     return {
       message: profile.name ? 'Welcome back' : 'OTP verified. Please complete onboarding.',
-      nextStep: profile.name ? 'dashboard' : 'basic_info',
+      nextStep,
       providerId: verifiedProfile.id,
+      userId: verifiedProfile.user.id,
       phone: verifiedProfile.phone,
       name: verifiedProfile.name,
+      services: selectedTypes,
       isVerified: verifiedProfile.isVerified,
     };
   },

@@ -6,6 +6,7 @@ import type { CreateTiffinInput, TiffinFilterInput } from './tiffin.schema.js';
 import { providerService } from '../provider/provider.service.js';
 import { serviceSelectionService } from '../services/service.service.js';
 import { ServiceCategory } from '../../common/enums.js';
+import { getCurrentTiffinDay } from '../../common/utils/tiffin-day.js';
 
 export const tiffinService = {
   /** Create a new tiffin listing */
@@ -20,5 +21,10 @@ export const tiffinService = {
   async list(queryParams: TiffinFilterInput) {
     const filters = tiffinFilterSchema.parse(queryParams);
     return tiffinRepository.findFiltered(filters);
+  },
+
+  /** Return only today's menu using the application's fixed Tiffin timezone. */
+  async getTodayMenu(serviceId: string) {
+    return tiffinRepository.findTodayMenu(serviceId, getCurrentTiffinDay());
   },
 };

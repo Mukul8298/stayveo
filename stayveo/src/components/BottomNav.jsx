@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Heart, Briefcase, User } from 'lucide-react';
 import './BottomNav.css';
@@ -19,7 +18,9 @@ export default function BottomNav() {
   return (
     <nav className="bottom-nav" id="bottom-navigation">
       {tabs.map(tab => {
-        const isActive = current.startsWith(tab.path);
+        const isActive = tab.path === '/services'
+          ? current.startsWith('/services') || current.startsWith('/tiffin')
+          : current.startsWith(tab.path);
         const Icon = tab.icon;
         return (
           <button
@@ -27,6 +28,8 @@ export default function BottomNav() {
             className={`bottom-nav-item ${isActive ? 'active' : ''}`}
             onClick={() => navigate(tab.path)}
             id={`nav-${tab.label.toLowerCase()}`}
+            aria-current={isActive ? 'page' : undefined}
+            aria-label={tab.label}
           >
             <div className="bottom-nav-icon">
               <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />

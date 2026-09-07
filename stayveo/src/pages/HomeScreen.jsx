@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, SlidersHorizontal, Loader, AlertCircle, RefreshCw } from 'lucide-react';
+import { Bell, SlidersHorizontal, Loader, AlertCircle, RefreshCw, MapPin, WalletCards, UtensilsCrossed, GraduationCap, Home as HomeIcon } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import ListingCard from '../components/ListingCard';
 import { fetchPGListings, subscribeToPGChanges } from '../api/supabaseApi';
@@ -120,10 +120,6 @@ export default function HomeScreen() {
 
       // Set whatever we got — even if empty
       setListings(data || []);
-
-      if (data?.length === 0) {
-        console.log('ℹ️ Home: no PG listings in database yet');
-      }
     } catch (err) {
       // Don't set error state if the component was unmounted
       if (signal?.aborted) return;
@@ -171,7 +167,7 @@ export default function HomeScreen() {
   // ── Show welcome-back toast for returning users ──────────────────────
   useEffect(() => {
     if (location.state?.welcomeBack && location.state?.name) {
-      queueMicrotask(() => setWelcomeToast(`Welcome back ${location.state.name} 👋`));
+      queueMicrotask(() => setWelcomeToast(`Welcome back ${location.state.name}`));
       const timer = setTimeout(() => setWelcomeToast(''), 4000);
       return () => clearTimeout(timer);
     }
@@ -209,10 +205,10 @@ export default function HomeScreen() {
       <div className="home-header">
         <div className="home-header-top">
           <div>
-            <p className="home-greeting">{greeting}, {safeUserName} 👋</p>
+            <p className="home-greeting">{greeting}, {safeUserName}</p>
             <h1 className="home-college">Nearby {userCollege}</h1>
           </div>
-          <button className="home-notif" onClick={() => navigate('/notifications')}>
+          <button className="home-notif" onClick={() => navigate('/notifications')} aria-label="Open notifications">
             <Bell size={20} />
             {unreadCount > 0 && <span className="notif-dot" />}
           </button>
@@ -221,11 +217,11 @@ export default function HomeScreen() {
           <div style={{ flex: 1 }} onClick={() => navigate('/search')}>
             <SearchBar placeholder="Search PGs, rooms near campus..." />
           </div>
-          <button className="home-filter-btn" onClick={() => navigate('/search')}>
+          <button className="home-filter-btn" onClick={() => navigate('/search')} aria-label="Open search filters">
             <SlidersHorizontal size={18} />
           </button>
         </div>
-        <div className="college-badge">🎓 Only for {userCollege} students</div>
+        <div className="college-badge"><GraduationCap size={13} /> Only for {userCollege} students</div>
       </div>
 
       {/* Loading state */}
@@ -251,7 +247,7 @@ export default function HomeScreen() {
       {/* Empty state — no PGs in database */}
       {!loading && !error && listings.length === 0 && (
         <div className="home-empty">
-          <div className="home-empty-icon">🏠</div>
+          <div className="home-empty-icon"><HomeIcon size={28} /></div>
           <h3>No PGs listed yet</h3>
           <p>Check back soon — new listings are added daily!</p>
         </div>
@@ -262,7 +258,7 @@ export default function HomeScreen() {
         <>
           <div className="section">
             <div className="section-header">
-              <h2 className="section-title">📍 Near Campus</h2>
+              <h2 className="section-title"><MapPin size={18} /> Near Campus</h2>
               <button className="section-link" onClick={() => navigate('/search')}>See all</button>
             </div>
             <div className="horizontal-scroll">
@@ -272,7 +268,7 @@ export default function HomeScreen() {
 
           <div className="section">
             <div className="section-header">
-              <h2 className="section-title">💰 Budget Friendly</h2>
+              <h2 className="section-title"><WalletCards size={18} /> Budget Friendly</h2>
               <button className="section-link" onClick={() => navigate('/search')}>See all</button>
             </div>
             <div className="horizontal-scroll">
@@ -282,7 +278,7 @@ export default function HomeScreen() {
 
           <div className="section">
             <div className="section-header">
-              <h2 className="section-title">🍽️ With Food</h2>
+              <h2 className="section-title"><UtensilsCrossed size={18} /> With Food</h2>
               <button className="section-link" onClick={() => navigate('/search')}>See all</button>
             </div>
             <div className="horizontal-scroll">

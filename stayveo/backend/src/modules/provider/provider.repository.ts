@@ -17,11 +17,9 @@ import type {
 const onboardingInclude = {
   user: { select: { id: true, phone_number: true, role: true } },
   services: {
-    include: {
+      include: {
       pgDetails: true,
       tiffinDetails: true,
-      laundryDetails: true,
-      cleaningDetails: true,
     },
   },
   verifications: true,
@@ -196,18 +194,6 @@ export const providerRepository = {
           create: { serviceId: service.id, ...input.data },
           update: input.data,
         });
-      case 'LAUNDRY':
-        return prisma.laundryDetails.upsert({
-          where: { serviceId: service.id },
-          create: { serviceId: service.id, ...input.data },
-          update: input.data,
-        });
-      case 'CLEANING':
-        return prisma.cleaningDetails.upsert({
-          where: { serviceId: service.id },
-          create: { serviceId: service.id, ...input.data },
-          update: input.data,
-        });
     }
   },
 
@@ -232,16 +218,6 @@ export const providerRepository = {
         });
       case 'TIFFIN':
         return prisma.tiffinDetails.update({
-          where: { serviceId: service.id },
-          data: { photos: input.photos },
-        });
-      case 'LAUNDRY':
-        return prisma.laundryDetails.update({
-          where: { serviceId: service.id },
-          data: { photos: input.photos },
-        });
-      case 'CLEANING':
-        return prisma.cleaningDetails.update({
           where: { serviceId: service.id },
           data: { photos: input.photos },
         });

@@ -9,8 +9,6 @@ const periods = ['Daily', 'Weekly', 'Monthly'];
 
 const TYPE_LABELS = {
   RENT: '🏠 Room Rent',
-  LAUNDRY: '🧺 Laundry',
-  CLEANING: '🧹 Cleaning',
   TIFFIN: '🍱 Tiffin',
 };
 
@@ -44,12 +42,6 @@ export default function ProviderEarnings() {
 
   return (
     <div className="pe-page" id="provider-earnings">
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate('/provider/dashboard')}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Earnings</h1>
-      </div>
 
       {loading ? (
         <div className="empty-state">

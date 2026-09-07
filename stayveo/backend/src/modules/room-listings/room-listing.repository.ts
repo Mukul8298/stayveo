@@ -22,12 +22,27 @@ export const roomListingRepository = {
         providerId,
         title:            data.title,
         description:      data.description,
+        address:          data.address,
         roomType:         data.roomType,
         genderPreference: data.genderPreference,
         price:            data.price,
         securityDeposit:  data.securityDeposit,
+        reservationFee:   data.reservationFee,
+        minimumStayMonths: data.minimumStayMonths,
+        numberOfBeds:     data.numberOfBeds,
+        platformFee:      data.platformFee,
+        foodCharges:      data.foodCharges,
+        electricityCharges: data.electricityCharges,
+        waterCharges:     data.waterCharges,
+        maintenanceCharges: data.maintenanceCharges,
+        parkingCharges:   data.parkingCharges,
+        otherCharges:     data.otherCharges,
         totalBeds:        data.totalBeds,
         availableBeds:    data.availableBeds,
+        reservedBeds:     data.reservedBeds,
+        occupiedBeds:     data.occupiedBeds,
+        blockedBeds:      data.blockedBeds,
+        offlineBeds:      data.offlineBeds,
         floor:            data.floor,
         amenities:        data.amenities,
         images:           data.images,
@@ -71,6 +86,18 @@ export const roomListingRepository = {
 
     const newAvailableBeds = data.availableBeds ?? current.availableBeds;
     const newIsActive      = data.isActive      ?? current.isActive;
+    const nextTotalBeds = data.totalBeds ?? current.totalBeds;
+    const nextReservedBeds = data.reservedBeds ?? current.reservedBeds;
+    const nextOccupiedBeds = data.occupiedBeds ?? current.occupiedBeds;
+    const nextBlockedBeds = data.blockedBeds ?? current.blockedBeds;
+    const nextOfflineBeds = data.offlineBeds ?? current.offlineBeds;
+    const allocatedBeds = nextReservedBeds + nextOccupiedBeds + nextBlockedBeds + nextOfflineBeds;
+    if (nextTotalBeds < 1 || allocatedBeds > nextTotalBeds) {
+      throw { statusCode: 409, message: 'Total beds cannot be lower than reserved or occupied beds.' };
+    }
+    if (newAvailableBeds < 0 || newAvailableBeds > nextTotalBeds - allocatedBeds) {
+      throw { statusCode: 409, message: 'Available beds do not match the current inventory allocation.' };
+    }
 
     // Derive new status
     let newStatus: RoomStatus;
@@ -151,6 +178,120 @@ export const roomListingRepository = {
         availableBeds: { gt: 0 },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /** Public discovery query. Visibility and availability are enforced here. */
+  async findActiveForStudents() {
+    const [roomListings, allInventoryProviders] = await Promise.all([
+      prisma.roomListing.findMany({
+        where: {
+          status: 'ACTIVE',
+          isActive: true,
+          availableBeds: { gt: 0 },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          provider: {
+            select: { id: true, name: true, phone: true, email: true },
+          },
+        },
+      }),
+      prisma.roomListing.findMany({
+        select: { providerId: true },
+        distinct: ['providerId'],
+      }),
+    ]);
+
+    // Legacy onboarding records remain discoverable only for providers that
+    // have not moved to inventory-backed RoomListings. Once a provider has a
+    // RoomListing, its visibility is controlled by that inventory row.
+    const inventoryProviderIds = new Set(allInventoryProviders.map((listing) => listing.providerId));
+    const legacyListings = await prisma.pGDetails.findMany({
+      where: {
+        service: {
+          providerId: { notIn: [...inventoryProviderIds] },
+        },
+      },
+      orderBy: { id: 'desc' },
+      include: {
+        service: {
+          select: {
+            providerId: true,
+            provider: { select: { id: true, name: true, phone: true, email: true } },
+          },
+        },
+      },
+    });
+
+    return [
+      ...roomListings.map((listing) => ({
+        ...listing,
+        listingSource: 'room_listing' as const,
+      })),
+      ...legacyListings.map((listing) => ({
+        id: listing.id,
+        providerId: listing.service.providerId,
+        title: listing.pgName,
+        description: null,
+        address: listing.address,
+        roomType: listing.roomType,
+        price: listing.minPrice,
+        securityDeposit: listing.securityDeposit,
+        reservationFee: listing.reservationFee,
+        minimumStayMonths: listing.minimumStayMonths,
+        numberOfBeds: listing.numberOfBeds,
+        platformFee: 0,
+        foodCharges: 0,
+        electricityCharges: 0,
+        waterCharges: 0,
+        maintenanceCharges: 0,
+        parkingCharges: 0,
+        otherCharges: 0,
+        totalBeds: listing.numberOfBeds,
+        availableBeds: listing.numberOfBeds,
+        reservedBeds: 0,
+        occupiedBeds: 0,
+        blockedBeds: 0,
+        offlineBeds: 0,
+        images: listing.photos,
+        amenities: listing.amenities,
+        isActive: true,
+        status: 'ACTIVE' as const,
+        listingSource: 'legacy_pg_details' as const,
+        provider: listing.service.provider,
+      })),
+    ];
+  },
+
+  /** Atomically adjust total capacity while preserving allocated beds. */
+  async adjustInventory(id: string, delta: number) {
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.roomListing.findUnique({ where: { id } });
+      if (!current) throw { statusCode: 404, message: 'Listing not found' };
+
+      const minimumTotal = current.reservedBeds + current.occupiedBeds + current.blockedBeds + current.offlineBeds;
+      const nextTotal = current.totalBeds + delta;
+      if (nextTotal < minimumTotal) {
+        throw {
+          statusCode: 409,
+          message: 'You cannot remove beds that are already reserved or occupied.',
+        };
+      }
+      if (nextTotal < 1) {
+        throw { statusCode: 400, message: 'A listing must have at least one bed.' };
+      }
+
+      const nextAvailable = nextTotal - minimumTotal;
+      const nextStatus = !current.isActive ? 'CLOSED' : nextAvailable === 0 ? 'FULL' : 'ACTIVE';
+      return tx.roomListing.update({
+        where: { id },
+        data: {
+          totalBeds: nextTotal,
+          availableBeds: nextAvailable,
+          status: nextStatus,
+        },
+      });
     });
   },
 };

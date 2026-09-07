@@ -1,103 +1,47 @@
-import { useState, useEffect } from 'react';
+import { ArrowRight, Sparkles, Shirt, Utensils } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Loader } from 'lucide-react';
-import ServiceCard from '../components/ServiceCard';
-import { fetchAllServices } from '../api/supabaseApi';
-import { useDistanceFromCollege } from '../hooks/useDistanceFromCollege';
-import './ServicesHome.css';
-
-// ── ServicesHome ────────────────────────────────────────────────────────
-// MIGRATION CHANGES:
-// - Removed mock data import — uses ONLY real Supabase data
-// - Uses AbortController for safe async cleanup
-// ────────────────────────────────────────────────────────────────────────
-
-const categories = [
-  { key: 'all', label: 'All', icon: '🏠' },
-  { key: 'laundry', label: 'Laundry', icon: '🧺' },
-  { key: 'tiffin', label: 'Tiffin', icon: '🍱' },
-  { key: 'cleaning', label: 'Cleaning', icon: '🧹' },
-];
+import TiffinTopbar from '../components/tiffin/TiffinTopbar';
+import './Tiffin.css';
 
 export default function ServicesHome() {
   const navigate = useNavigate();
-  const [active, setActive] = useState('all');
-  // Start with empty array — NO mock data
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const { itemsWithDistance: servicesByDistance } = useDistanceFromCollege(services);
-
-  // ── Fetch real services from Supabase ─────────────────────────────────
-  useEffect(() => {
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const { data, error } = await fetchAllServices({ signal: controller.signal });
-        if (controller.signal.aborted) return;
-
-        if (error) {
-          console.error('ServicesHome: fetch error:', error);
-          return;
-        }
-        setServices(data || []);
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          console.error('ServicesHome: unexpected error:', err);
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => controller.abort();
-  }, []);
-
-  const filtered = active === 'all'
-    ? servicesByDistance
-    : servicesByDistance.filter(s => s?.category === active);
 
   return (
-    <div className="page" id="services-home">
-      <div className="services-header">
-        <h1>Services</h1>
-        <p>Book services near your campus</p>
+    <main className="tiffin-page tiffin-services-page" id="services-home">
+      <div className="tiffin-content">
+        <TiffinTopbar />
+        <header className="tiffin-page-heading">
+          <h1>Services</h1>
+          <p>Everything you need for a comfortable stay, all in one place.</p>
+        </header>
+
+        <section className="tiffin-services-grid" aria-label="Student services">
+          <article className="tiffin-feature-service">
+            <div className="tiffin-feature-copy">
+              <span className="tiffin-service-icon"><Utensils size={17} /></span>
+              <span className="tiffin-coming-label">Available now</span>
+              <h2>Tiffin Service</h2>
+              <p>Fresh, homely meals delivered to your doorstep.</p>
+              <span className="tiffin-starting-price">Starting from ₹80 / meal</span>
+              <button type="button" className="tiffin-dark-button" onClick={() => navigate('/tiffin')}>Explore Tiffin <ArrowRight size={15} /></button>
+            </div>
+            <img src="https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=82" alt="Fresh homestyle tiffin meal" />
+          </article>
+
+          <ComingSoonCard icon={<Shirt size={16} />} title="Laundry" description="Professional wash and fold services." />
+          <ComingSoonCard icon={<Sparkles size={16} />} title="Room Cleaning" description="Schedule deep cleaning for your space." />
+        </section>
       </div>
+    </main>
+  );
+}
 
-      <div className="services-categories">
-        {categories.map(c => (
-          <button key={c.key} className={`services-cat ${active === c.key ? 'active' : ''}`}
-            onClick={() => setActive(c.key)}>
-            <span className="services-cat-icon">{c.icon}</span>
-            <span>{c.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Loading state */}
-      {loading && (
-        <div className="home-loading">
-          <Loader size={24} className="spinning" />
-          <span>Loading services...</span>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && filtered.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">📦</div>
-          <h3>No services yet</h3>
-          <p>Services will appear here when providers add them</p>
-        </div>
-      )}
-
-      <div className="services-list">
-        {filtered.map(s => (
-          <ServiceCard key={s.id} service={s} onClick={() => navigate(`/service/${s.id}`)} />
-        ))}
-      </div>
-    </div>
+function ComingSoonCard({ icon, title, description }) {
+  return (
+    <article className="tiffin-coming-card">
+      <div className="tiffin-coming-card-top"><span className="tiffin-service-icon is-muted">{icon}</span><span>Coming Soon</span></div>
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </article>
   );
 }

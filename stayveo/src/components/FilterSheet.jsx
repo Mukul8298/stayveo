@@ -7,7 +7,7 @@ export default function FilterSheet({ isOpen, onClose, onApply }) {
   const [priceRange, setPriceRange] = useState([3000, 15000]);
   const [distance, setDistance] = useState(2);
   const [roomType, setRoomType] = useState('any');
-  const [serviceFilters, setServiceFilters] = useState({ food: false, wifi: true, laundry: false, cleaning: false });
+  const [serviceFilters, setServiceFilters] = useState({ food: false, wifi: true });
 
   const toggleService = (key) => setServiceFilters(prev => ({ ...prev, [key]: !prev[key] }));
 

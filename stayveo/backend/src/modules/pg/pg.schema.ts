@@ -9,7 +9,7 @@ export const createPGSchema = z.object({
   room_types: z.array(z.string()).optional(),     // ["single", "double", "triple"]
   min_price: z.number().min(0).optional(),
   max_price: z.number().min(0).optional(),
-  amenities: z.array(z.string()).optional(),       // ["wifi", "ac", "food", "laundry"]
+  amenities: z.array(z.string()).optional(),       // ["wifi", "ac", "food"]
 });
 
 /** Query params for filtering PG listings */

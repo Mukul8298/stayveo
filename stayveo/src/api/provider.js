@@ -3,21 +3,33 @@
 // Single source of truth for all provider HTTP requests.
 // ────────────────────────────────────────────────────────────────────────
 
-const PROVIDER_API = import.meta.env.VITE_PROVIDER_URL || 'http://localhost:3000/api/provider';
+import { PROVIDER_API_BASES } from '../config/api.js';
 
 async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (phone) headers['x-provider-phone'] = phone;
 
-  const res = await fetch(`${PROVIDER_API}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let lastError;
 
-  const json = await res.json();
-  if (!json.success) throw new Error(json.message || 'Something went wrong');
-  return json;
+  for (const baseUrl of PROVIDER_API_BASES) {
+    try {
+      const res = await fetch(`${baseUrl}${endpoint}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || `Request failed with status ${res.status}`);
+      }
+      return json;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to reach the provider API');
 }
 
 // ── OTP ─────────────────────────────────────────────────────────────────
@@ -114,13 +126,22 @@ export function toggleRoomListing(phone, id, isActive) {
   });
 }
 
+/** Atomically add or remove total bed capacity. */
+export function adjustRoomListingInventory(phone, id, delta) {
+  return providerRequest(`/room-listings/${id}/inventory`, {
+    method: 'PATCH',
+    body: { delta },
+    phone,
+  });
+}
+
 /** Soft-delete a listing (marks as CLOSED, not a real DB delete) */
 export function deleteRoomListing(phone, id) {
   return providerRequest(`/room-listings/${id}`, { method: 'DELETE', phone });
 }
 
 // ── Generic Service Inventory ───────────────────────────────────────────
-// These endpoints are the scalable contract for tiffin/laundry/cleaning.
+// These endpoints are the scalable contract for Tiffin service inventory.
 // Room listings keep their mature room-listings endpoints because they have
 // bed inventory logic and richer booking semantics.
 

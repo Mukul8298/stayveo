@@ -1,13 +1,9 @@
 // ─── User Zod Schemas ───────────────────────────────────────────────────
 
 import { z } from 'zod';
+import { parseYear } from '../../common/utils/year.js';
 
-const displayYear = normalizeEnum({
-  '1st year': '1st Year',
-  '2nd year': '2nd Year',
-  '3rd year': '3rd Year',
-  '4th year': '4th Year',
-});
+
 
 const displayGender = normalizeEnum({
   male: 'Male',
@@ -79,8 +75,8 @@ export const updateUserProfileSchema = z.preprocess(
     fullName: z.string().min(1).max(200),
     college: z.string().min(1).max(200),
     year: z.preprocess(
-      displayYear,
-      z.enum(['1st Year', '2nd Year', '3rd Year', '4th Year'])
+      parseYear,
+      z.number().int().min(1).max(6)
     ),
     gender: z.preprocess(
       displayGender,
@@ -91,14 +87,14 @@ export const updateUserProfileSchema = z.preprocess(
       z.enum(['Vegetarian', 'Non-Veg', 'Jain', 'Vegan'])
     ),
     budget: z.string().min(1).max(100),
-    cleanlinessLevel: z.coerce.number().int().min(1).max(5),
+    cleanlinessLevel: z.coerce.number().int().min(1).max(5).optional().nullable(),
     studyHabits: z.preprocess(
       displayStudy,
-      z.enum(['Quiet', 'Normal', 'Flexible'])
+      z.enum(['Quiet', 'Normal', 'Flexible']).optional().nullable()
     ),
     personalityType: z.preprocess(
       displayPersonality,
-      z.enum(['Introvert', 'Ambivert', 'Extrovert'])
+      z.enum(['Introvert', 'Ambivert', 'Extrovert']).optional().nullable()
     ),
     locationPreference: z.string().optional(),
     currentAddress: z.string().max(1000).optional().or(z.literal('')),
@@ -108,7 +104,7 @@ export const updateUserProfileSchema = z.preprocess(
       displaySleep,
       z.enum(['Early Bird', 'Night Owl', 'Flexible'])
     ),
-    profileImageUrl: z.string().optional(),
+    profileImageUrl: z.string().optional().nullable(),
   })
 );
 

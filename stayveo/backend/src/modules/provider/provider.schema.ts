@@ -16,7 +16,7 @@ export const createProviderSchema = z.object({
 export const updateProviderSchema = createProviderSchema.partial();
 
 export const phoneSchema = z.string().min(10).max(15);
-export const serviceTypeSchema = z.enum(['PG', 'TIFFIN', 'LAUNDRY', 'CLEANING']);
+export const serviceTypeSchema = z.enum(['PG', 'TIFFIN']);
 
 export const sendOtpSchema = z.object({
   phone: phoneSchema,
@@ -45,6 +45,10 @@ export const pgDetailsSchema = z.object({
   longitude: z.coerce.number().min(-180).max(180).optional(),
   roomType: z.string().min(1).max(100),
   minPrice: z.coerce.number().min(0),
+  securityDeposit: z.coerce.number().min(0),
+  reservationFee: z.coerce.number().min(0),
+  minimumStayMonths: z.coerce.number().int().min(1).max(60),
+  numberOfBeds: z.coerce.number().int().min(1).max(100),
   amenities: z.array(z.string().min(1)).default([]),
   photos: z.array(z.string().url()).default([]),
 });
@@ -53,20 +57,6 @@ export const tiffinDetailsSchema = z.object({
   name: z.string().min(1).max(200),
   price: z.coerce.number().min(0),
   mealsPerDay: z.coerce.number().int().min(1).max(6),
-  latitude: z.coerce.number().min(-90).max(90).optional(),
-  longitude: z.coerce.number().min(-180).max(180).optional(),
-  photos: z.array(z.string().url()).default([]),
-});
-
-export const laundryDetailsSchema = z.object({
-  pricing: z.string().min(1).max(500),
-  latitude: z.coerce.number().min(-90).max(90).optional(),
-  longitude: z.coerce.number().min(-180).max(180).optional(),
-  photos: z.array(z.string().url()).default([]),
-});
-
-export const cleaningDetailsSchema = z.object({
-  pricing: z.string().min(1).max(500),
   latitude: z.coerce.number().min(-90).max(90).optional(),
   longitude: z.coerce.number().min(-180).max(180).optional(),
   photos: z.array(z.string().url()).default([]),
@@ -82,16 +72,6 @@ export const serviceDetailsSchema = z.discriminatedUnion('type', [
     phone: phoneSchema.optional(),
     type: z.literal('TIFFIN'),
     data: tiffinDetailsSchema,
-  }),
-  z.object({
-    phone: phoneSchema.optional(),
-    type: z.literal('LAUNDRY'),
-    data: laundryDetailsSchema,
-  }),
-  z.object({
-    phone: phoneSchema.optional(),
-    type: z.literal('CLEANING'),
-    data: cleaningDetailsSchema,
   }),
 ]);
 

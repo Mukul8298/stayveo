@@ -21,19 +21,19 @@ import providerRoutes, { providerOnboardingRoutes } from './modules/provider/pro
 import serviceRoutes from './modules/services/service.routes.js';
 import pgRoutes from './modules/pg/pg.routes.js';
 import tiffinRoutes from './modules/tiffin/tiffin.routes.js';
-import laundryRoutes from './modules/laundry/laundry.routes.js';
-import cleaningRoutes from './modules/cleaning/cleaning.routes.js';
 import mediaRoutes from './modules/media/media.routes.js';
 import documentRoutes from './modules/documents/document.routes.js';
 import bookingRoutes from './modules/bookings/booking.routes.js';
 import visitRoutes from './modules/visits/visit.routes.js';
 import paymentRoutes from './modules/payments/payment.routes.js';
 import profileViewRoutes from './modules/profile-views/profile-view.routes.js';
-import roomListingRoutes from './modules/room-listings/room-listing.routes.js';
+import roomListingRoutes, { publicRoomListingRoutes } from './modules/room-listings/room-listing.routes.js';
 import collegeRoutes from './modules/colleges/college.routes.js';
-import serviceRequestRoutes from './modules/service-requests/service-request.routes.js';
+import savedRoutes from './modules/saved/saved.routes.js';
+import notificationRoutes from './modules/notifications/notification.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
+  const configuredFrontendUrl = process.env.FRONTEND_URL?.trim().replace(/\/+$/, '');
   const app = Fastify({
     logger: {
       level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -52,10 +52,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: (origin, cb) => {
       // Allow requests with no origin (curl, mobile apps, server-to-server)
       if (!origin) return cb(null, true);
+      if (configuredFrontendUrl && origin === configuredFrontendUrl) return cb(null, true);
       // Always allow localhost
       if (origin.includes('localhost')) return cb(null, true);
       // Allow all Cloudflare tunnel URLs
       if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
+      // Allow VS Code / Microsoft Dev Tunnels used for forwarded ports
+      if (origin.endsWith('.devtunnels.ms')) return cb(null, true);
       // Allow all ngrok URLs
       if (origin.endsWith('.ngrok-free.dev') || origin.endsWith('.ngrok.io')) return cb(null, true);
       // Block everything else in production
@@ -87,8 +90,6 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(serviceRoutes, { prefix: '/provider/services' });
       await api.register(pgRoutes, { prefix: '/pg' });
       await api.register(tiffinRoutes, { prefix: '/tiffin' });
-      await api.register(laundryRoutes, { prefix: '/laundry' });
-      await api.register(cleaningRoutes, { prefix: '/cleaning' });
       await api.register(mediaRoutes, { prefix: '/media' });
       await api.register(documentRoutes, { prefix: '/documents' });
       await api.register(bookingRoutes, { prefix: '/bookings' });
@@ -96,7 +97,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(paymentRoutes, { prefix: '/payments' });
       await api.register(profileViewRoutes, { prefix: '/profile-views' });
       await api.register(collegeRoutes, { prefix: '/colleges' });
-      await api.register(serviceRequestRoutes, { prefix: '/service-requests' });
+      await api.register(savedRoutes, { prefix: '/saved' });
+      await api.register(notificationRoutes, { prefix: '/notifications' });
+      await api.register(publicRoomListingRoutes, { prefix: '/room-listings' });
     },
     { prefix: '/api/v1' }
   );

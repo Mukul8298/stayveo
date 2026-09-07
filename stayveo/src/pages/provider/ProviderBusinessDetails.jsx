@@ -1,288 +1,338 @@
-// ─── Business Details Page ────────────────────────────────────────────────
-// Allows providers to edit their business name, address, contact & description.
-//
-// FORM STATE PATTERN:
-//   1. Mount → fetch current data → prefill form fields
-//   2. Provider edits → local state updates (controlled inputs)
-//   3. Save → PUT request → success toast → navigate back
-//   4. Error → toast + button re-enabled (never silent failure)
-//
-// WHY controlled inputs?
-//   React's "controlled input" pattern means the input value is always
-//   driven by state. This gives us: validation on keypress, easy reset,
-//   and predictable re-renders. Uncontrolled inputs (using refs) are only
-//   for edge cases like file uploads.
-// ─────────────────────────────────────────────────────────────────────────
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, MapPin, Phone, FileText, Loader2, Save } from 'lucide-react';
+import {
+  ArrowLeft,
+  BedDouble,
+  FileText,
+  Home,
+  Loader2,
+  MapPin,
+  Pencil,
+  Phone,
+  Save,
+  Store,
+  Utensils,
+  X,
+} from 'lucide-react';
+import { getProviderBusinessDetails, getRoomListings, updateProviderBusinessDetails } from '../../api/provider';
+import { getTiffinBusinessDetails, getTiffinSettings, updateTiffinBusinessDetails } from '../../api/tiffinProvider';
+import { SERVICE_TYPES, getProviderPersona } from '../../config/providerServices';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
-import { getProviderBusinessDetails, updateProviderBusinessDetails } from '../../api/provider';
 import './ProviderBusinessDetails.css';
+
+const EMPTY_FORM = {
+  name: '',
+  businessName: '',
+  address: '',
+  contactNumber: '',
+  description: '',
+  email: '',
+};
+
+function formFromData(data) {
+  return {
+    name: data?.name || '',
+    businessName: data?.businessName || '',
+    address: data?.address || '',
+    contactNumber: data?.contactNumber || '',
+    description: data?.description || '',
+    email: data?.email || '',
+  };
+}
+
+function parseTiffinSettings(response) {
+  return response?.data?.data || response?.data || {};
+}
+
+function summarizeListings(listings) {
+  return listings.reduce((summary, listing) => ({
+    rooms: summary.rooms + Math.max(Number(listing.totalRooms ?? listing.roomCount ?? 0), 1),
+    beds: summary.beds + Number(listing.totalBeds ?? 0),
+    available: summary.available + Number(listing.availableBeds ?? 0),
+    roomTypes: [...summary.roomTypes, listing.roomType].filter(Boolean),
+  }), { rooms: 0, beds: 0, available: 0, roomTypes: [] });
+}
 
 export default function ProviderBusinessDetails() {
   const navigate = useNavigate();
-  const { provider, updateProvider } = useProvider();
+  const { provider, updateProvider, providerLoading } = useProvider();
   const toast = useToast();
+  const persona = getProviderPersona(provider);
+  const isTiffin = persona.type === SERVICE_TYPES.TIFFIN;
+  const settingsBase = isTiffin ? '/provider/tiffin/settings' : '/provider/settings';
+  const PersonaIcon = persona.icon;
 
-  // ── Form state ─────────────────────────────────────────────────────────
-  // Each field mirrors a DB column on providerProfile.
-  // We initialize with '' so inputs are always controlled (never undefined).
-  const [form, setForm] = useState({
-    name:          '',
-    businessName:  '',
-    address:       '',
-    contactNumber: '',
-    description:   '',
-    email:         '',
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [snapshot, setSnapshot] = useState(EMPTY_FORM);
+  const [supportingData, setSupportingData] = useState({
+    loading: true,
+    deliveryRadiusKm: '',
+    kitchenStatus: '',
+    verificationStatus: '',
+    listingSummary: { rooms: 0, beds: 0, available: 0 },
   });
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
-  // ── UI state ───────────────────────────────────────────────────────────
-  const [loading, setLoading] = useState(true);   // initial fetch
-  const [saving, setSaving]   = useState(false);   // PUT request in progress
-  const [dirty, setDirty]     = useState(false);   // has the user changed anything?
-
-  // ── Fetch current details on mount ────────────────────────────────────
-  // This is the "prefill" step. We fetch from the DB so the form shows
-  // what's actually saved — not stale localStorage data.
   useEffect(() => {
-    if (!provider.phone) return;
+    if (providerLoading) return undefined;
+    if (!provider.phone) return undefined;
 
-    async function fetchDetails() {
-      try {
-        const res = await getProviderBusinessDetails(provider.phone);
-        const d = res.data;
-        setForm({
-          name:          d.name          ?? '',
-          businessName:  d.businessName  ?? '',
-          address:       d.address       ?? '',
-          contactNumber: d.contactNumber ?? '',
-          description:   d.description   ?? '',
-          email:         d.email         ?? '',
+    let cancelled = false;
+
+    async function loadDetails() {
+      setError('');
+      setSupportingData((current) => ({ ...current, loading: true }));
+      const primaryRequest = isTiffin
+        ? getTiffinBusinessDetails(provider)
+        : getProviderBusinessDetails(provider.phone);
+      const supportingRequest = isTiffin
+        ? getTiffinSettings(provider)
+        : getRoomListings(provider.phone);
+
+      const [primaryResult, supportingResult] = await Promise.allSettled([primaryRequest, supportingRequest]);
+      if (cancelled) return;
+
+      if (primaryResult.status === 'rejected') {
+        setError(primaryResult.reason?.message || 'Unable to load business details.');
+        setSupportingData((current) => ({ ...current, loading: false }));
+        return;
+      }
+
+      const details = formFromData(primaryResult.value?.data);
+      setForm(details);
+      setSnapshot(details);
+
+      if (isTiffin && supportingResult.status === 'fulfilled') {
+        const kitchen = parseTiffinSettings(supportingResult.value);
+        setSupportingData({
+          loading: false,
+          deliveryRadiusKm: kitchen.location?.deliveryRadiusKm ?? '',
+          kitchenStatus: kitchen.status || '',
+          verificationStatus: kitchen.verificationStatus || '',
+          listingSummary: { rooms: 0, beds: 0, available: 0 },
         });
-      } catch {
-        toast.error('Could not load business details');
-      } finally {
-        setLoading(false);
+      } else if (!isTiffin && supportingResult.status === 'fulfilled') {
+        const listings = Array.isArray(supportingResult.value?.data) ? supportingResult.value.data : [];
+        setSupportingData((current) => ({ ...current, loading: false, listingSummary: summarizeListings(listings) }));
+      } else {
+        setSupportingData((current) => ({ ...current, loading: false }));
       }
     }
 
-    fetchDetails();
-  }, [provider.phone]); // eslint-disable-line react-hooks/exhaustive-deps
+    loadDetails();
+    return () => { cancelled = true; };
+  }, [isTiffin, provider, providerLoading]);
 
-  // ── Handle input change ────────────────────────────────────────────────
-  // One generic handler for all fields — cleaner than 6 individual ones.
-  function handleChange(field, value) {
-    setForm(prev => ({ ...prev, [field]: value }));
+  function updateField(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
     setDirty(true);
   }
 
-  // ── Handle save ───────────────────────────────────────────────────────
-  // PUT /api/provider/business-details
-  // On success: update ProviderContext so profile card name updates immediately.
-  async function handleSave() {
-    if (!dirty) return; // No changes → don't waste a network call
+  function cancelEdit() {
+    setForm(snapshot);
+    setDirty(false);
+    setEditing(false);
+  }
 
+  async function save(event) {
+    event.preventDefault();
+    if (!form.name.trim() || !form.businessName.trim()) {
+      toast.error('Your name and business name are required');
+      return;
+    }
+
+    setSaving(true);
     try {
-      setSaving(true);
-
-      // Only send non-empty fields. Empty string means "clear this field".
       const payload = {
-        name:          form.name         || undefined,
-        businessName:  form.businessName  || undefined,
-        address:       form.address       || undefined,
-        contactNumber: form.contactNumber || undefined,
-        description:   form.description   || undefined,
-        email:         form.email         || undefined,
+        ...form,
+        name: form.name.trim(),
+        businessName: form.businessName.trim(),
+        email: form.email.trim(),
+        address: form.address.trim(),
+        contactNumber: form.contactNumber.trim(),
+        description: form.description.trim(),
       };
-
-      const res = await updateProviderBusinessDetails(provider.phone, payload);
-
-      // Optimistic update: sync the new name back into ProviderContext
-      // so the profile card shows the updated name without a page refresh.
-      if (res.data?.name) {
-        updateProvider({ name: res.data.name });
-      }
-
-      toast.success('Business details saved!');
+      const response = isTiffin
+        ? await updateTiffinBusinessDetails(provider, payload)
+        : await updateProviderBusinessDetails(provider.phone, payload);
+      const updated = formFromData(response?.data);
+      setForm(updated);
+      setSnapshot(updated);
+      updateProvider({ name: updated.name, email: updated.email, activeServiceType: persona.type });
       setDirty(false);
-      navigate(-1); // Go back to profile
-    } catch (err) {
-      toast.error(err.message || 'Failed to save details');
+      setEditing(false);
+      toast.success('Business details saved');
+    } catch (saveError) {
+      toast.error(saveError.message || 'Unable to save business details');
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="pbd-page" id="provider-business-details">
-        <div className="page-header">
-          <button className="back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={20} />
-          </button>
-          <h1>Business Details</h1>
-        </div>
-        <div className="pbd-loading">
-          <Loader2 size={24} className="pbd-spinner" />
-          <p>Loading details…</p>
-        </div>
-      </div>
-    );
+  if (!provider.phone && !providerLoading) {
+    return <PageState error="Provider authentication is missing. Please sign in again." />;
   }
 
+  if (providerLoading || supportingData.loading) {
+    return <PageState label="Loading business details..." />;
+  }
+
+  if (error) {
+    return <PageState error={error} />;
+  }
+
+  const sectionIcon = isTiffin ? Utensils : Home;
+  const SectionIcon = sectionIcon;
+  const verificationLabel = supportingData.verificationStatus
+    ? String(supportingData.verificationStatus).replace(/_/g, ' ').toLowerCase()
+    : 'Not submitted';
+
   return (
-    <div className="pbd-page" id="provider-business-details">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Business Details</h1>
-      </div>
-
+    <main className="pbd-page" id="provider-business-details">
       <div className="pbd-content">
-        {/* ── Hero Section ──────────────────────────────────────── */}
-        <div className="pbd-hero">
-          <div className="pbd-hero-icon">
-            <Building2 size={28} />
-          </div>
+        <button className="pbd-back" type="button" onClick={() => navigate(settingsBase)}>
+          <ArrowLeft size={16} />
+          <span>Back to Settings</span>
+        </button>
+
+        <header className="pbd-heading">
           <div>
+            <h1>Business Details</h1>
+            <p>{persona.businessDetailsSubtitle}</p>
+          </div>
+          <span className="pbd-status"><span /> {provider.isVerified ? 'Verified Merchant Account' : 'Profile in progress'}</span>
+        </header>
+
+        <section className="pbd-hero">
+          <div className="pbd-hero-icon"><Store size={22} /></div>
+          <div className="pbd-hero-copy">
             <h2>Your Business Profile</h2>
-            <p>This information is shown to students on your listings</p>
+            <p>{persona.businessProfileDescription}</p>
           </div>
-        </div>
-
-        {/* ── Form Fields ───────────────────────────────────────── */}
-        <div className="pbd-section">
-          <h3 className="pbd-section-title">Basic Information</h3>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-name" className="pbd-label">
-              Your Name
-            </label>
-            <input
-              id="pbd-name"
-              type="text"
-              className="pbd-input"
-              value={form.name}
-              onChange={e => handleChange('name', e.target.value)}
-              placeholder="e.g. Rajesh Kumar"
-              maxLength={200}
-            />
-          </div>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-businessName" className="pbd-label">
-              Business Name
-              <span className="pbd-label-hint">Optional</span>
-            </label>
-            <input
-              id="pbd-businessName"
-              type="text"
-              className="pbd-input"
-              value={form.businessName}
-              onChange={e => handleChange('businessName', e.target.value)}
-              placeholder="e.g. Rajesh PG & Accommodation"
-              maxLength={200}
-            />
-          </div>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-email" className="pbd-label">
-              Email Address
-              <span className="pbd-label-hint">Optional</span>
-            </label>
-            <input
-              id="pbd-email"
-              type="email"
-              className="pbd-input"
-              value={form.email}
-              onChange={e => handleChange('email', e.target.value)}
-              placeholder="e.g. rajesh@example.com"
-            />
-          </div>
-        </div>
-
-        <div className="pbd-section">
-          <h3 className="pbd-section-title">Location & Contact</h3>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-address" className="pbd-label">
-              <MapPin size={14} className="pbd-label-icon" />
-              Business Address
-            </label>
-            <textarea
-              id="pbd-address"
-              className="pbd-input pbd-textarea"
-              value={form.address}
-              onChange={e => handleChange('address', e.target.value)}
-              placeholder="e.g. 42, MG Road, Near Gate 3, North Campus"
-              rows={3}
-              maxLength={500}
-            />
-          </div>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-contact" className="pbd-label">
-              <Phone size={14} className="pbd-label-icon" />
-              Contact Number
-            </label>
-            <input
-              id="pbd-contact"
-              type="tel"
-              className="pbd-input"
-              value={form.contactNumber}
-              onChange={e => handleChange('contactNumber', e.target.value)}
-              placeholder="e.g. +91 98765 43210"
-              maxLength={20}
-            />
-          </div>
-        </div>
-
-        <div className="pbd-section">
-          <h3 className="pbd-section-title">About Your Business</h3>
-
-          <div className="pbd-field">
-            <label htmlFor="pbd-description" className="pbd-label">
-              <FileText size={14} className="pbd-label-icon" />
-              Description
-              <span className="pbd-label-hint">Optional</span>
-            </label>
-            <textarea
-              id="pbd-description"
-              className="pbd-input pbd-textarea pbd-textarea--lg"
-              value={form.description}
-              onChange={e => handleChange('description', e.target.value)}
-              placeholder="Tell students about your business, what makes you unique, your rules and offerings…"
-              rows={5}
-              maxLength={1000}
-            />
-            <span className="pbd-char-count">{form.description.length}/1000</span>
-          </div>
-        </div>
-
-        {/* ── Save Button ────────────────────────────────────────── */}
-        <div className="pbd-footer">
-          <button
-            className="pbd-save-btn"
-            onClick={handleSave}
-            disabled={saving || !dirty}
-          >
-            {saving ? (
-              <><Loader2 size={18} className="pbd-spinner" /> Saving…</>
-            ) : (
-              <><Save size={18} /> Save Changes</>
-            )}
-          </button>
-
-          {!dirty && !saving && (
-            <p className="pbd-no-changes">No unsaved changes</p>
+          {!editing && (
+            <button className="pbd-edit-button" type="button" onClick={() => setEditing(true)}>
+              <Pencil size={16} />
+              <span>Edit Details</span>
+            </button>
           )}
-        </div>
+        </section>
+
+        <form className="pbd-card" onSubmit={save}>
+          <header className="pbd-card-header">
+            <div className="pbd-card-title-icon"><PersonaIcon size={19} /></div>
+            <div>
+              <h2>Business Record &amp; Specifications</h2>
+              <p>{isTiffin ? 'Primary contact details & kitchen delivery settings' : 'Primary contact details & property occupancy settings'}</p>
+            </div>
+            <span className="pbd-mode">{editing ? 'Edit Mode' : 'View Mode'}</span>
+          </header>
+
+          <div className="pbd-card-body">
+            <section className="pbd-section">
+              <SectionHeading icon={PersonaIcon} title="Basic Information" note="Fields marked required" />
+              <div className="pbd-grid pbd-grid--two">
+                <DetailField label="Your Name" value={form.name} editing={editing} required id="pbd-name" onChange={(value) => updateField('name', value)} />
+                <DetailField label={persona.businessNameLabel} value={form.businessName} editing={editing} required id="pbd-business-name" placeholder={persona.businessNamePlaceholder} onChange={(value) => updateField('businessName', value)} />
+                <DetailField label="Email Address" value={form.email} editing={editing} id="pbd-email" type="email" verified={Boolean(form.email)} onChange={(value) => updateField('email', value)} />
+              </div>
+            </section>
+
+            <section className="pbd-section">
+              <SectionHeading icon={MapPin} title="Location & Contact" note={persona.locationNote} />
+              <div className="pbd-grid pbd-grid--two">
+                <DetailField className="is-wide" label={persona.businessAddressLabel} value={form.address} editing={editing} id="pbd-address" multiline onChange={(value) => updateField('address', value)} />
+                <DetailField label="Contact Number" value={form.contactNumber} editing={editing} id="pbd-contact" type="tel" icon={Phone} onChange={(value) => updateField('contactNumber', value)} />
+                {isTiffin ? (
+                  <>
+                    <DetailField label="Delivery Radius" value={supportingData.deliveryRadiusKm ? `${supportingData.deliveryRadiusKm} km coverage` : 'Not provided'} icon={MapPin} />
+                    <DetailField label="Kitchen Status" value={supportingData.kitchenStatus || 'Not provided'} icon={Utensils} />
+                  </>
+                ) : (
+                  <>
+                    <DetailField label="Warden / Contact" value={form.contactNumber || 'Primary contact on file'} icon={Phone} />
+                    <DetailField label="Room layout" value={supportingData.listingSummary.roomTypes.length ? [...new Set(supportingData.listingSummary.roomTypes)].join(' / ') : 'Add room listings'} icon={BedDouble} />
+                  </>
+                )}
+              </div>
+            </section>
+
+            <section className="pbd-section">
+              <SectionHeading icon={FileText} title="About Your Business" note="Appears in customer search results" />
+              <DetailField label={persona.descriptionLabel} value={form.description} editing={editing} id="pbd-description" multiline rows={4} placeholder={persona.descriptionPlaceholder} onChange={(value) => updateField('description', value)} />
+            </section>
+
+            <section className="pbd-section pbd-section--specific">
+              <SectionHeading icon={SectionIcon} title={persona.specificSectionTitle} note={persona.specificSectionNote} />
+              {isTiffin ? (
+                <div className="pbd-summary-grid">
+                  <SummaryField label="Kitchen status" value={supportingData.kitchenStatus || 'Not provided'} />
+                  <SummaryField label="Verification" value={verificationLabel} />
+                  <SummaryField label="Delivery coverage" value={supportingData.deliveryRadiusKm ? `${supportingData.deliveryRadiusKm} km` : 'Not provided'} />
+                </div>
+              ) : (
+                <div className="pbd-summary-grid">
+                  <SummaryField label="Listed rooms" value={supportingData.listingSummary.rooms || 'No listings'} icon={BedDouble} />
+                  <SummaryField label="Total beds" value={supportingData.listingSummary.beds || 'No inventory'} />
+                  <SummaryField label="Available beds" value={supportingData.listingSummary.available || 'None available'} />
+                  <SummaryField label="Property verification" value={provider.isVerified ? 'Verified' : 'In progress'} />
+                </div>
+              )}
+            </section>
+          </div>
+
+          {editing && (
+            <footer className="pbd-footer">
+              <button className="pbd-cancel-button" type="button" onClick={cancelEdit} disabled={saving}><X size={16} /> Cancel</button>
+              <button className="pbd-save-button" type="submit" disabled={saving || !dirty}>
+                {saving ? <Loader2 size={16} className="pbd-spinner" /> : <Save size={16} />}
+                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+              </button>
+            </footer>
+          )}
+        </form>
       </div>
+    </main>
+  );
+}
+
+function SectionHeading({ icon: Icon, title, note }) {
+  return (
+    <header className="pbd-section-heading">
+      <div className="pbd-section-heading-title"><Icon size={17} /><h3>{title}</h3></div>
+      <span>{note}</span>
+    </header>
+  );
+}
+
+function DetailField({ className = '', label, value, editing = false, required = false, id, type = 'text', multiline = false, rows = 3, placeholder, icon: Icon, verified = false, onChange }) {
+  return (
+    <div className={`pbd-field${className ? ` ${className}` : ''}`}>
+      <label htmlFor={id}>{label}{required && <b>*</b>}</label>
+      {editing ? (
+        multiline ? (
+          <textarea id={id} rows={rows} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+        ) : (
+          <input id={id} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+        )
+      ) : (
+        <div className="pbd-value">
+          <span>{value || 'Not provided'}</span>
+          {Icon && <Icon size={16} />}
+          {verified && <small>Verified</small>}
+        </div>
+      )}
     </div>
   );
+}
+
+function SummaryField({ label, value, icon: Icon }) {
+  return <div className="pbd-summary-field"><span>{label}</span><strong>{Icon && <Icon size={15} />}{value}</strong></div>;
+}
+
+function PageState({ label, error }) {
+  return <div className={`pbd-page-state${error ? ' is-error' : ''}`}><Loader2 size={22} className={error ? '' : 'pbd-spinner'} /><p>{error || label}</p></div>;
 }

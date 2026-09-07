@@ -16,12 +16,14 @@ export default function SupportLayout({ role = 'student' }) {
 
   return (
     <div className="support-page" id={`${role}-help-support`}>
-      <div className="page-header">
-        <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back">
-          <ArrowLeft size={20} />
-        </button>
-        <h1>Help & Support</h1>
-      </div>
+      {role !== 'provider' && (
+        <div className="page-header">
+          <button className="back-btn" onClick={() => navigate(-1)} aria-label="Go back">
+            <ArrowLeft size={20} />
+          </button>
+          <h1>Help & Support</h1>
+        </div>
+      )}
 
       <div className="support-content">
         <section className="support-founder-card">
@@ -97,8 +99,8 @@ export default function SupportLayout({ role = 'student' }) {
         <section className="support-section support-about">
           <h3 className="support-section-title">App Information</h3>
           <p>
-            StayVeo is a student housing ecosystem for rooms, roommates, tiffin, laundry,
-            and cleaning services around college life.
+            StayVeo is a student housing ecosystem for rooms, roommates, and tiffin
+            services around college life.
           </p>
           <div className="support-stats-row">
             <div><strong>DU-first</strong><span>Campus focused</span></div>

@@ -17,16 +17,10 @@ CREATE TYPE "study_habit" AS ENUM ('quiet', 'flexible', 'normal');
 CREATE TYPE "social_level" AS ENUM ('introvert', 'extrovert', 'ambivert');
 
 -- CreateEnum
-CREATE TYPE "service_category" AS ENUM ('pg', 'tiffin', 'laundry', 'cleaning');
+CREATE TYPE "service_category" AS ENUM ('pg', 'tiffin');
 
 -- CreateEnum
 CREATE TYPE "food_type" AS ENUM ('veg', 'nonveg', 'jain', 'vegan');
-
--- CreateEnum
-CREATE TYPE "pricing_model" AS ENUM ('per_kg', 'per_item');
-
--- CreateEnum
-CREATE TYPE "clean_type" AS ENUM ('basic', 'deep_clean');
 
 -- CreateEnum
 CREATE TYPE "doc_type" AS ENUM ('id_proof', 'business_proof');
@@ -115,35 +109,6 @@ CREATE TABLE "tiffin_services" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "tiffin_services_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "laundry_services" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "provider_id" UUID NOT NULL,
-    "pricing_model" "pricing_model",
-    "price" DECIMAL(10,2),
-    "pickup_frequency" TEXT,
-    "delivery_time" TEXT,
-    "service_radius_km" DECIMAL(5,2),
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "laundry_services_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "cleaning_services" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "provider_id" UUID NOT NULL,
-    "service_type" "clean_type",
-    "basic_price" DECIMAL(10,2),
-    "deep_clean_price" DECIMAL(10,2),
-    "staff_available" INTEGER,
-    "available_slots" JSONB,
-    "service_radius_km" DECIMAL(5,2),
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "cleaning_services_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
