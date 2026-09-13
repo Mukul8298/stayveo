@@ -64,6 +64,11 @@
 .po-field label .po-optional {
   font-weight: 400; color: var(--neutral-400); font-size: var(--text-xs);
 }
+.po-verified-tag {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: var(--space-2);
+  padding: 2px 8px; border-radius: var(--radius-full); background: var(--accent-50);
+  color: var(--accent-600); font-size: 11px; font-weight: 600; border: 1px solid var(--accent-100);
+}
 
 .po-phone-row {
   display: flex; align-items: center; border: 1.5px solid var(--neutral-200);

@@ -5,6 +5,15 @@
 
 import { PROVIDER_API_BASES } from '../config/api.js';
 
+class ProviderApiError extends Error {
+  constructor(message, status, details = {}) {
+    super(message);
+    this.name = 'ProviderApiError';
+    this.status = status;
+    this.details = details;
+  }
+}
+
 async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (phone) headers['x-provider-phone'] = phone;
@@ -19,12 +28,17 @@ async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) 
         body: body ? JSON.stringify(body) : undefined,
       });
 
-      const json = await res.json();
+      const json = await res.json().catch(() => null);
+
       if (!res.ok || !json?.success) {
-        throw new Error(json?.message || `Request failed with status ${res.status}`);
+        const message = json?.message || `Request failed with status ${res.status}`;
+        throw new ProviderApiError(message, res.status, json);
       }
       return json;
     } catch (error) {
+      if (error instanceof ProviderApiError) {
+        throw error; // Server responded with error status — throw immediately
+      }
       lastError = error;
     }
   }
@@ -34,12 +48,16 @@ async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) 
 
 // ── OTP ─────────────────────────────────────────────────────────────────
 
-export function providerSendOtp(phone) {
-  return providerRequest('/send-otp', { body: { phone } });
+export function providerSendOtp(email, password) {
+  return providerRequest('/send-otp', { body: { email, password } });
 }
 
-export function providerVerifyOtp(phone, otp) {
-  return providerRequest('/verify-otp', { body: { phone, otp } });
+export function providerVerifyOtp(email, otp) {
+  return providerRequest('/verify-otp', { body: { email, otp } });
+}
+
+export function providerResendOtp(email) {
+  return providerRequest('/resend-otp', { body: { email } });
 }
 
 // ── Onboarding Steps ────────────────────────────────────────────────────

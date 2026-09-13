@@ -267,14 +267,26 @@ function serializeKitchen(kitchen: AnyRecord | null, verifications: AnyRecord[] 
 
 async function resolveOwner(phone: unknown, userId?: unknown) {
   const providerPhone = text(phone);
-  if (!providerPhone) throw { statusCode: 400, message: 'x-provider-phone header is required' };
+  const uid = text(userId);
 
-  const profile = await prisma.providerProfile.findUnique({ where: { phone: providerPhone } });
+  let profile = null;
+  if (uid) {
+    profile = await prisma.providerProfile.findUnique({ where: { userId: uid } });
+  }
+  if (!profile && providerPhone) {
+    profile = await prisma.providerProfile.findFirst({
+      where: {
+        OR: [
+          { phone: providerPhone },
+          { email: providerPhone },
+          { user: { email: providerPhone } },
+        ],
+      },
+    });
+  }
+
   if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
   if (!profile.otpVerified) throw { statusCode: 403, message: 'OTP verification required' };
-  if (userId && text(userId) !== profile.userId) {
-    throw { statusCode: 403, message: 'Provider identity does not match this session' };
-  }
 
   const kitchen = await prisma.tiffinKitchen.findUnique({
     where: { ownerId: profile.id },

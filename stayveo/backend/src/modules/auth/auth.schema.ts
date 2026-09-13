@@ -1,23 +1,41 @@
 // ─── Auth Zod Schemas ───────────────────────────────────────────────────
+// Validates email + password + role authentication requests.
+// ────────────────────────────────────────────────────────────────────────
 
 import { z } from 'zod';
 
-/** POST /auth/send-otp */
-export const sendOtpSchema = z.object({
-  phone_number: z.string()
-    .min(10, 'Phone number must be at least 10 digits')
-    .max(15, 'Phone number must not exceed 15 digits'),
+const emailField = z
+  .string()
+  .email('Please enter a valid email address')
+  .transform((v) => v.trim().toLowerCase());
+
+const roleField = z.enum(['STUDENT', 'PROVIDER']);
+
+/** POST /auth/start-auth — begin login or signup */
+export const startAuthSchema = z.object({
+  email: emailField,
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  role: roleField,
 });
 
-/** POST /auth/verify-otp */
+const otpField = z.union([
+  z.string().length(4, 'OTP must be 4 digits'),
+  z.number().int().min(1000).max(9999).transform((v) => String(v)),
+]);
+
+/** POST /auth/verify-otp — verify the 4-digit email OTP */
 export const verifyOtpSchema = z.object({
-  phone_number: z.string()
-    .min(10, 'Phone number must be at least 10 digits')
-    .max(15, 'Phone number must not exceed 15 digits'),
-  otp: z.string()
-    .min(4, 'OTP must be at least 4 digits')
-    .max(6, 'OTP must not exceed 6 digits'),
+  email: emailField,
+  otp: otpField,
+  role: roleField,
 });
 
-export type SendOtpInput = z.infer<typeof sendOtpSchema>;
+/** POST /auth/resend-otp — request a new OTP */
+export const resendOtpSchema = z.object({
+  email: emailField,
+  role: roleField,
+});
+
+export type StartAuthInput = z.infer<typeof startAuthSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type ResendOtpInput = z.infer<typeof resendOtpSchema>;

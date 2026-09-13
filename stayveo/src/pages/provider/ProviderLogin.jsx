@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Loader2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Building2, Loader2, CheckCircle2, Mail, Lock, KeyRound } from 'lucide-react';
 import Button from '../../components/Button';
-import { providerSendOtp, providerVerifyOtp } from '../../api/provider';
+import { providerSendOtp, providerVerifyOtp, providerResendOtp } from '../../api/provider';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
 import './ProviderLogin.css';
@@ -11,40 +11,46 @@ export default function ProviderLogin() {
   const navigate = useNavigate();
   const toast = useToast();
   const { updateProvider } = useProvider();
-  const [phone, setPhone] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
 
-  // ── STEP 1: Send OTP ──────────────────────────────────────────────────
-  const handleSendOtp = async () => {
-    if (phone.length < 10) return;
+  // ── STEP 1: Send OTP via Email + Password ────────────────────────────
+  const handleSendOtp = async (e) => {
+    e?.preventDefault();
+    if (!email || !password) return;
     setError('');
     setLoading(true);
     try {
-      await providerSendOtp(phone);
+      await providerSendOtp(email.trim(), password);
       setStep('otp');
-      toast.success('OTP sent to +91 ' + phone);
+      toast.success(`Verification code sent to ${email.trim()}`);
     } catch (err) {
-      setError(err.message);
-      toast.error(err.message);
+      setError(err.message || 'Login failed');
+      toast.error(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
   };
 
   // ── STEP 2: Verify OTP ────────────────────────────────────────────────
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (e) => {
+    e?.preventDefault();
     setError('');
     setLoading(true);
     try {
       const otpString = otp.join('');
-      const res = await providerVerifyOtp(phone, otpString);
+      const res = await providerVerifyOtp(email.trim(), otpString);
       const d = res.data;
 
       updateProvider({
-        phone,
+        email: email.trim(),
+        phone: d.phone || '',
         providerId: d.providerId,
         userId: d.userId,
         name: d.name || '',
@@ -56,23 +62,38 @@ export default function ProviderLogin() {
       });
 
       if (d.nextStep === 'dashboard') {
-        toast.success(`Welcome back, ${d.name}!`);
+        toast.success(`Welcome back, ${d.name || 'Provider'}!`);
         navigate('/provider/dashboard');
       } else if (d.nextStep === 'tiffin_dashboard') {
-        toast.success(`Welcome back, ${d.name}!`);
+        toast.success(`Welcome back, ${d.name || 'Provider'}!`);
         navigate('/provider/tiffin/dashboard');
       } else if (d.nextStep === 'tiffin_onboarding') {
         toast.info('Continue your Tiffin service setup');
         navigate('/provider/tiffin/onboarding');
       } else {
-        toast.info('Let\'s set up your provider profile');
+        toast.info("Let's set up your provider profile");
         navigate('/provider/select');
       }
     } catch (err) {
-      setError(err.message);
-      toast.error(err.message);
+      setError(err.message || 'Verification failed');
+      toast.error(err.message || 'Verification failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError('');
+    setResending(true);
+    try {
+      await providerResendOtp(email.trim());
+      setOtp(['', '', '', '']);
+      toast.success('New verification code sent!');
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
+      toast.error(err.message || 'Failed to resend code');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -92,59 +113,83 @@ export default function ProviderLogin() {
 
   return (
     <div className="pl-page" id="provider-login">
-      <button className="pl-back" onClick={() => navigate(-1)}>
+      <button
+        className="pl-back"
+        onClick={() => (step === 'otp' ? setStep('credentials') : navigate(-1))}
+      >
         <ArrowLeft size={20} />
       </button>
 
       <div className="pl-content">
         <div className="pl-header">
           <div className="pl-icon-wrap">
-            <Building2 size={32} />
+            {step === 'credentials' ? <Building2 size={32} /> : <KeyRound size={32} />}
           </div>
-          <h1>{step === 'phone' ? 'Provider Login' : 'Verify OTP'}</h1>
+          <h1>{step === 'credentials' ? 'Provider Portal' : 'Verify Email OTP'}</h1>
           <p>
-            {step === 'phone'
-              ? 'Enter your phone number to get started as a provider'
-              : `Enter the code sent to +91 ${phone}`}
+            {step === 'credentials'
+              ? 'Enter your email and password to access your StayVeo provider portal'
+              : `Enter the code sent to ${email}`}
           </p>
         </div>
 
         {error && <div className="pl-error">{error}</div>}
 
-        {step === 'phone' ? (
-          <div className="pl-form">
-            <div className="pl-phone-input">
-              <span className="pl-prefix">+91</span>
-              <input
-                type="tel"
-                className="pl-phone-field"
-                placeholder="98765 43210"
-                maxLength={10}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                id="provider-phone-input"
-                autoFocus
-              />
+        {step === 'credentials' ? (
+          <form className="pl-form" onSubmit={handleSendOtp}>
+            <div className="pl-input-group">
+              <label htmlFor="provider-email-input">Email Address</label>
+              <div className="pl-field-wrap">
+                <Mail size={18} className="pl-icon" />
+                <input
+                  type="email"
+                  className="pl-input-field"
+                  placeholder="provider@stayveo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  id="provider-email-input"
+                  required
+                  autoFocus
+                />
+              </div>
             </div>
+
+            <div className="pl-input-group">
+              <label htmlFor="provider-password-input">Password</label>
+              <div className="pl-field-wrap">
+                <Lock size={18} className="pl-icon" />
+                <input
+                  type="password"
+                  className="pl-input-field"
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  id="provider-password-input"
+                  minLength={6}
+                  required
+                />
+              </div>
+            </div>
+
             <Button
               variant="accent"
               fullWidth
               size="lg"
-              onClick={handleSendOtp}
-              disabled={phone.length < 10 || loading}
+              type="submit"
+              disabled={!email || password.length < 6 || loading}
             >
               {loading ? (
-                <><Loader2 size={18} className="spin" /> Sending...</>
+                <><Loader2 size={18} className="spin" /> Processing...</>
               ) : (
-                'Send OTP'
+                'Continue'
               )}
             </Button>
-          </div>
+          </form>
         ) : (
-          <div className="pl-form pl-otp-section">
+          <form className="pl-form pl-otp-section" onSubmit={handleVerifyOtp}>
             <div className="pl-otp-sent">
               <CheckCircle2 size={14} />
-              <span>OTP sent successfully</span>
+              <span>Verification code sent to your email</span>
             </div>
             <div className="pl-otp-inputs">
               {otp.map((d, i) => (
@@ -165,7 +210,7 @@ export default function ProviderLogin() {
               variant="accent"
               fullWidth
               size="lg"
-              onClick={handleVerifyOtp}
+              type="submit"
               disabled={otp.some((d) => !d) || loading}
             >
               {loading ? (
@@ -175,15 +220,14 @@ export default function ProviderLogin() {
               )}
             </Button>
             <button
+              type="button"
               className="pl-resend"
-              onClick={() => {
-                setOtp(['', '', '', '']);
-                handleSendOtp();
-              }}
+              onClick={handleResendOtp}
+              disabled={resending}
             >
-              Resend code
+              {resending ? 'Sending code...' : 'Resend code'}
             </button>
-          </div>
+          </form>
         )}
 
         <div className="pl-features">

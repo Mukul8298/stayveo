@@ -88,7 +88,8 @@ export default function ProviderOnboarding() {
 
   // Basic info form
   const [name, setName] = useState(provider.name || '');
-  const [email, setEmail] = useState(provider.email || '');
+  const [email] = useState(provider.email || '');
+  const [phone, setPhone] = useState(provider.phone || '');
 
   // Service selection
   // ProviderTypeSelect sends lowercase keys (pg/tiffin/...), while the
@@ -448,8 +449,13 @@ export default function ProviderOnboarding() {
       switch (currentStep.key) {
         case 'basic-info': {
           if (!name.trim()) throw new Error('Name is required');
-          await saveBasicInfo({ name: name.trim(), phone: provider.phone, email: email.trim() || undefined });
-          updateProvider({ name: name.trim(), email: email.trim() });
+          const cleanPhone = phone.trim();
+          if (!cleanPhone || cleanPhone.length < 10) throw new Error('Valid 10-digit phone number is required');
+          const verifiedEmail = provider.email || email.trim();
+          if (!verifiedEmail) throw new Error('Verified email address is missing');
+
+          await saveBasicInfo({ name: name.trim(), phone: cleanPhone, email: verifiedEmail });
+          updateProvider({ name: name.trim(), phone: cleanPhone, email: verifiedEmail });
           toast.success('Basic info saved ✓');
           break;
         }
@@ -751,13 +757,14 @@ export default function ProviderOnboarding() {
               <label>Phone Number</label>
               <div className="po-phone-row">
                 <span className="po-phone-prefix">+91</span>
-                <input className="input-field po-input-readonly" value={provider.phone} readOnly />
+                <input className="input-field" type="tel" maxLength={10} placeholder="10-digit phone number"
+                  value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} required />
               </div>
             </div>
             <div className="po-field">
-              <label>Email <span className="po-optional">(optional)</span></label>
-              <input className="input-field" type="email" placeholder="email@example.com"
-                value={email} onChange={(e) => setEmail(e.target.value)} />
+              <label>Email Address <span className="po-verified-tag">🔒 Verified Email</span></label>
+              <input className="input-field po-input-readonly" type="email"
+                value={provider.email || email} readOnly disabled />
             </div>
           </div>
         )}

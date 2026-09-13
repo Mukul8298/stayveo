@@ -85,12 +85,21 @@ export async function request(endpoint, options = {}) {
 
 // ── Auth ────────────────────────────────────────────────────────────────
 
-export function sendOtp(phone_number) {
-  return request('/auth/send-otp', { method: 'POST', body: { phone_number } });
+export function startAuth(email, password, role = 'STUDENT') {
+  return request('/auth/start', { method: 'POST', body: { email, password, role } });
 }
 
-export function verifyOtp(phone_number, otp) {
-  return request('/auth/verify-otp', { method: 'POST', body: { phone_number, otp } });
+export function verifyOtp(email, otp, role = 'STUDENT') {
+  return request('/auth/verify-otp', { method: 'POST', body: { email, otp, role } });
+}
+
+export function resendOtp(email, role = 'STUDENT') {
+  return request('/auth/resend-otp', { method: 'POST', body: { email, role } });
+}
+
+// Retained for backward compatibility if any legacy code calls sendOtp
+export function sendOtp(email, password, role = 'STUDENT') {
+  return startAuth(email, password, role);
 }
 
 export function createStudentProfile(userId, profileData) {

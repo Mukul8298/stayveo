@@ -26,13 +26,13 @@ const sameOrigin = typeof window !== 'undefined' ? window.location.origin : null
 // same-origin requests working during forwarded-port development.
 export const API_BASES = uniqueUrls(
   isLocalFrontend
-    ? [`${LOCAL_API_ORIGIN}/api/v1`, configuredApiBase]
+    ? ['/api/v1', `${LOCAL_API_ORIGIN}/api/v1`, configuredApiBase]
     : [configuredApiBase, sameOrigin ? `${sameOrigin}/api/v1` : null]
 );
 
 export const PROVIDER_API_BASES = uniqueUrls(
   isLocalFrontend
-    ? [`${LOCAL_API_ORIGIN}/api/provider`, configuredProviderBase]
+    ? ['/api/provider', `${LOCAL_API_ORIGIN}/api/provider`, configuredProviderBase]
     : [configuredProviderBase, sameOrigin ? `${sameOrigin}/api/provider` : null]
 );
 

@@ -8,6 +8,7 @@ import type {
   BasicInfoInput,
   CreateProviderInput,
   PhotoUploadInput,
+  ResendOtpInput,
   SendOtpInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
@@ -54,6 +55,12 @@ export const providerController = {
   /** POST /provider/verify-otp */
   async verifyOtp(request: FastifyRequest<{ Body: VerifyOtpInput }>, reply: FastifyReply) {
     const result = await providerService.verifyOtp(request.body);
+    return sendSuccess(reply, result, result.message);
+  },
+
+  /** POST /provider/resend-otp */
+  async resendOtp(request: FastifyRequest<{ Body: ResendOtpInput }>, reply: FastifyReply) {
+    const result = await providerService.resendOtp(request.body);
     return sendSuccess(reply, result, result.message);
   },
 

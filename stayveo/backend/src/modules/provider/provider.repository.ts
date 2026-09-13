@@ -64,10 +64,17 @@ export const providerRepository = {
     });
   },
 
-  /** Find onboarding provider profile by phone */
+  /** Find onboarding provider profile by phone or email */
   async findOnboardingByPhone(phone: string) {
-    return prisma.providerProfile.findUnique({
-      where: { phone },
+    if (!phone) return null;
+    return prisma.providerProfile.findFirst({
+      where: {
+        OR: [
+          { phone },
+          { email: phone },
+          { user: { email: phone } },
+        ],
+      },
       include: onboardingInclude,
     });
   },
@@ -114,36 +121,69 @@ export const providerRepository = {
   /** Save common onboarding info */
   async saveBasicInfo(data: BasicInfoInput) {
     return prisma.$transaction(async (tx) => {
-      const existingUser = await tx.user.findUnique({ where: { phone_number: data.phone } });
+      // 1. Check if phone number is already registered by a STUDENT user
+      const existingPhoneUser = await tx.user.findFirst({
+        where: { phone_number: data.phone },
+      });
 
-      if (existingUser && existingUser.role !== UserRole.PROVIDER) {
+      if (existingPhoneUser && existingPhoneUser.email !== data.email && existingPhoneUser.role !== UserRole.PROVIDER) {
         throw { statusCode: 409, message: 'Phone number is already registered as a student' };
       }
 
-      const user =
-        existingUser ??
-        (await tx.user.create({
+      // 2. Find authenticated user by email or phone_number
+      let user = data.email
+        ? await tx.user.findUnique({ where: { email: data.email } })
+        : null;
+
+      if (!user && existingPhoneUser) {
+        user = existingPhoneUser;
+      }
+
+      if (!user) {
+        user = await tx.user.create({
           data: {
+            email: data.email || null,
             phone_number: data.phone,
             role: UserRole.PROVIDER,
           },
-        }));
+        });
+      } else {
+        // Save phone_number to existing users table
+        await tx.user.update({
+          where: { id: user.id },
+          data: { phone_number: data.phone },
+        });
+      }
 
-      return tx.providerProfile.upsert({
-        where: { phone: data.phone },
-        create: {
-          userId: user.id,
-          phone: data.phone,
-          name: data.name.trim(),
-          email: data.email?.trim() || null,
-          otpVerified: true,
-        },
-        update: {
-          name: data.name.trim(),
-          email: data.email?.trim() || null,
-        },
-        include: onboardingInclude,
+      // 3. Upsert provider profile linked to user.id
+      const existingProfile = await tx.providerProfile.findFirst({
+        where: { OR: [{ userId: user.id }, { phone: data.phone }] },
       });
+
+      if (existingProfile) {
+        return tx.providerProfile.update({
+          where: { id: existingProfile.id },
+          data: {
+            userId: user.id,
+            phone: data.phone,
+            name: data.name.trim(),
+            email: user.email || data.email?.trim() || null,
+            otpVerified: true,
+          },
+          include: onboardingInclude,
+        });
+      } else {
+        return tx.providerProfile.create({
+          data: {
+            userId: user.id,
+            phone: data.phone,
+            name: data.name.trim(),
+            email: user.email || data.email?.trim() || null,
+            otpVerified: true,
+          },
+          include: onboardingInclude,
+        });
+      }
     });
   },
 

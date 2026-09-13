@@ -1,31 +1,24 @@
 // ─── Auth Repository ────────────────────────────────────────────────────
-// All DB queries needed for the auth/onboarding flow
+// All DB queries for email-based authentication and OTP challenges.
+// ────────────────────────────────────────────────────────────────────────
 
 import prisma from '../../common/db/prisma.js';
-import { UserRole } from '../../common/enums.js';
+import type { UserRole } from '@prisma/client';
+
+// ── User Queries ────────────────────────────────────────────────────────
 
 export const authRepository = {
-  /** Find user by phone number */
-  async findByPhone(phone_number: string) {
+  /** Find user by normalized email */
+  async findByEmail(email: string) {
     return prisma.user.findUnique({
-      where: { phone_number },
+      where: { email },
     });
   },
 
-  /** Create a new user with STUDENT role */
-  async createUser(phone_number: string) {
-    return prisma.user.create({
-      data: {
-        phone_number,
-        role: UserRole.STUDENT,
-      },
-    });
-  },
-
-  /** Find user by phone number WITH student profile included */
-  async findByPhoneWithProfile(phone_number: string) {
+  /** Find user by email WITH student profile included */
+  async findByEmailWithProfile(email: string) {
     return prisma.user.findUnique({
-      where: { phone_number },
+      where: { email },
       include: {
         studentProfile: {
           select: {
@@ -45,6 +38,71 @@ export const authRepository = {
           },
         },
       },
+    });
+  },
+
+  /** Create a new user with email, hashed password, and role */
+  async createUser(email: string, passwordHash: string, role: UserRole) {
+    return prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role,
+      },
+    });
+  },
+
+  // ── Challenge Queries ───────────────────────────────────────────────────
+
+  /** Create a pending OTP challenge */
+  async createChallenge(data: {
+    email: string;
+    role: UserRole;
+    purpose: string;
+    otpHash: string;
+    passwordHash?: string;
+    userId?: string;
+    expiresAt: Date;
+  }) {
+    return prisma.emailAuthChallenge.create({
+      data: {
+        email: data.email,
+        role: data.role,
+        purpose: data.purpose,
+        otpHash: data.otpHash,
+        passwordHash: data.passwordHash,
+        userId: data.userId,
+        expiresAt: data.expiresAt,
+      },
+    });
+  },
+
+  /** Find the most recent non-expired challenge for email + role + purpose */
+  async findActiveChallenge(email: string, role: UserRole, purpose?: string) {
+    const where: Record<string, unknown> = {
+      email,
+      role,
+      expiresAt: { gt: new Date() },
+    };
+    if (purpose) {
+      where.purpose = purpose;
+    }
+
+    return prisma.emailAuthChallenge.findFirst({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /** Delete a single challenge by ID */
+  async deleteChallenge(id: string) {
+    return prisma.emailAuthChallenge.delete({ where: { id } });
+  },
+
+  /** Delete all challenges for a given email + role (cleanup before new OTP) */
+  async deleteChallengesByEmail(email: string, role: UserRole) {
+    return prisma.emailAuthChallenge.deleteMany({
+      where: { email, role },
     });
   },
 };

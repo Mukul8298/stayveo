@@ -101,7 +101,11 @@ enum DocType {
 
 model User {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  phone_number String   @unique @db.VarChar(15)
+  // Kept for existing phone-auth data and provider/business workflows. New
+  // email-auth accounts may not have a phone until provider onboarding.
+  phone_number String?  @unique @db.VarChar(15)
+  email        String?  @unique @db.VarChar(255)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
   role         UserRole
   collegeId    String?  @map("college_id") @db.Uuid
   collegeName  String?  @map("college_name")
@@ -116,8 +120,30 @@ model User {
   savedListings           SavedListing[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  emailAuthChallenges      EmailAuthChallenge[]
 
   @@map("users")
+}
+
+// Pending email login/signup verification. OTPs are stored as SHA-256 hashes
+// and removed after successful verification; this table is never returned to
+// the frontend.
+model EmailAuthChallenge {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String   @db.VarChar(255)
+  role         UserRole
+  purpose      String   @db.VarChar(32)
+  otpHash      String   @map("otp_hash") @db.VarChar(64)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  userId       String?  @map("user_id") @db.Uuid
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, role, purpose])
+  @@index([expiresAt])
+  @@map("email_auth_challenges")
 }
 
 // ─── STUDENT PROFILES ───────────────────────────────────────────────────

@@ -53,8 +53,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       // Allow requests with no origin (curl, mobile apps, server-to-server)
       if (!origin) return cb(null, true);
       if (configuredFrontendUrl && origin === configuredFrontendUrl) return cb(null, true);
-      // Always allow localhost
-      if (origin.includes('localhost')) return cb(null, true);
+      // Always allow localhost and 127.0.0.1
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
       // Allow all Cloudflare tunnel URLs
       if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
       // Allow VS Code / Microsoft Dev Tunnels used for forwarded ports

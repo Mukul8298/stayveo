@@ -12,6 +12,7 @@ export async function providerOnboardingRoutes(fastify: FastifyInstance) {
   // ── OTP auth ──────────────────────────────────────────────────────────
   fastify.post('/send-otp', providerController.sendOtp);
   fastify.post('/verify-otp', providerController.verifyOtp);
+  fastify.post('/resend-otp', providerController.resendOtp);
 
   // ── Onboarding flow ───────────────────────────────────────────────────
   fastify.post('/basic-info', providerController.saveBasicInfo);

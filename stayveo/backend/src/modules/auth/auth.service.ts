@@ -1,90 +1,257 @@
 // ─── Auth Service ───────────────────────────────────────────────────────
-// Business logic for phone login + student onboarding flow.
-// OTP is DUMMY — any value is accepted.
+// Business logic for email + password + 4-digit email OTP authentication.
+//
+// Flow:
+//   1. startAuth  → validate credentials, generate & send OTP
+//   2. verifyOtp  → verify OTP, create/authenticate user
+//   3. resendOtp  → invalidate old OTP, send new one
+//
+// Existing user detection and new user creation preserve the same UUID
+// and downstream data structures that the rest of the app expects.
 // ────────────────────────────────────────────────────────────────────────
 
+import bcrypt from 'bcryptjs';
 import { authRepository } from './auth.repository.js';
-import { sendOtpSchema, verifyOtpSchema } from './auth.schema.js';
-import type { SendOtpInput, VerifyOtpInput } from './auth.schema.js';
+import { startAuthSchema, verifyOtpSchema, resendOtpSchema } from './auth.schema.js';
+import type { StartAuthInput, VerifyOtpInput, ResendOtpInput } from './auth.schema.js';
+import { generateOtp, hashOtp, verifyOtp as verifyOtpHash } from '../../common/utils/otp.utils.js';
+import { sendOtpEmail } from '../../common/utils/email.service.js';
 import { yearToDisplay } from '../../common/utils/year.js';
+import { UserRole } from '@prisma/client';
+
+const BCRYPT_ROUNDS = 10;
+const OTP_EXPIRY_MINUTES = 5;
+
+function otpExpiry(): Date {
+  return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
 
 export const authService = {
   /**
-   * STEP 1: Send OTP (Dummy)
-   * - Validates phone number
-   * - Creates new user if not exists (role = STUDENT)
-   * - Returns isNewUser flag
+   * STEP 1: Start Authentication (replaces sendOtp)
+   *
+   * - Existing user with correct role → verify password → send OTP
+   * - Existing user with wrong role  → reject
+   * - New user                       → hash password → send OTP (pending signup)
    */
-  async sendOtp(input: SendOtpInput) {
-    const { phone_number } = sendOtpSchema.parse(input);
+  async startAuth(input: StartAuthInput) {
+    const { email, password, role } = startAuthSchema.parse(input);
+    const prismaRole = role === 'STUDENT' ? UserRole.STUDENT : UserRole.PROVIDER;
 
-    // Check if user already exists
-    const existingUser = await authRepository.findByPhone(phone_number);
+    const existingUser = await authRepository.findByEmail(email);
 
-    let isNewUser = false;
+    if (existingUser) {
+      // ── Role mismatch guard ────────────────────────────────────────
+      if (existingUser.role !== prismaRole) {
+        throw {
+          statusCode: 400,
+          message: 'An account with this email exists with a different role.',
+        };
+      }
 
-    if (!existingUser) {
-      // Create new user with default STUDENT role
-      await authRepository.createUser(phone_number);
-      isNewUser = true;
+      // ── Existing user: verify password ─────────────────────────────
+      if (!existingUser.passwordHash) {
+        // Legacy phone-auth user who never set a password.
+        // We cannot verify them yet — they need a migration path.
+        throw {
+          statusCode: 400,
+          message: 'This account was created with phone authentication. Please contact support to set up email login.',
+        };
+      }
+
+      const passwordValid = await bcrypt.compare(password, existingUser.passwordHash);
+      if (!passwordValid) {
+        throw { statusCode: 401, message: 'Invalid email or password.' };
+      }
+
+      // ── Generate & send OTP ────────────────────────────────────────
+      const otp = generateOtp();
+      const otpHash = hashOtp(otp);
+
+      // Clean up previous challenges for this email+role
+      await authRepository.deleteChallengesByEmail(email, prismaRole);
+
+      await authRepository.createChallenge({
+        email,
+        role: prismaRole,
+        purpose: 'login',
+        otpHash,
+        userId: existingUser.id,
+        expiresAt: otpExpiry(),
+      });
+
+      await sendOtpEmail(email, otp);
+
+      return {
+        requiresOtp: true,
+        email,
+        isNewUser: false,
+        message: 'Verification code sent to your email.',
+      };
     }
 
+    // ── New user: hash password, store pending signup ─────────────────
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+
+    // Clean up any stale challenges
+    await authRepository.deleteChallengesByEmail(email, prismaRole);
+
+    await authRepository.createChallenge({
+      email,
+      role: prismaRole,
+      purpose: 'signup',
+      otpHash,
+      passwordHash: hashedPassword,
+      expiresAt: otpExpiry(),
+    });
+
+    await sendOtpEmail(email, otp);
+
     return {
-      isNewUser,
-      message: 'OTP sent successfully (dummy mode)',
+      requiresOtp: true,
+      email,
+      isNewUser: true,
+      message: 'Verification code sent to your email.',
     };
   },
 
   /**
-   * STEP 2: Verify OTP (Dummy — accepts any OTP)
-   * - Fetches user by phone
-   * - Checks if student profile exists
-   * - Returns appropriate response for new vs returning user
+   * STEP 2: Verify OTP
+   *
+   * - Login challenge  → authenticate existing user
+   * - Signup challenge → create user, then authenticate
    */
   async verifyOtp(input: VerifyOtpInput) {
-    const { phone_number } = verifyOtpSchema.parse(input);
+    const { email, otp, role } = verifyOtpSchema.parse(input);
+    const prismaRole = role === 'STUDENT' ? UserRole.STUDENT : UserRole.PROVIDER;
 
-    // OTP is always accepted (dummy mode) — no validation on otp value
+    // Find the most recent active challenge
+    const challenge = await authRepository.findActiveChallenge(email, prismaRole);
 
-    // Fetch user with their student profile
-    const user = await authRepository.findByPhoneWithProfile(phone_number);
-
-    if (!user) {
-      throw { statusCode: 404, message: 'User not found. Please send OTP first.' };
+    if (!challenge) {
+      throw {
+        statusCode: 400,
+        message: 'No active verification found. Please request a new code.',
+      };
     }
 
-    const hasProfile = !!user.studentProfile;
+    // Check expiry
+    if (new Date() > challenge.expiresAt) {
+      await authRepository.deleteChallenge(challenge.id);
+      throw { statusCode: 400, message: 'Verification code has expired. Please request a new one.' };
+    }
 
-    if (hasProfile) {
-      // ── CASE B: Returning user with completed profile ──────────────
-      return {
-        isProfileComplete: true,
-        userId: user.id,
-        message: `Welcome back ${user.studentProfile!.fullName} 👋`,
-        data: {
-          id: user.studentProfile!.id,
-          fullName: user.studentProfile!.fullName,
-          college: user.studentProfile!.college,
-          year: yearToDisplay(user.studentProfile!.year),
-          gender: user.studentProfile!.gender,
-          foodPreference: user.studentProfile!.foodPreference,
-          sleepSchedule: user.studentProfile!.sleepSchedule,
-          cleanlinessLevel: user.studentProfile!.cleanlinessLevel,
-          studyHabits: user.studentProfile!.studyHabits,
-          personalityType: user.studentProfile!.personalityType,
-          locationPreference: user.studentProfile!.locationPreference,
-          budget: user.studentProfile!.budget,
-          profileImageUrl: user.studentProfile!.profileImageUrl,
-        },
-      };
-    } else {
-      // ── CASE A: New user — needs to complete profile ───────────────
+    // Verify OTP hash
+    if (!verifyOtpHash(otp, challenge.otpHash)) {
+      throw { statusCode: 400, message: 'Invalid verification code.' };
+    }
+
+    // Invalidate the challenge immediately (cannot be reused)
+    await authRepository.deleteChallenge(challenge.id);
+
+    if (challenge.purpose === 'login') {
+      // ── Existing user login ────────────────────────────────────────
+      const user = await authRepository.findByEmailWithProfile(email);
+      if (!user) {
+        throw { statusCode: 404, message: 'User not found.' };
+      }
+
+      const hasProfile = !!user.studentProfile;
+
+      if (hasProfile) {
+        return {
+          isProfileComplete: true,
+          userId: user.id,
+          message: `Welcome back ${user.studentProfile!.fullName} 👋`,
+          data: {
+            id: user.studentProfile!.id,
+            fullName: user.studentProfile!.fullName,
+            college: user.studentProfile!.college,
+            year: yearToDisplay(user.studentProfile!.year),
+            gender: user.studentProfile!.gender,
+            foodPreference: user.studentProfile!.foodPreference,
+            sleepSchedule: user.studentProfile!.sleepSchedule,
+            cleanlinessLevel: user.studentProfile!.cleanlinessLevel,
+            studyHabits: user.studentProfile!.studyHabits,
+            personalityType: user.studentProfile!.personalityType,
+            locationPreference: user.studentProfile!.locationPreference,
+            budget: user.studentProfile!.budget,
+            profileImageUrl: user.studentProfile!.profileImageUrl,
+          },
+        };
+      }
+
       return {
         isProfileComplete: false,
         userId: user.id,
         nextStep: 'complete_profile',
-        message: 'OTP verified. Please complete your profile.',
+        message: 'Verified. Please complete your profile.',
       };
     }
+
+    // ── Signup: create new user ──────────────────────────────────────
+    if (!challenge.passwordHash) {
+      throw { statusCode: 500, message: 'Missing signup data. Please restart registration.' };
+    }
+
+    const newUser = await authRepository.createUser(email, challenge.passwordHash, prismaRole);
+
+    return {
+      isProfileComplete: false,
+      userId: newUser.id,
+      nextStep: 'complete_profile',
+      message: 'Account created. Please complete your profile.',
+    };
+  },
+
+  /**
+   * STEP 3: Resend OTP
+   *
+   * Invalidates existing challenges and sends a fresh OTP.
+   * Requires an active pending auth flow (either login or signup).
+   */
+  async resendOtp(input: ResendOtpInput) {
+    const { email, role } = resendOtpSchema.parse(input);
+    const prismaRole = role === 'STUDENT' ? UserRole.STUDENT : UserRole.PROVIDER;
+
+    // Find existing challenge to preserve its purpose + data
+    const existing = await authRepository.findActiveChallenge(email, prismaRole);
+
+    if (!existing) {
+      throw {
+        statusCode: 400,
+        message: 'No pending verification found. Please start the login process again.',
+      };
+    }
+
+    const purpose = existing.purpose;
+    const passwordHash = existing.passwordHash;
+    const userId = existing.userId;
+
+    // Delete all old challenges
+    await authRepository.deleteChallengesByEmail(email, prismaRole);
+
+    // Generate new OTP
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+
+    await authRepository.createChallenge({
+      email,
+      role: prismaRole,
+      purpose,
+      otpHash,
+      passwordHash: passwordHash ?? undefined,
+      userId: userId ?? undefined,
+      expiresAt: otpExpiry(),
+    });
+
+    await sendOtpEmail(email, otp);
+
+    return {
+      message: 'New verification code sent to your email.',
+      email,
+    };
   },
 };

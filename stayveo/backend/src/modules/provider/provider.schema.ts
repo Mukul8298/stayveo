@@ -18,13 +18,28 @@ export const updateProviderSchema = createProviderSchema.partial();
 export const phoneSchema = z.string().min(10).max(15);
 export const serviceTypeSchema = z.enum(['PG', 'TIFFIN']);
 
+const emailField = z
+  .string()
+  .email('Please enter a valid email address')
+  .transform((v) => v.trim().toLowerCase());
+
 export const sendOtpSchema = z.object({
-  phone: phoneSchema,
+  email: emailField,
+  password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
+const otpField = z.union([
+  z.string().length(4, 'OTP must be 4 digits'),
+  z.number().int().min(1000).max(9999).transform((v) => String(v)),
+]);
+
 export const verifyOtpSchema = z.object({
-  phone: phoneSchema,
-  otp: z.string().length(4),
+  email: emailField,
+  otp: otpField,
+});
+
+export const resendOtpSchema = z.object({
+  email: emailField,
 });
 
 export const basicInfoSchema = z.object({
@@ -91,6 +106,7 @@ export type CreateProviderInput = z.infer<typeof createProviderSchema>;
 export type UpdateProviderInput = z.infer<typeof updateProviderSchema>;
 export type SendOtpInput = z.infer<typeof sendOtpSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type ResendOtpInput = z.infer<typeof resendOtpSchema>;
 export type BasicInfoInput = z.infer<typeof basicInfoSchema>;
 export type ServiceSelectionInput = z.infer<typeof serviceSelectionSchema>;
 export type ServiceDetailsInput = z.infer<typeof serviceDetailsSchema>;

@@ -103,7 +103,7 @@ export default function TiffinOnboarding() {
   const canContinue = validateStep(step.key, current);
 
   useEffect(() => {
-    if (!provider.phone) {
+    if (!provider.otpVerified && !provider.phone && !provider.email) {
       navigate('/provider/login', { replace: true });
       return;
     }
@@ -366,8 +366,8 @@ function BusinessStep({ data, provider, onChange, onPhoto, onRemovePhoto }) {
     <div className="tpo-form-grid">
       <Field label="Tiffin Service Name"><input value={data.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="e.g. Ghar Ka Swad" /></Field>
       <Field label="Owner / Contact Person"><input value={data.ownerName} onChange={(e) => onChange({ ownerName: e.target.value })} placeholder="Full name" /></Field>
-      <Field label="Phone Number"><input value={provider.phone || data.phone} readOnly /></Field>
-      <Field label="Email Address"><input type="email" value={data.email} onChange={(e) => onChange({ email: e.target.value })} placeholder="contact@example.com" /></Field>
+      <Field label="Phone Number"><input type="tel" maxLength={10} value={data.phone || provider.phone || ''} onChange={(e) => onChange({ phone: e.target.value.replace(/\D/g, '') })} placeholder="10-digit phone number" /></Field>
+      <Field label="Email Address (Verified)"><input type="email" value={provider.email || data.email || ''} readOnly disabled className="tpo-input-readonly" /></Field>
       <Field label="Business Address"><textarea value={data.address} onChange={(e) => onChange({ address: e.target.value })} placeholder="Street address, City, State, Zip" rows={3} /></Field>
     </div>
     <div className="tpo-about-service">

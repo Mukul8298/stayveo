@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, ArrowLeft, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Loader2, KeyRound } from 'lucide-react';
 import Button from '../components/Button';
-import { sendOtp, verifyOtp } from '../api/client';
+import { startAuth, verifyOtp, resendOtp } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import './AuthScreen.css';
@@ -11,45 +11,49 @@ export default function AuthScreen() {
   const navigate = useNavigate();
   const { setAuth } = useAuth();
   const toast = useToast();
-  const [phone, setPhone] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState(['', '', '', '']);
-  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
 
-  // ── STEP 1: Send OTP ──────────────────────────────────────────────────
-  const handleSendOtp = async () => {
+  // ── STEP 1: Send Credentials ──────────────────────────────────────────
+  const handleStartAuth = async (e) => {
+    e?.preventDefault();
+    if (!email || !password) return;
     setError('');
     setLoading(true);
     try {
-      await sendOtp(phone);
+      await startAuth(email.trim(), password, 'STUDENT');
       setStep('otp');
-      toast.success('OTP sent successfully!');
+      toast.success('Verification code sent to your email!');
     } catch (err) {
-      setError(err.message || 'Failed to send OTP');
-      toast.error(err.message || 'Failed to send OTP');
+      setError(err.message || 'Authentication failed');
+      toast.error(err.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
   // ── STEP 2: Verify OTP ────────────────────────────────────────────────
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (e) => {
+    e?.preventDefault();
     setError('');
     setLoading(true);
     try {
       const otpString = otp.join('');
-      const res = await verifyOtp(phone, otpString);
+      const res = await verifyOtp(email.trim(), otpString, 'STUDENT');
       const { isProfileComplete, userId, data } = res.data;
       const displayName = data?.fullName || data?.name || '';
 
-      // Save user data to localStorage
       localStorage.setItem('userId', userId);
-      localStorage.setItem('phone', phone);
+      localStorage.setItem('email', email.trim());
 
-      // Update global auth state
       setAuth({
-        phone,
+        email: email.trim(),
         userId,
         isAuthenticated: true,
         exists: isProfileComplete,
@@ -57,11 +61,10 @@ export default function AuthScreen() {
       });
 
       if (isProfileComplete) {
-        // ── Returning user → go straight to home ────────────────────
         localStorage.setItem('userName', displayName);
         localStorage.setItem('userCollege', data?.college || '');
         localStorage.setItem('profileComplete', 'true');
-        toast.success(`Welcome back, ${displayName || 'User'}!`);
+        toast.success(`Welcome back, ${displayName || 'Student'}!`);
         const returnTo = localStorage.getItem('tiffinReservationReturn');
         if (returnTo) {
           localStorage.removeItem('tiffinReservationReturn');
@@ -70,20 +73,30 @@ export default function AuthScreen() {
           navigate('/home', { state: { welcomeBack: true, name: displayName } });
         }
       } else {
-        // ── New user → go to college selection → onboarding ─────────
         toast.info('Please complete your profile');
         navigate('/college-select');
       }
     } catch (err) {
-      console.error('OTP verification failed', {
-        message: err?.message,
-        details: err?.details,
-      });
       const message = err?.message || 'Verification failed';
       setError(message);
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError('');
+    setResending(true);
+    try {
+      await resendOtp(email.trim(), 'STUDENT');
+      setOtp(['', '', '', '']);
+      toast.success('New verification code sent to your email!');
+    } catch (err) {
+      setError(err.message || 'Failed to resend code');
+      toast.error(err.message || 'Failed to resend code');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -103,58 +116,118 @@ export default function AuthScreen() {
 
   return (
     <div className="auth-page" id="auth-screen">
-      <button className="auth-back" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
+      <button
+        className="auth-back"
+        onClick={() => (step === 'otp' ? setStep('credentials') : navigate(-1))}
+      >
+        <ArrowLeft size={20} />
+      </button>
 
       <div className="auth-content">
         <div className="auth-header">
-          <div className="auth-icon-wrap"><Phone size={28} /></div>
-          <h1>{step === 'phone' ? 'Enter your number' : 'Verify OTP'}</h1>
-          <p>{step === 'phone' ? "We'll send you a verification code" : `Code sent to +91 ${phone}`}</p>
+          <div className="auth-icon-wrap">
+            {step === 'credentials' ? <Mail size={28} /> : <KeyRound size={28} />}
+          </div>
+          <h1>{step === 'credentials' ? 'Welcome to StayVeo' : 'Verify Email OTP'}</h1>
+          <p>
+            {step === 'credentials'
+              ? 'Enter your email and password to log in or create an account'
+              : `We sent a 4-digit verification code to ${email}`}
+          </p>
         </div>
 
         {error && <div className="auth-error">{error}</div>}
 
-        {step === 'phone' ? (
-          <div className="auth-form">
-            <div className="phone-input">
-              <span className="phone-prefix">+91</span>
-              <input type="tel" placeholder="Phone number" maxLength={10}
-                value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-                className="phone-field" id="phone-input" autoFocus />
+        {step === 'credentials' ? (
+          <form className="auth-form" onSubmit={handleStartAuth}>
+            <div className="input-group">
+              <label htmlFor="email-input">Email Address</label>
+              <div className="input-field-wrap">
+                <Mail size={18} className="input-icon" />
+                <input
+                  type="email"
+                  placeholder="student@college.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="auth-field"
+                  id="email-input"
+                  required
+                  autoFocus
+                />
+              </div>
             </div>
-            <Button variant="primary" fullWidth size="lg" onClick={handleSendOtp}
-              disabled={phone.length < 10 || loading}>
-              {loading ? <><Loader2 size={18} className="spin" /> Sending...</> : 'Send OTP'}
+
+            <div className="input-group">
+              <label htmlFor="password-input">Password</label>
+              <div className="input-field-wrap">
+                <Lock size={18} className="input-icon" />
+                <input
+                  type="password"
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="auth-field"
+                  id="password-input"
+                  minLength={6}
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              variant="primary"
+              fullWidth
+              size="lg"
+              type="submit"
+              disabled={!email || password.length < 6 || loading}
+            >
+              {loading ? (
+                <><Loader2 size={18} className="spin" /> Processing...</>
+              ) : (
+                'Continue'
+              )}
             </Button>
-          </div>
+          </form>
         ) : (
-          <div className="auth-form">
+          <form className="auth-form" onSubmit={handleVerifyOtp}>
             <div className="otp-inputs">
               {otp.map((d, i) => (
-                <input key={i} id={`otp-${i}`} type="tel" maxLength={1}
-                  className="otp-field" value={d}
-                  onChange={e => handleOtpChange(i, e.target.value)}
-                  onKeyDown={e => handleOtpKeyDown(i, e)}
-                  autoFocus={i === 0} />
+                <input
+                  key={i}
+                  id={`otp-${i}`}
+                  type="tel"
+                  maxLength={1}
+                  className="otp-field"
+                  value={d}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  autoFocus={i === 0}
+                />
               ))}
             </div>
-            <Button variant="primary" fullWidth size="lg"
-              onClick={handleVerifyOtp}
-              disabled={otp.some(d => !d) || loading}>
-              {loading ? <><Loader2 size={18} className="spin" /> Verifying...</> : 'Verify & Continue'}
+            <Button
+              variant="primary"
+              fullWidth
+              size="lg"
+              type="submit"
+              disabled={otp.some((d) => !d) || loading}
+            >
+              {loading ? (
+                <><Loader2 size={18} className="spin" /> Verifying...</>
+              ) : (
+                'Verify & Continue'
+              )}
             </Button>
-            <button className="auth-resend" onClick={() => { setOtp(['','','','']); handleSendOtp(); }}>
-              Resend code
+            <button
+              type="button"
+              className="auth-resend"
+              onClick={handleResendOtp}
+              disabled={resending}
+            >
+              {resending ? 'Sending code...' : 'Resend code'}
             </button>
-          </div>
+          </form>
         )}
-
-        <div className="auth-divider"><span>or</span></div>
-
-        <button className="google-btn" onClick={() => navigate('/college-select')}>
-          <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-          Continue with Google
-        </button>
       </div>
     </div>
   );

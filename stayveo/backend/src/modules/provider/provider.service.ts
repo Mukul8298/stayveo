@@ -1,5 +1,10 @@
 // ─── Provider Service ───────────────────────────────────────────────────
+// Business logic for provider authentication (email + password + OTP)
+// and onboarding steps. Authentication is now email-based but all
+// post-auth onboarding still uses phone via provider profile.
+// ────────────────────────────────────────────────────────────────────────
 
+import bcrypt from 'bcryptjs';
 import { providerRepository } from './provider.repository.js';
 import {
   basicInfoSchema,
@@ -12,11 +17,13 @@ import {
   updateProviderSchema,
   verifyIdSchema,
   verifyOtpSchema,
+  resendOtpSchema,
 } from './provider.schema.js';
 import type {
   BasicInfoInput,
   CreateProviderInput,
   PhotoUploadInput,
+  ResendOtpInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
   UpdateBusinessDetailsInput,
@@ -25,7 +32,18 @@ import type {
   VerifyOtpInput,
 } from './provider.schema.js';
 import { userService } from '../users/user.service.js';
+import { authRepository } from '../auth/auth.repository.js';
+import { generateOtp, hashOtp, verifyOtp as verifyOtpHash } from '../../common/utils/otp.utils.js';
+import { sendOtpEmail } from '../../common/utils/email.service.js';
+import { UserRole } from '@prisma/client';
 import prisma from '../../common/db/prisma.js';
+
+const BCRYPT_ROUNDS = 10;
+const OTP_EXPIRY_MINUTES = 5;
+
+function otpExpiry(): Date {
+  return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
 
 export const providerService = {
   /** Get provider by user ID */
@@ -63,48 +81,250 @@ export const providerService = {
     return providerRepository.update(provider.id, data);
   },
 
-  /** Send dummy OTP and create a pending onboarding profile if needed */
+  /**
+   * Send OTP — email + password authentication for providers.
+   *
+   * - Existing PROVIDER with password → verify password → send OTP
+   * - Existing user with STUDENT role → reject
+   * - New user                        → hash password → send OTP (pending signup)
+   */
   async sendOtp(input: unknown) {
     const data = sendOtpSchema.parse(input);
-    await providerRepository.createPendingOnboardingProfile(data.phone);
+    const email = data.email;
+
+    const existingUser = await authRepository.findByEmail(email);
+
+    if (existingUser) {
+      // Role mismatch guard
+      if (existingUser.role !== UserRole.PROVIDER) {
+        throw {
+          statusCode: 400,
+          message: 'An account with this email exists with a different role.',
+        };
+      }
+
+      // Legacy phone-auth user without password
+      if (!existingUser.passwordHash) {
+        throw {
+          statusCode: 400,
+          message: 'This account was created with phone authentication. Please contact support to set up email login.',
+        };
+      }
+
+      // Verify password
+      const passwordValid = await bcrypt.compare(data.password, existingUser.passwordHash);
+      if (!passwordValid) {
+        throw { statusCode: 401, message: 'Invalid email or password.' };
+      }
+
+      // Generate & send OTP
+      const otp = generateOtp();
+      const otpHash = hashOtp(otp);
+
+      await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
+      await authRepository.createChallenge({
+        email,
+        role: UserRole.PROVIDER,
+        purpose: 'provider_login',
+        otpHash,
+        userId: existingUser.id,
+        expiresAt: otpExpiry(),
+      });
+
+      await sendOtpEmail(email, otp);
+
+      return {
+        requiresOtp: true,
+        email,
+        message: 'Verification code sent to your email.',
+      };
+    }
+
+    // New provider signup
+    const hashedPassword = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+
+    await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
+    await authRepository.createChallenge({
+      email,
+      role: UserRole.PROVIDER,
+      purpose: 'provider_signup',
+      otpHash,
+      passwordHash: hashedPassword,
+      expiresAt: otpExpiry(),
+    });
+
+    await sendOtpEmail(email, otp);
 
     return {
-      phone: data.phone,
-      otp: '1111',
-      message: 'OTP sent',
+      requiresOtp: true,
+      email,
+      message: 'Verification code sent to your email.',
     };
   },
 
-  /** Verify dummy OTP and return existing-provider state */
+  /**
+   * Verify OTP — completes provider authentication.
+   *
+   * Login  → load existing provider profile, determine nextStep
+   * Signup → create user + pending provider profile, return basic_info step
+   */
   async verifyOtp(input: VerifyOtpInput) {
     const data = verifyOtpSchema.parse(input);
-    if (data.otp !== '1111') {
-      throw { statusCode: 400, message: 'Invalid OTP' };
+    const email = data.email;
+
+    const challenge = await authRepository.findActiveChallenge(email, UserRole.PROVIDER);
+    if (!challenge) {
+      throw {
+        statusCode: 400,
+        message: 'No active verification found. Please request a new code.',
+      };
     }
 
-    const profile =
-      (await providerRepository.findOnboardingByPhone(data.phone)) ??
-      (await providerRepository.createPendingOnboardingProfile(data.phone));
-
-    const verifiedProfile = await providerRepository.markOtpVerified(data.phone);
-
-    const selectedTypes = verifiedProfile.services.map((service) => service.type);
-    const tiffinOnly = selectedTypes.includes('TIFFIN') && !selectedTypes.includes('PG');
-    let nextStep: 'dashboard' | 'basic_info' | 'tiffin_dashboard' | 'tiffin_onboarding' = profile.name ? 'dashboard' : 'basic_info';
-    if (profile.name && tiffinOnly) {
-      const kitchen = await prisma.tiffinKitchen.findUnique({ where: { ownerId: verifiedProfile.id }, select: { id: true } });
-      nextStep = kitchen ? 'tiffin_dashboard' : 'tiffin_onboarding';
+    if (new Date() > challenge.expiresAt) {
+      await authRepository.deleteChallenge(challenge.id);
+      throw { statusCode: 400, message: 'Verification code has expired. Please request a new one.' };
     }
+
+    if (!verifyOtpHash(data.otp, challenge.otpHash)) {
+      throw { statusCode: 400, message: 'Invalid verification code.' };
+    }
+
+    // Invalidate challenge
+    await authRepository.deleteChallenge(challenge.id);
+
+    if (challenge.purpose === 'provider_login') {
+      // ── Existing provider login ──────────────────────────────────
+      const user = await authRepository.findByEmail(email);
+      if (!user) throw { statusCode: 404, message: 'User not found.' };
+
+      // Find provider profile by userId
+      const profile = await prisma.providerProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          user: { select: { id: true, phone_number: true, role: true } },
+          services: {
+            include: { pgDetails: true, tiffinDetails: true },
+          },
+          verifications: true,
+        },
+      });
+
+      if (!profile) {
+        // User exists but no provider profile yet — treat as new onboarding
+        return {
+          message: 'Verified. Let\'s set up your provider profile.',
+          nextStep: 'basic_info' as const,
+          providerId: null,
+          userId: user.id,
+          phone: user.phone_number || '',
+          name: null,
+          services: [],
+          isVerified: false,
+        };
+      }
+
+      const selectedTypes = profile.services.map((s) => s.type);
+      const tiffinOnly = selectedTypes.includes('TIFFIN') && !selectedTypes.includes('PG');
+      let nextStep: 'dashboard' | 'basic_info' | 'tiffin_dashboard' | 'tiffin_onboarding' = profile.name ? 'dashboard' : 'basic_info';
+      if (profile.name && tiffinOnly) {
+        const kitchen = await prisma.tiffinKitchen.findUnique({ where: { ownerId: profile.id }, select: { id: true } });
+        nextStep = kitchen ? 'tiffin_dashboard' : 'tiffin_onboarding';
+      }
+
+      return {
+        message: profile.name ? 'Welcome back' : 'Verified. Please complete onboarding.',
+        nextStep,
+        providerId: profile.id,
+        userId: user.id,
+        phone: profile.phone,
+        name: profile.name,
+        services: selectedTypes,
+        isVerified: profile.isVerified,
+      };
+    }
+
+    // ── New provider signup ────────────────────────────────────────
+    if (!challenge.passwordHash) {
+      throw { statusCode: 500, message: 'Missing signup data. Please restart registration.' };
+    }
+
+    // Create user with PROVIDER role
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: challenge.passwordHash,
+        role: UserRole.PROVIDER,
+      },
+    });
+
+    // Create a minimal pending provider profile (phone will be set during basic-info)
+    const newProfile = await prisma.providerProfile.create({
+      data: {
+        userId: newUser.id,
+        phone: '', // Will be populated during basic-info onboarding step
+      },
+      include: {
+        user: { select: { id: true, phone_number: true, role: true } },
+        services: {
+          include: { pgDetails: true, tiffinDetails: true },
+        },
+        verifications: true,
+      },
+    });
 
     return {
-      message: profile.name ? 'Welcome back' : 'OTP verified. Please complete onboarding.',
-      nextStep,
-      providerId: verifiedProfile.id,
-      userId: verifiedProfile.user.id,
-      phone: verifiedProfile.phone,
-      name: verifiedProfile.name,
-      services: selectedTypes,
-      isVerified: verifiedProfile.isVerified,
+      message: 'Account created. Let\'s set up your provider profile.',
+      nextStep: 'basic_info' as const,
+      providerId: newProfile.id,
+      userId: newUser.id,
+      phone: '',
+      name: null,
+      services: [],
+      isVerified: false,
+    };
+  },
+
+  /**
+   * Resend OTP — invalidate old challenge and send a fresh code.
+   */
+  async resendOtp(input: ResendOtpInput) {
+    const data = resendOtpSchema.parse(input);
+    const email = data.email;
+
+    const existing = await authRepository.findActiveChallenge(email, UserRole.PROVIDER);
+    if (!existing) {
+      throw {
+        statusCode: 400,
+        message: 'No pending verification found. Please start the login process again.',
+      };
+    }
+
+    const purpose = existing.purpose;
+    const passwordHash = existing.passwordHash;
+    const userId = existing.userId;
+
+    await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
+
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+
+    await authRepository.createChallenge({
+      email,
+      role: UserRole.PROVIDER,
+      purpose,
+      otpHash,
+      passwordHash: passwordHash ?? undefined,
+      userId: userId ?? undefined,
+      expiresAt: otpExpiry(),
+    });
+
+    await sendOtpEmail(email, otp);
+
+    return {
+      message: 'New verification code sent to your email.',
+      email,
     };
   },
 
@@ -160,16 +380,9 @@ export const providerService = {
 
   /**
    * Dashboard stats — fetches the 3 numbers shown on the profile card.
-   *
-   * WHY this exists in the service layer (not the controller):
-   * The controller should only handle HTTP concerns (reading headers, sending
-   * responses). Business logic — like "look up the profile by phone first,
-   * THEN query stats using the internal ID" — belongs here.
    */
   async getDashboardStats(phone: string) {
-    // Step 1: resolve phone → internal providerId
     const profile = await providerService.getVerifiedOnboardingProfile(phone);
-    // Step 2: run the 3 aggregation queries in parallel
     return providerRepository.getDashboardStats(profile.id);
   },
 
@@ -182,14 +395,9 @@ export const providerService = {
 
   /**
    * Update business details from the settings page.
-   *
-   * Architecture decision: we validate with Zod FIRST (schema.parse),
-   * then guard the profile exists, then update. This means a malformed
-   * request never reaches the DB — Zod short-circuits it.
    */
   async updateBusinessDetails(phone: string, input: UpdateBusinessDetailsInput) {
     const data = updateBusinessDetailsSchema.parse(input);
-    // Guard: profile must exist before we attempt to update
     await providerService.getVerifiedOnboardingProfile(phone);
     return providerRepository.updateOnboardingProfileFields(phone, data);
   },
