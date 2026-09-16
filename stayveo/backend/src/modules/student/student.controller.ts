@@ -29,7 +29,6 @@ export const studentController = {
     request: FastifyRequest<{ Body: UpdateStudentInput }>,
     reply: FastifyReply
   ) {
-    console.log('Incoming Body:', request.body);
     const userId = request.headers[USER_ID_HEADER] as string;
     const profile = await studentService.updateProfile(userId, request.body);
     return sendSuccess(reply, profile, 'Student profile updated');

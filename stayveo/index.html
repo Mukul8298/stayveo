@@ -14,7 +14,12 @@
     <title>StayVeo — Student Housing, Simplified</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #09090b; color: #f4f4f5; font-family: 'Geist Sans', system-ui, sans-serif;">
+        <div style="width: 44px; height: 44px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6366f1; border-radius: 50%; animation: stayveo-spin 0.8s linear infinite;"></div>
+        <style>@keyframes stayveo-spin { to { transform: rotate(360deg); } }</style>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

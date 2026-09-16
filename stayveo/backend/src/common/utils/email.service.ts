@@ -60,6 +60,6 @@ export async function sendOtpEmail(
     throw new Error('Resend returned no email ID');
   }
 
-  console.log(`OTP email sent to ${to}, Resend ID: ${data.id}`);
+  console.log(`OTP email sent successfully, Resend ID: ${data.id}`);
   return data.id;
 }

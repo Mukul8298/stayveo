@@ -80,7 +80,7 @@ export function globalErrorHandler(
   }
 
   // ── Catch-all ───────────────────────────────────────────────────────
-  console.error('Unhandled error:', error);
+  _request.log.error({ err: error }, 'Unhandled application error');
   return reply.status(500).send({
     success: false,
     data: null,

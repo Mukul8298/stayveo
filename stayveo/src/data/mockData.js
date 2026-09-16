@@ -1,49 +1,5 @@
-export const roommates = [
-  {
-    id: 1, name: 'Arjun Patel', age: 20, year: '2nd Year', branch: 'Computer Science',
-    compatibility: 92, avatar: '👨‍💻',
-    photo: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=500&fit=crop&crop=face',
-    traits: { sleep: 'Night Owl', cleanliness: 4, food: 'Vegetarian', study: 'Library', social: 'Ambivert' },
-    bio: 'Coder by day, gamer by night. Looking for someone who doesn\'t mind late night coding sessions.',
-    interests: ['Coding', 'Gaming', 'Anime']
-  },
-  {
-    id: 2, name: 'Sneha Reddy', age: 19, year: '1st Year', branch: 'Electronics',
-    compatibility: 87, avatar: '👩‍🔬',
-    photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=500&fit=crop&crop=face',
-    traits: { sleep: 'Early Bird', cleanliness: 5, food: 'Non-Veg', study: 'Room', social: 'Extrovert' },
-    bio: 'Music lover and morning person. I keep my space clean and love cooking together!',
-    interests: ['Music', 'Cooking', 'Yoga']
-  },
-  {
-    id: 3, name: 'Rahul Sharma', age: 21, year: '3rd Year', branch: 'Mechanical',
-    compatibility: 78, avatar: '🏋️',
-    photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=500&fit=crop&crop=face',
-    traits: { sleep: 'Flexible', cleanliness: 3, food: 'Non-Veg', study: 'Cafe', social: 'Extrovert' },
-    bio: 'Gym enthusiast who loves a good chai break. Pretty chill about most things.',
-    interests: ['Fitness', 'Cricket', 'Movies']
-  },
-  {
-    id: 4, name: 'Priya Singh', age: 20, year: '2nd Year', branch: 'Design',
-    compatibility: 95, avatar: '🎨',
-    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop&crop=face',
-    traits: { sleep: 'Night Owl', cleanliness: 4, food: 'Vegetarian', study: 'Room', social: 'Introvert' },
-    bio: 'Design student who needs creative space. Love plants and minimalist living.',
-    interests: ['Art', 'Plants', 'Reading']
-  },
-  {
-    id: 5, name: 'Vikram Das', age: 22, year: '4th Year', branch: 'Civil',
-    compatibility: 71, avatar: '📐',
-    photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=500&fit=crop&crop=face',
-    traits: { sleep: 'Early Bird', cleanliness: 3, food: 'Non-Veg', study: 'Library', social: 'Ambivert' },
-    bio: 'Final year stress but always up for a conversation. Organised chaos is my style.',
-    interests: ['Photography', 'Trekking', 'Chess']
-  },
-];
-
 export const notifications = [
   { id: 1, type: 'booking', title: 'Booking Confirmed!', message: 'Your room at Sunshine PG is confirmed for May 15.', time: '2 min ago', read: false },
-  { id: 2, type: 'match', title: 'New Match! 🎉', message: 'You matched with Priya Singh (95% compatible)', time: '1 hour ago', read: false },
   { id: 4, type: 'payment', title: 'Payment Due', message: 'Rent payment of ₹8,500 due in 3 days.', time: '1 day ago', read: true },
   { id: 5, type: 'booking', title: 'New Enquiry', message: 'A student enquired about your listing.', time: '2 days ago', read: true },
 ];
@@ -64,7 +20,6 @@ export const currentUser = {
     address: '23, MG Road, Near Gate 3', owner: 'Rajesh Kumar',
     description: 'Spacious shared rooms with home-cooked meals. 24/7 security and CCTV. Walking distance from campus gate 3.',
   },
-  activeRoommate: roommates[3],
   savedListings: [
     {
       id: 1, title: 'Sunshine PG for Boys', type: 'PG', price: 8500, distance: 0.3,

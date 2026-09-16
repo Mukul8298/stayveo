@@ -8,7 +8,7 @@ export default function TiffinProviderCard({ provider }) {
   return (
     <article className="tiffin-provider-card">
       <button type="button" className="tiffin-provider-image-button" onClick={() => navigate(`/tiffin/${provider.id}`)} aria-label={`Open ${provider.name}`}>
-        <img src={provider.image} alt={`${provider.name} meals`} />
+        <img src={provider.image} alt={`${provider.name} meals`} loading="lazy" decoding="async" />
         <span className="tiffin-card-rating"><Star size={11} fill="currentColor" /> {provider.rating.toFixed(1)}</span>
       </button>
       <div className="tiffin-provider-body">

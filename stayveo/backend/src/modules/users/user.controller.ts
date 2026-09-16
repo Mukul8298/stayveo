@@ -34,7 +34,6 @@ export const userController = {
     request: FastifyRequest<{ Body: UpdateUserProfileInput }>,
     reply: FastifyReply
   ) {
-    console.log('Incoming Body:', request.body);
     const user = await userService.updateProfile(request.body);
     return sendSuccess(reply, user, 'Profile updated successfully');
   },

@@ -93,6 +93,7 @@ export const roomListingController = {
 
 export const publicRoomListingController = {
   async list(_request: FastifyRequest, reply: FastifyReply) {
+    reply.header('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
     const listings = await roomListingRepository.findActiveForStudents();
     return sendSuccess(reply, listings);
   },

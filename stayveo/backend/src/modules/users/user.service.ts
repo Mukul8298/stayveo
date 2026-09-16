@@ -73,11 +73,7 @@ export const userService = {
 
   /** Update a student profile using the phone number as the stable lookup key */
   async updateProfile(input: UpdateUserProfileInput) {
-    const rawYear = input.year;
-    const mappedYear = parseYear(rawYear);
     const data = updateUserProfileSchema.parse(input);
-    const validatedYear = data.year;
-    const prismaYear = data.year;
 
     const existingUser = await userRepository.findWithProfileByPhone(data.phone);
     if (!existingUser) {
@@ -102,16 +98,6 @@ export const userService = {
       budget: data.budget.trim(),
       profileImageUrl: data.profileImageUrl?.trim() || null,
     });
-
-    const storedDbYear = result.studentProfile?.year;
-
-    console.log(`\n--- Verification for PUT /user/update-profile ---`);
-    console.log(`Incoming year: ${rawYear}`);
-    console.log(`Mapped year: ${mappedYear}`);
-    console.log(`Validated year: ${validatedYear}`);
-    console.log(`Prisma year: ${prismaYear}`);
-    console.log(`Stored database year: ${storedDbYear}`);
-    console.log(`-------------------------------------------\n`);
 
     return result;
   },

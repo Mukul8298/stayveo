@@ -5,7 +5,7 @@ import './BottomNav.css';
 const tabs = [
   { path: '/home', icon: Home, label: 'Home' },
   { path: '/search', icon: Search, label: 'Search' },
-  { path: '/roommate', icon: Heart, label: 'Match' },
+  { path: '/saved', icon: Heart, label: 'Saved' },
   { path: '/services', icon: Briefcase, label: 'Services' },
   { path: '/profile', icon: User, label: 'Profile' },
 ];

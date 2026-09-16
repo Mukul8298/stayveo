@@ -6,6 +6,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
+import rateLimit from '@fastify/rate-limit';
 
 // Plugins
 import prismaPlugin from './plugins/prisma.js';
@@ -34,11 +35,12 @@ import notificationRoutes from './modules/notifications/notification.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const configuredFrontendUrl = process.env.FRONTEND_URL?.trim().replace(/\/+$/, '');
+  const isProd = process.env.NODE_ENV === 'production';
   const app = Fastify({
     logger: {
-      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      level: isProd ? 'info' : 'debug',
       transport:
-        process.env.NODE_ENV !== 'production'
+        !isProd
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,
     },
@@ -47,27 +49,52 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ── Global Error Handler ──────────────────────────────────────────
   app.setErrorHandler(globalErrorHandler);
 
+  // ── Security Headers Hook ─────────────────────────────────────────
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-XSS-Protection', '1; mode=block');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+  });
+
   // ── Core Plugins ──────────────────────────────────────────────────
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (curl, mobile apps, server-to-server)
       if (!origin) return cb(null, true);
       if (configuredFrontendUrl && origin === configuredFrontendUrl) return cb(null, true);
-      // Always allow localhost and 127.0.0.1
-      if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
-      // Allow all Cloudflare tunnel URLs
-      if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
-      // Allow VS Code / Microsoft Dev Tunnels used for forwarded ports
-      if (origin.endsWith('.devtunnels.ms')) return cb(null, true);
-      // Allow all ngrok URLs
-      if (origin.endsWith('.ngrok-free.dev') || origin.endsWith('.ngrok.io')) return cb(null, true);
-      // Block everything else in production
-      cb(null, false);
+      // Production origins
+      if (origin === 'https://stayveo.com' || origin === 'https://www.stayveo.com' || origin.endsWith('.stayveo.pages.dev')) {
+        return cb(null, true);
+      }
+      // Non-production origins (local development / tunnels)
+      if (!isProd) {
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
+        if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
+        if (origin.endsWith('.devtunnels.ms')) return cb(null, true);
+        if (origin.endsWith('.ngrok-free.dev') || origin.endsWith('.ngrok.io')) return cb(null, true);
+      }
+      // Block unknown origins in production
+      if (isProd) return cb(null, false);
+      // Fallback for local development
+      cb(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-provider-phone', 'x-provider-id'],
     credentials: true,
   });
+
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    errorResponseBuilder: (_req, context) => ({
+      success: false,
+      data: null,
+      message: `Too many requests. Please try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+    }),
+  });
+
   await app.register(sensible); // adds httpErrors, to(), etc.
   await app.register(prismaPlugin);
 
