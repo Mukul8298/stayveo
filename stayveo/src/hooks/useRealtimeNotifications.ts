@@ -5,6 +5,7 @@ import {
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  deleteNotification,
 } from '../services/notification.service';
 import { notificationStore } from '../stores/notificationStore';
 
@@ -86,6 +87,17 @@ export function useRealtimeNotifications(userId, { toast } = {}) {
     }
   }, [loadNotifications, unreadCount, userId]);
 
+  const remove = useCallback(async (notificationId) => {
+    if (!userId || !notificationId) return;
+    notificationStore.remove(notificationId);
+    try {
+      await deleteNotification(userId, notificationId);
+    } catch (err) {
+      console.warn('Could not delete notification:', err);
+      await loadNotifications();
+    }
+  }, [loadNotifications, userId]);
+
   return {
     notifications,
     unreadCount,
@@ -94,5 +106,6 @@ export function useRealtimeNotifications(userId, { toast } = {}) {
     reload: loadNotifications,
     markRead,
     markAllRead,
+    remove,
   };
 }

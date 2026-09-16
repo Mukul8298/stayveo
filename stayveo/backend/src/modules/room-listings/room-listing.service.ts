@@ -51,6 +51,18 @@ export const roomListingService = {
   async create(phone: string, input: CreateRoomListingInput) {
     const data    = createRoomListingSchema.parse(input);
     const profile = await roomListingService.resolveProvider(phone);
+
+    // Auto-populate coordinates from provider's existing service details if not explicitly provided
+    if (data.latitude == null || data.longitude == null) {
+      for (const service of profile.services || []) {
+        if (service.tiffinDetails?.latitude != null && service.tiffinDetails?.longitude != null) {
+          data.latitude = data.latitude ?? Number(service.tiffinDetails.latitude);
+          data.longitude = data.longitude ?? Number(service.tiffinDetails.longitude);
+          break;
+        }
+      }
+    }
+
     return roomListingRepository.create(profile.id, data);
   },
 

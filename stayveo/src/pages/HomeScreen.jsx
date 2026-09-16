@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Bell, SlidersHorizontal, Loader, AlertCircle, RefreshCw, MapPin, WalletCards, UtensilsCrossed, GraduationCap, Home as HomeIcon } from 'lucide-react';
+import { Bell, SlidersHorizontal, Loader, AlertCircle, RefreshCw, MapPin, WalletCards, UtensilsCrossed, Home as HomeIcon } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
 import ListingCard from '../components/ListingCard';
 import { fetchPGListings, subscribeToPGChanges } from '../api/supabaseApi';
@@ -221,7 +221,7 @@ export default function HomeScreen() {
             <SlidersHorizontal size={18} />
           </button>
         </div>
-        <div className="college-badge"><GraduationCap size={13} /> Only for {userCollege} students</div>
+
       </div>
 
       {/* Loading state */}

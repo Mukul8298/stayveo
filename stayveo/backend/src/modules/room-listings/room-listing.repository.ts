@@ -23,6 +23,8 @@ export const roomListingRepository = {
         title:            data.title,
         description:      data.description,
         address:          data.address,
+        latitude:         data.latitude,
+        longitude:        data.longitude,
         roomType:         data.roomType,
         genderPreference: data.genderPreference,
         price:            data.price,

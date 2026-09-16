@@ -72,4 +72,29 @@ export const userRepository = {
       },
     });
   },
+
+  /** Upsert student profile data using userId as the primary lookup key.
+   *  Preferred over updateProfileByPhone for the email-based identity migration. */
+  async updateProfileByUserId(
+    userId: string,
+    data: Prisma.StudentProfileUncheckedCreateInput
+  ) {
+    const { userId: _userId, ...profileData } = data;
+
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        studentProfile: {
+          upsert: {
+            create: profileData,
+            update: profileData,
+          },
+        },
+      },
+      include: {
+        studentProfile: true,
+        provider: true,
+      },
+    });
+  },
 };

@@ -29,12 +29,15 @@ export const userController = {
     return sendSuccess(reply, user, 'User updated successfully');
   },
 
-  /** PUT /user/update-profile — Update a student profile by phone */
+  /** PUT /user/update-profile — Update a student profile.
+   *  Primary: uses x-user-id header (preferred).
+   *  Fallback: uses phone from body (backward compat). */
   async updateProfile(
     request: FastifyRequest<{ Body: UpdateUserProfileInput }>,
     reply: FastifyReply
   ) {
-    const user = await userService.updateProfile(request.body);
+    const userId = request.headers[USER_ID_HEADER] as string | undefined;
+    const user = await userService.updateProfile(request.body, userId);
     return sendSuccess(reply, user, 'Profile updated successfully');
   },
 };

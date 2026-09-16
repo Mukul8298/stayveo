@@ -55,3 +55,19 @@ export async function markAllNotificationsRead(userId) {
     return { data };
   }
 }
+
+export async function deleteNotification(userId, notificationId) {
+  try {
+    return await request(`/notifications/${notificationId}`, { method: 'DELETE', userId });
+  } catch (apiError) {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId)
+      .eq('user_id', userId);
+
+    if (error) throw apiError || error;
+    return { success: true };
+  }
+}
+

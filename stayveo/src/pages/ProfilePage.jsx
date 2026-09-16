@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, ChevronRight, Heart, Home, HelpCircle, LogOut, Edit3, Loader2 } from 'lucide-react';
-import { currentUser } from '../data/mockData';
+
 import Button from '../components/Button';
 import LocationPicker from '../components/maps/LocationPicker';
 import { getCurrentUserProfile, updateUserProfile } from '../api/client';
@@ -131,8 +131,8 @@ function mapProfileToForm(profile) {
   };
 }
 
-function validateProfile(info, phone) {
-  if (!phone) return 'Phone number is required to update your profile';
+function validateProfile(info, identityKey) {
+  if (!identityKey) return 'User identity is required to update your profile';
   if (!info.fullName.trim()) return 'Full name is required';
   if (!info.college.trim()) return 'College is required';
   if (!info.year) return 'Year is required';
@@ -260,7 +260,7 @@ export default function ProfilePage() {
   }, [loadProfile]);
 
   const buildProfilePayload = useCallback((nextInfo) => ({
-    phone: authState.phone,
+    phone: authState.phone || undefined,
     fullName: nextInfo.fullName.trim(),
     college: nextInfo.college.trim(),
     year: nextInfo.year,
@@ -284,7 +284,7 @@ export default function ProfilePage() {
 
     if (file) {
       try {
-        const validationError = validateProfile(info, authState.phone);
+        const validationError = validateProfile(info, authState.userId || authState.phone);
         if (validationError) {
           toast.error(validationError);
           return;
@@ -299,7 +299,7 @@ export default function ProfilePage() {
           imageId: 'avatar',
         });
         const nextInfo = { ...info, profileImageUrl: upload.publicUrl };
-        await updateUserProfile(buildProfilePayload(nextInfo));
+        await updateUserProfile(buildProfilePayload(nextInfo), authState.userId);
         await loadProfile({ force: true });
         toast.success('Profile photo updated');
       } catch (error) {
@@ -322,7 +322,7 @@ export default function ProfilePage() {
     try {
       const payload = buildProfilePayload(info);
 
-      const response = await updateUserProfile(payload);
+      const response = await updateUserProfile(payload, authState.userId);
       const profile = response.data?.studentProfile;
 
       if (profile) {
@@ -385,11 +385,9 @@ export default function ProfilePage() {
 
       {/* ---- Stats ---- */}
       <div className="profile-stats">
-        <div className="profile-stat"><span className="ps-num">{currentUser?.savedListings?.length ?? 0}</span><span>Saved</span></div>
-        <div className="profile-stat-divider" />
         <div className="profile-stat"><span className="ps-num">0</span><span>Bookings</span></div>
         <div className="profile-stat-divider" />
-        <div className="profile-stat"><span className="ps-num">{currentUser?.activeServices?.length ?? 0}</span><span>Services</span></div>
+        <div className="profile-stat"><span className="ps-num">0</span><span>Services</span></div>
       </div>
 
       {/* ---- Personal Information Section ---- */}

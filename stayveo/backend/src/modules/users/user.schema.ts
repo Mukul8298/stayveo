@@ -71,7 +71,7 @@ export const updateUserSchema = createUserSchema.partial();
 export const updateUserProfileSchema = z.preprocess(
   normalizeProfileAliases,
   z.object({
-    phone: z.string().min(10).max(15),
+    phone: z.string().min(10).max(15).optional(),
     fullName: z.string().min(1).max(200),
     college: z.string().min(1).max(200),
     year: z.preprocess(

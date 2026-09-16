@@ -71,9 +71,47 @@ export const userService = {
     return userRepository.update(id, data);
   },
 
-  /** Update a student profile using the phone number as the stable lookup key */
-  async updateProfile(input: UpdateUserProfileInput) {
+  /**
+   * Update a student profile.
+   * Primary lookup: userId (from x-user-id header).
+   * Fallback: phone number (backward compatibility for old clients).
+   */
+  async updateProfile(input: UpdateUserProfileInput, userId?: string) {
     const data = updateUserProfileSchema.parse(input);
+
+    // Preferred path: use userId from header
+    if (userId) {
+      const existingUser = await userRepository.findWithProfile(userId);
+      if (!existingUser) {
+        throw { statusCode: 404, message: 'User not found' };
+      }
+
+      const result = await userRepository.updateProfileByUserId(userId, {
+        userId,
+        fullName: data.fullName.trim(),
+        college: data.college.trim(),
+        year: data.year,
+        gender: GENDER_TO_ENUM[data.gender],
+        foodPreference: FOOD_TO_ENUM[data.foodPreference],
+        sleepSchedule: SLEEP_TO_ENUM[data.sleepSchedule],
+        cleanlinessLevel: data.cleanlinessLevel ?? null,
+        studyHabits: data.studyHabits ? STUDY_TO_ENUM[data.studyHabits] : null,
+        personalityType: data.personalityType ? PERSONALITY_TO_ENUM[data.personalityType] : null,
+        locationPreference: data.locationPreference?.trim() || null,
+        currentAddress: data.currentAddress?.trim() || null,
+        latitude: data.latitude ?? null,
+        longitude: data.longitude ?? null,
+        budget: data.budget.trim(),
+        profileImageUrl: data.profileImageUrl?.trim() || null,
+      });
+
+      return result;
+    }
+
+    // Fallback: phone-based lookup (backward compatibility)
+    if (!data.phone) {
+      throw { statusCode: 400, message: 'Either x-user-id header or phone in body is required' };
+    }
 
     const existingUser = await userRepository.findWithProfileByPhone(data.phone);
     if (!existingUser) {

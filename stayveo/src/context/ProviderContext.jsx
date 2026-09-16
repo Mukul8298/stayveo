@@ -35,7 +35,7 @@ export function ProviderProvider({ children }) {
   const [state, setState] = useState(() => loadState() || INITIAL_STATE);
   const [providerLoading, setProviderLoading] = useState(() => {
     const saved = loadState();
-    return Boolean(saved?.phone && !saved?.activeServiceType && !saved?.services?.length);
+    return Boolean((saved?.phone || saved?.email || saved?.providerId) && !saved?.activeServiceType && !saved?.services?.length);
   });
   const hydrationAttempted = useRef(false);
 
@@ -58,7 +58,8 @@ export function ProviderProvider({ children }) {
   // the saved service records from the existing profile endpoint before a
   // provider-aware page renders its persona.
   useEffect(() => {
-    if (!state.phone || state.activeServiceType || state.services?.length || hydrationAttempted.current) {
+    const identity = state.phone || state.email || state.providerId;
+    if (!identity || state.activeServiceType || state.services?.length || hydrationAttempted.current) {
       setProviderLoading(false);
       return undefined;
     }
@@ -67,7 +68,7 @@ export function ProviderProvider({ children }) {
     setProviderLoading(true);
     let cancelled = false;
 
-    getProviderBusinessDetails(state.phone)
+    getProviderBusinessDetails(identity)
       .then((response) => {
         if (cancelled) return;
         const details = response?.data || {};

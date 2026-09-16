@@ -19,6 +19,7 @@ const AuthContext = createContext(null);
 
 const INITIAL_STATE = {
   phone: '',
+  email: '',
   exists: false,
   name: '',
   isAuthenticated: false,
@@ -131,13 +132,15 @@ export function AuthProvider({ children }) {
     // Hydrate from localStorage on first render
     const userId = safeGetItem('userId');
     const phone = safeGetItem('phone');
+    const email = safeGetItem('email');
     const name = safeGetItem('userName');
     const college = safeGetItem('userCollege') || safeGetItem('selectedCollege');
     const profileComplete = safeGetItem('profileComplete') === 'true';
 
-    if (userId && phone) {
+    if (userId) {
       return {
-        phone,
+        phone: phone || '',
+        email: email || '',
         exists: profileComplete,
         // If name is missing from localStorage (old user), use temporary placeholder
         // The useEffect below will resolve the proper name asynchronously
@@ -224,6 +227,9 @@ export function AuthProvider({ children }) {
         next.nameResolved = true;
         safeSetItem('userName', updates.name);
       }
+      if (updates.email) {
+        safeSetItem('email', updates.email);
+      }
       if (updates.college) {
         safeSetItem('userCollege', updates.college);
         safeSetItem('userCollegeName', updates.college);
@@ -240,6 +246,7 @@ export function AuthProvider({ children }) {
   const clearAuth = useCallback(() => {
     localStorage.removeItem('userId');
     localStorage.removeItem('phone');
+    localStorage.removeItem('email');
     localStorage.removeItem('userName');
     localStorage.removeItem('userCollege');
     localStorage.removeItem('userCollegeName');

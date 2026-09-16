@@ -17,6 +17,8 @@ export const createRoomListingSchema = z.object({
   title:           z.string().min(1).max(200),
   description:     z.string().max(2000).optional().nullable(),
   address:         z.string().max(500).optional().nullable(),
+  latitude:        z.number().min(-90).max(90).optional().nullable(),
+  longitude:       z.number().min(-180).max(180).optional().nullable(),
   roomType:        z.string().min(1).max(100),           // free-text or from ROOM_TYPES
   genderPreference: z.enum(GENDER_PREFS).default('unisex'),
   price:           z.number().min(0),

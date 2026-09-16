@@ -68,8 +68,10 @@ enum SocialLevel {
 }
 
 enum ServiceCategory {
-  PG     @map("pg")
-  TIFFIN @map("tiffin")
+  PG       @map("pg")
+  TIFFIN   @map("tiffin")
+  LAUNDRY  @map("laundry")
+  CLEANING @map("cleaning")
 
   @@map("service_category")
 }
@@ -77,6 +79,8 @@ enum ServiceCategory {
 enum ServiceType {
   PG
   TIFFIN
+  LAUNDRY
+  CLEANING
 
   @@map("provider_service_type")
 }
@@ -401,6 +405,8 @@ enum PaymentType {
   RENT        @map("rent")
   RESERVATION @map("reservation")
   TIFFIN      @map("tiffin")
+  LAUNDRY     @map("laundry")
+  CLEANING    @map("cleaning")
 
   @@map("payment_type")
 }
@@ -454,6 +460,7 @@ model Booking {
   platformFee        Decimal       @default(0) @map("platform_fee") @db.Decimal(10, 2)
   minimumStayMonths  Int           @default(1) @map("minimum_stay_months")
   numberOfBeds       Int           @default(1) @map("number_of_beds")
+  laundryCharges     Decimal       @default(0) @map("laundry_charges") @db.Decimal(10, 2)
   foodCharges        Decimal       @default(0) @map("food_charges") @db.Decimal(10, 2)
   electricityCharges Decimal       @default(0) @map("electricity_charges") @db.Decimal(10, 2)
   waterCharges       Decimal       @default(0) @map("water_charges") @db.Decimal(10, 2)
@@ -676,6 +683,8 @@ model RoomListing {
   title            String  @db.VarChar(200) // "Single AC Room"
   description      String? // long-form details
   address          String? @db.VarChar(500)
+  latitude         Float?
+  longitude        Float?
   roomType         String  @map("room_type") @db.VarChar(100) // "Single", "Double", "Triple"
   genderPreference String  @default("unisex") @map("gender_preference") @db.VarChar(20)
 

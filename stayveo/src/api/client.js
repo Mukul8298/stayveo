@@ -110,8 +110,8 @@ export function getCurrentUserProfile(userId) {
   return request('/users/me', { method: 'GET', userId });
 }
 
-export function updateUserProfile(profileData) {
-  return request('/user/update-profile', { method: 'PUT', body: profileData });
+export function updateUserProfile(profileData, userId) {
+  return request('/user/update-profile', { method: 'PUT', body: profileData, userId });
 }
 
 // ── Saved Listings ─────────────────────────────────────────────────────
