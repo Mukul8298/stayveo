@@ -21,6 +21,17 @@ export const bookingService = {
     return [profile.id, legacyProvider?.id].filter(Boolean) as string[];
   },
 
+  async resolveProviderIdsByUserId(userId: string) {
+    const profile = await providerRepository.findOnboardingByUserId(userId);
+    if (!profile) throw { statusCode: 404, message: 'Provider not found' };
+
+    const legacyProvider = await prisma.provider.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    return [profile.id, legacyProvider?.id].filter(Boolean) as string[];
+  },
+
   /** Create a new booking */
   async create(userId: string, input: CreateBookingInput) {
     const data = createBookingSchema.parse(input);
@@ -36,11 +47,15 @@ export const bookingService = {
     return booking;
   },
 
-  async getByIdForActor(id: string, { userId, providerPhone }: { userId?: string; providerPhone?: string }) {
+  async getByIdForActor(id: string, { userId, providerPhone, providerUserId }: { userId?: string; providerPhone?: string; providerUserId?: string }) {
     const booking = await bookingService.getById(id);
     if (userId && booking.userId === userId) return booking;
     if (providerPhone) {
       const providerIds = await bookingService.resolveProviderIds(providerPhone);
+      if (providerIds.includes(booking.providerId)) return booking;
+    }
+    if (providerUserId) {
+      const providerIds = await bookingService.resolveProviderIdsByUserId(providerUserId);
       if (providerIds.includes(booking.providerId)) return booking;
     }
     throw { statusCode: 403, message: 'You are not allowed to access this booking' };
@@ -58,6 +73,12 @@ export const bookingService = {
     return bookingRepository.findByProvider(providerIds, filters);
   },
 
+  async listByProviderUserId(userId: string, queryParams: BookingFilterInput) {
+    const filters = bookingFilterSchema.parse(queryParams);
+    const providerIds = await bookingService.resolveProviderIdsByUserId(userId);
+    return bookingRepository.findByProvider(providerIds, filters);
+  },
+
   /** List bookings for a student */
   async listByUser(userId: string, queryParams: BookingFilterInput) {
     const filters = bookingFilterSchema.parse(queryParams);
@@ -65,13 +86,19 @@ export const bookingService = {
   },
 
   /** Update booking status */
-  async updateStatus(id: string, input: { status: string }, providerPhone?: string) {
+  async updateStatus(id: string, input: { status: string }, providerPhone?: string, providerUserId?: string) {
     const { status } = updateBookingStatusSchema.parse(input);
     // Verify booking exists
     const booking = await bookingRepository.findById(id);
     if (!booking) throw { statusCode: 404, message: 'Booking not found' };
     if (providerPhone) {
       const providerIds = await bookingService.resolveProviderIds(providerPhone);
+      if (!providerIds.includes(booking.providerId)) {
+        throw { statusCode: 403, message: 'You do not own this booking' };
+      }
+    }
+    if (providerUserId) {
+      const providerIds = await bookingService.resolveProviderIdsByUserId(providerUserId);
       if (!providerIds.includes(booking.providerId)) {
         throw { statusCode: 403, message: 'You do not own this booking' };
       }

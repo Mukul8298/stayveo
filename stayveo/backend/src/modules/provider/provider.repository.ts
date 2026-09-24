@@ -5,6 +5,7 @@ import { UserRole } from '../../common/enums.js';
 import type {
   BasicInfoInput,
   CreateProviderInput,
+  PgOnboardingInput,
   PhotoUploadInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
@@ -76,6 +77,61 @@ export const providerRepository = {
         ],
       },
       include: onboardingInclude,
+    });
+  },
+
+  /** Find the current provider onboarding profile from the authenticated user. */
+  async findOnboardingByUserId(userId: string) {
+    if (!userId) return null;
+    return prisma.providerProfile.findUnique({
+      where: { userId },
+      include: onboardingInclude,
+    });
+  },
+
+  /** Safe current-provider identity for session hydration. */
+  async findCurrentByUserId(userId: string) {
+    const profile = await prisma.providerProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        userId: true,
+        phone: true,
+        name: true,
+        email: true,
+        businessName: true,
+        address: true,
+        contactNumber: true,
+        description: true,
+        latitude: true,
+        longitude: true,
+        isVerified: true,
+        otpVerified: true,
+        providerType: true,
+        onboardingStatus: true,
+        services: { select: { type: true } },
+      },
+    });
+    if (profile) {
+      const tiffinKitchen = await prisma.tiffinKitchen.findUnique({
+        where: { ownerId: profile.id },
+        select: { id: true },
+      });
+      return { ...profile, tiffinService: Boolean(tiffinKitchen) };
+    }
+
+    return prisma.provider.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        businessName: true,
+        phone_number: true,
+        location: true,
+        services: { select: { serviceType: true } },
+        user: { select: { email: true, role: true } },
+      },
     });
   },
 
@@ -184,6 +240,49 @@ export const providerRepository = {
           include: onboardingInclude,
         });
       }
+    });
+  },
+
+  /** Save onboarding info without allowing the browser to change the owner. */
+  async saveBasicInfoForUser(userId: string, data: BasicInfoInput) {
+    return prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user || user.role !== UserRole.PROVIDER) {
+        throw { statusCode: 404, message: 'Provider account not found' };
+      }
+
+      const existingPhoneUser = await tx.user.findFirst({ where: { phone_number: data.phone } });
+      if (existingPhoneUser && existingPhoneUser.id !== userId && existingPhoneUser.role !== UserRole.PROVIDER) {
+        throw { statusCode: 409, message: 'Phone number is already registered as a student' };
+      }
+
+      const existingPhoneProfile = await tx.providerProfile.findFirst({ where: { phone: data.phone } });
+      if (existingPhoneProfile && existingPhoneProfile.userId !== userId) {
+        throw { statusCode: 409, message: 'Phone number is already registered to another provider' };
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { phone_number: data.phone },
+      });
+
+      return tx.providerProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          phone: data.phone,
+          name: data.name.trim(),
+          email: user.email || data.email?.trim() || null,
+          otpVerified: true,
+        },
+        update: {
+          phone: data.phone,
+          name: data.name.trim(),
+          email: user.email || data.email?.trim() || null,
+          otpVerified: true,
+        },
+        include: onboardingInclude,
+      });
     });
   },
 
@@ -360,6 +459,24 @@ export const providerRepository = {
     });
   },
 
+  async getOnboardingProfileByUserId(userId: string) {
+    return prisma.providerProfile.findUnique({
+      where: { userId },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+        businessName: true,
+        address: true,
+        contactNumber: true,
+        description: true,
+        isVerified: true,
+        services: { select: { type: true } },
+      },
+    });
+  },
+
   /**
    * Partial update of provider profile fields from the Business Details page.
    * Uses Prisma's update (not upsert) — the record MUST already exist.
@@ -386,6 +503,80 @@ export const providerRepository = {
         contactNumber: true,
         description:   true,
       },
+    });
+  },
+
+  async updateOnboardingProfileFieldsByUserId(userId: string, data: UpdateBusinessDetailsInput) {
+    const profile = await prisma.providerProfile.findUnique({ where: { userId }, select: { id: true } });
+    if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
+    return prisma.providerProfile.update({
+      where: { id: profile.id },
+      data,
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+        businessName: true,
+        address: true,
+        contactNumber: true,
+        description: true,
+        isVerified: true,
+        services: { select: { type: true } },
+      },
+    });
+  },
+
+  async updateProviderType(userId: string, providerType: 'PG' | 'TIFFIN') {
+    return prisma.providerProfile.update({
+      where: { userId },
+      data: {
+        providerType,
+        onboardingStatus: 'ONBOARDING',
+      },
+    });
+  },
+
+  async savePgOnboarding(userId: string, data: PgOnboardingInput) {
+    const profile = await prisma.providerProfile.findUnique({ where: { userId } });
+    if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
+
+    const updated = await prisma.providerProfile.update({
+      where: { userId },
+      data: {
+        name: data.name,
+        ...(data.phone && { phone: data.phone }),
+        ...(data.email !== undefined && { email: data.email }),
+        ...(data.businessName !== undefined && { businessName: data.businessName }),
+        ...(data.address !== undefined && { address: data.address }),
+        ...(data.contactNumber !== undefined && { contactNumber: data.contactNumber }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.latitude !== undefined && { latitude: data.latitude }),
+        ...(data.longitude !== undefined && { longitude: data.longitude }),
+        providerType: 'PG',
+        onboardingStatus: 'COMPLETED',
+      },
+    });
+
+    const existingService = await prisma.providerService.findFirst({
+      where: { providerId: profile.id, type: 'PG' },
+    });
+    if (!existingService) {
+      await prisma.providerService.create({
+        data: {
+          providerId: profile.id,
+          type: 'PG',
+        },
+      });
+    }
+
+    return updated;
+  },
+
+  async completeOnboarding(userId: string) {
+    return prisma.providerProfile.update({
+      where: { userId },
+      data: { onboardingStatus: 'COMPLETED' },
     });
   },
 };

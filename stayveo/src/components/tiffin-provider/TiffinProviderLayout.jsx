@@ -11,7 +11,9 @@ import {
   Users,
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
+import { providerLogout } from '../../api/provider';
 import './TiffinProvider.css';
+import ProviderAuthGate from '../provider/ProviderAuthGate';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/provider/tiffin/dashboard', icon: LayoutDashboard },
@@ -34,9 +36,11 @@ export default function TiffinProviderLayout() {
   const displayName = provider.name || 'Tiffin Provider';
   const initial = displayName.charAt(0).toUpperCase();
 
-  function logout() {
-    clearProvider();
-    navigate('/provider/login', { replace: true });
+  async function logout() {
+    try { await providerLogout(); } finally {
+      clearProvider();
+      navigate('/provider/login', { replace: true });
+    }
   }
 
   function openSettings() {
@@ -93,7 +97,7 @@ export default function TiffinProviderLayout() {
           </div>
         </header>
 
-        <main className="tp-content"><Outlet /></main>
+        <main className="tp-content"><ProviderAuthGate><Outlet /></ProviderAuthGate></main>
       </div>
 
       <nav className="tp-bottom-nav" aria-label="Tiffin provider mobile navigation">

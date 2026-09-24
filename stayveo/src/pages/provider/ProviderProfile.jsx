@@ -16,7 +16,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, CreditCard, ChevronRight, LogOut, Building2, HelpCircle, Loader2 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
-import { getProviderDashboardStats } from '../../api/provider';
+import { getProviderDashboardStats, providerLogout } from '../../api/provider';
 import { providerTypes } from '../../data/mockData';
 import './ProviderProfile.css';
 
@@ -102,9 +102,11 @@ export default function ProviderProfile() {
   // clearProvider() wipes localStorage + resets ProviderContext to INITIAL_STATE.
   // Without this, a provider who logs out would see the previous session's
   // data if another provider logs in on the same device.
-  function handleLogout() {
-    clearProvider();
-    navigate('/provider/login', { replace: true });
+  async function handleLogout() {
+    try { await providerLogout(); } finally {
+      clearProvider();
+      navigate('/provider/login', { replace: true });
+    }
   }
 
   // ── Earnings display helper ──────────────────────────────────────────────

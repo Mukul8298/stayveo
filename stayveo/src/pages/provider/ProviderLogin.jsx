@@ -70,7 +70,11 @@ export default function ProviderLogin() {
       } else if (d.nextStep === 'tiffin_onboarding') {
         toast.info('Continue your Tiffin service setup');
         navigate('/provider/tiffin/onboarding');
+      } else if (d.nextStep === 'pg_onboarding') {
+        toast.info('Continue your PG provider setup');
+        navigate('/provider/pg/onboarding');
       } else {
+        // select_type, basic_info, or any unknown → type selection
         toast.info("Let's set up your provider profile");
         navigate('/provider/select');
       }

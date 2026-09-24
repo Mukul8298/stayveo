@@ -51,6 +51,7 @@ export async function request(endpoint, options = {}) {
         headers,
         body: hasBody ? JSON.stringify(body) : undefined,
         signal,
+        credentials: 'include',
       });
 
       const json = await parseResponse(res);
@@ -97,21 +98,37 @@ export function resendOtp(email, role = 'STUDENT') {
   return request('/auth/resend-otp', { method: 'POST', body: { email, role } });
 }
 
+export function getAuthMe() {
+  return request('/auth/me', { method: 'GET' });
+}
+
+// Provider session hydration uses the provider-protected route. The student
+// auth endpoint must never be used to decide provider onboarding state.
+export function getProviderCurrentProfile() {
+  return request('/provider/me', { method: 'GET' });
+}
+
+export function logout() {
+  return request('/auth/logout', { method: 'POST' });
+}
+
 // Retained for backward compatibility if any legacy code calls sendOtp
 export function sendOtp(email, password, role = 'STUDENT') {
   return startAuth(email, password, role);
 }
 
-export function createStudentProfile(userId, profileData) {
-  return request('/student/profile', { method: 'POST', body: profileData, userId });
+export function createStudentProfile(_userId, profileData) {
+  // The server derives the onboarding user from the short-lived HttpOnly
+  // profile-setup cookie issued after OTP verification.
+  return request('/student/profile', { method: 'POST', body: profileData });
 }
 
 export function getCurrentUserProfile(userId) {
-  return request('/users/me', { method: 'GET', userId });
+  return request('/users/me', { method: 'GET' });
 }
 
 export function updateUserProfile(profileData, userId) {
-  return request('/user/update-profile', { method: 'PUT', body: profileData, userId });
+  return request('/user/update-profile', { method: 'PUT', body: profileData });
 }
 
 // ── Saved Listings ─────────────────────────────────────────────────────

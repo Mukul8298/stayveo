@@ -3,6 +3,7 @@
 import { FastifyInstance } from 'fastify';
 import { tiffinController } from './tiffin.controller.js';
 import { tiffinProviderController } from './tiffin-provider.controller.js';
+import { authenticateProvider } from '../../common/hooks/authenticate-provider.js';
 
 export default async function tiffinRoutes(fastify: FastifyInstance) {
   fastify.post('/', tiffinController.create);
@@ -25,25 +26,29 @@ export default async function tiffinRoutes(fastify: FastifyInstance) {
   fastify.post('/reservations/:id/payment/fail', tiffinController.failReservationPayment);
   fastify.post('/reservations/:id/confirm', tiffinController.confirmReservation);
 
-  // Provider-only Tiffin experience. These routes resolve ownership from
-  // x-provider-phone + x-user-id and never accept a provider id from the UI.
-  fastify.get('/provider/onboarding', tiffinProviderController.getOnboarding);
-  fastify.put('/provider/onboarding', tiffinProviderController.saveOnboarding);
-  fastify.post('/provider/onboarding/submit', tiffinProviderController.submitOnboarding);
-  fastify.post('/provider/kyc/upload-url', tiffinProviderController.kycUploadUrl);
-  fastify.get('/provider/dashboard', tiffinProviderController.dashboard);
-  fastify.get('/provider/meal-changes', tiffinProviderController.mealChanges);
-  fastify.get('/provider/customers', tiffinProviderController.customers);
-  fastify.post('/provider/customers', tiffinProviderController.createCustomer);
-  fastify.get('/provider/customers/:id', tiffinProviderController.customer);
-  fastify.get('/provider/deliveries', tiffinProviderController.deliveries);
-  fastify.post('/provider/deliveries/mark-all', tiffinProviderController.markAllDeliveries);
-  fastify.patch('/provider/deliveries/:id', tiffinProviderController.updateDelivery);
-  fastify.get('/provider/menu', tiffinProviderController.menu);
-  fastify.put('/provider/menu', tiffinProviderController.saveMenu);
-  fastify.get('/provider/reports', tiffinProviderController.reports);
-  fastify.get('/provider/settings', tiffinProviderController.settings);
-  fastify.put('/provider/settings', tiffinProviderController.settings);
-  fastify.get('/provider/business-details', tiffinProviderController.businessDetails);
-  fastify.put('/provider/business-details', tiffinProviderController.businessDetails);
+  // Provider onboarding is authenticated with the email-login session. The
+  // controller derives ownership from request.user and does not trust IDs or
+  // phone headers supplied by the browser.
+  await fastify.register(async (providerRoutes) => {
+    providerRoutes.addHook('preHandler', authenticateProvider);
+    providerRoutes.get('/provider/onboarding', tiffinProviderController.getOnboarding);
+    providerRoutes.put<{ Body: { step?: string; data?: Record<string, unknown> } }>('/provider/onboarding', tiffinProviderController.saveOnboarding);
+    providerRoutes.post('/provider/onboarding/submit', tiffinProviderController.submitOnboarding);
+    providerRoutes.post<{ Body: { documentType?: string; contentType?: string } }>('/provider/kyc/upload-url', tiffinProviderController.kycUploadUrl);
+    providerRoutes.get('/provider/dashboard', tiffinProviderController.dashboard);
+    providerRoutes.get('/provider/meal-changes', tiffinProviderController.mealChanges);
+    providerRoutes.get('/provider/customers', tiffinProviderController.customers);
+    providerRoutes.post('/provider/customers', tiffinProviderController.createCustomer);
+    providerRoutes.get('/provider/customers/:id', tiffinProviderController.customer);
+    providerRoutes.get('/provider/deliveries', tiffinProviderController.deliveries);
+    providerRoutes.post('/provider/deliveries/mark-all', tiffinProviderController.markAllDeliveries);
+    providerRoutes.patch('/provider/deliveries/:id', tiffinProviderController.updateDelivery);
+    providerRoutes.get('/provider/menu', tiffinProviderController.menu);
+    providerRoutes.put('/provider/menu', tiffinProviderController.saveMenu);
+    providerRoutes.get('/provider/reports', tiffinProviderController.reports);
+    providerRoutes.get('/provider/settings', tiffinProviderController.settings);
+    providerRoutes.put('/provider/settings', tiffinProviderController.settings);
+    providerRoutes.get('/provider/business-details', tiffinProviderController.businessDetails);
+    providerRoutes.put('/provider/business-details', tiffinProviderController.businessDetails);
+  });
 }

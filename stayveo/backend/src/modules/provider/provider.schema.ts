@@ -127,3 +127,24 @@ export const updateBusinessDetailsSchema = z.object({
 });
 
 export type UpdateBusinessDetailsInput = z.infer<typeof updateBusinessDetailsSchema>;
+
+export const selectTypeSchema = z.object({
+  providerType: serviceTypeSchema,
+});
+
+export type SelectTypeInput = z.infer<typeof selectTypeSchema>;
+
+export const pgOnboardingSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200),
+  phone: z.string().min(10, 'Valid phone is required').max(15).optional(),
+  email: z.string().email().optional().nullable(),
+  businessName: z.string().min(1).max(200).optional().nullable(),
+  address: z.string().min(1).max(500).optional().nullable(),
+  contactNumber: z.string().min(10).max(20).optional().nullable(),
+  description: z.string().max(1000).optional().nullable(),
+  latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
+  longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
+});
+
+export type PgOnboardingInput = z.infer<typeof pgOnboardingSchema>;
+

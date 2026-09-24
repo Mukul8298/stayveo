@@ -1,6 +1,6 @@
 .payout-page {
   min-height: 100%;
-  background: var(--pl-bg);
+  background: var(--pl-bg, #f7faf8);
 }
 
 .payout-content {
@@ -9,37 +9,52 @@
   padding: 28px 0 64px;
 }
 
+.payout-back,
+.payout-edit-link,
+.payout-secondary-button,
+.payout-primary-button {
+  font: inherit;
+  cursor: pointer;
+}
+
 .payout-back {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
   border: 0;
   background: transparent;
-  color: var(--pl-primary);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
+  color: var(--pl-primary, #087343);
+  font-size: 13px;
 }
 
 .payout-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
+}
+
+.payout-eyebrow {
+  color: #087343;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 
 .payout-heading h1 {
-  color: var(--pl-primary-deep);
+  margin-top: 6px;
+  color: var(--pl-primary-deep, #173d2b);
   font-size: 30px;
   font-weight: 700;
   line-height: 1.15;
-  letter-spacing: -0.025em;
+  letter-spacing: -.025em;
 }
 
 .payout-heading p {
-  margin-top: 6px;
+  margin-top: 7px;
   color: #64748b;
   font-size: 15px;
 }
@@ -48,8 +63,6 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
-  margin-top: 5px;
   padding: 7px 13px;
   border-radius: 999px;
   background: #fff8e8;
@@ -65,254 +78,184 @@
   background: #d39b18;
 }
 
+.payout-status.is-linked {
+  background: #edfff5;
+  color: #087343;
+}
+
+.payout-status.is-linked > span { background: #087343; }
+
+.payout-error {
+  padding: 12px 15px;
+  margin-bottom: 18px;
+  border: 1px solid #fecdd3;
+  border-radius: 9px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 13px;
+}
+
 .payout-security {
-  min-height: 110px;
+  min-height: 106px;
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 22px 24px;
-  margin-bottom: 34px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
   border: 1px solid #173d2b;
   border-radius: 12px;
-  background: var(--pl-primary);
-  color: #ffffff;
+  background: var(--pl-primary, #087343);
+  color: #fff;
+}
+
+.payout-security-icon,
+.payout-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
 }
 
 .payout-security-icon {
   width: 44px;
   height: 44px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 9px;
-  background: rgba(194, 246, 211, 0.14);
+  background: rgba(194, 246, 211, .14);
   color: #9df1c2;
 }
 
-.payout-security > div:nth-child(2) {
-  min-width: 0;
-  flex: 1;
-}
-
-.payout-security h2 {
-  font-size: 17px;
-  font-weight: 600;
-}
-
-.payout-security p {
-  max-width: 600px;
-  margin-top: 5px;
-  color: #b6cfbf;
-  font-size: 13px;
-  line-height: 1.45;
-}
+.payout-security > div:nth-child(2) { min-width: 0; flex: 1; }
+.payout-security h2 { font-size: 17px; font-weight: 650; }
+.payout-security p { max-width: 620px; margin-top: 5px; color: #c2dbca; font-size: 13px; line-height: 1.45; }
 
 .payout-encrypted {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
   padding: 7px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, .14);
   color: #d4e9dc;
   font-size: 11px;
   white-space: nowrap;
 }
 
-.payout-section-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 0 0 12px;
-  color: #64748b;
-  font-size: 13px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.payout-section-label small {
-  color: #087343;
-  font-size: 12px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-.payout-card {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 24px 28px;
-  margin-bottom: 36px;
-  border: 1px solid var(--pl-border);
+.payout-form-card {
+  margin-bottom: 22px;
+  overflow: hidden;
+  border: 1px solid var(--pl-border, #dce7df);
   border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(9, 9, 11, 0.03);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(9, 9, 11, .03);
+}
+
+.payout-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e7eee9;
 }
 
 .payout-card-icon {
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 11px;
-  background: #f1f3f2;
+  width: 42px;
+  height: 42px;
+  background: #e7f8ed;
   color: #087343;
 }
 
-.payout-card-copy {
+.payout-card-heading > div:nth-child(2) { min-width: 0; flex: 1; }
+.payout-card-heading h2 { color: #17231b; font-size: 18px; font-weight: 650; }
+.payout-card-heading p { margin-top: 5px; color: #64748b; font-size: 13px; line-height: 1.4; }
+
+.payout-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 24px;
+}
+
+.payout-field { display: grid; gap: 8px; color: #334155; font-size: 13px; font-weight: 650; }
+.payout-field input {
   min-width: 0;
-  flex: 1;
-}
-
-.payout-card-copy h2 {
-  color: #111827;
-  font-size: 19px;
-  font-weight: 600;
-}
-
-.payout-card-copy p {
-  max-width: 560px;
-  margin-top: 6px;
-  color: #64748b;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid #cbd8cf;
+  border-radius: 8px;
+  background: #fff;
+  color: #17231b;
+  font: inherit;
   font-size: 14px;
-  line-height: 1.45;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.payout-secondary-button,
-.payout-primary-button {
-  min-height: 40px;
+.payout-field input:focus { border-color: #087343; box-shadow: 0 0 0 3px rgba(8, 115, 67, .12); }
+.payout-field input[readonly] { background: #f7faf8; color: #53657e; }
+.payout-field small { color: #7a8b80; font-size: 11px; font-weight: 450; line-height: 1.35; }
+
+.payout-input-wrap { position: relative; display: flex; align-items: center; }
+.payout-input-wrap > svg { position: absolute; left: 13px; color: #087343; pointer-events: none; }
+.payout-input-wrap input { padding-left: 39px; padding-right: 76px; }
+.payout-input-badge { position: absolute; right: 12px; display: inline-flex; align-items: center; gap: 4px; color: #718078; font-size: 10px; font-weight: 600; }
+
+.payout-edit-link {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 0 16px;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: #087343;
+  font-size: 12px;
+  font-weight: 650;
 }
 
-.payout-secondary-button {
-  border: 1px solid var(--pl-border);
-  background: #f5f6f6;
-  color: #374151;
-}
-
-.payout-primary-button {
-  border: 1px solid var(--pl-primary-deep);
-  background: var(--pl-primary);
-  color: #ffffff;
-}
-
-.payout-secondary-button:hover {
-  background: #edf4ef;
-}
-
-.payout-primary-button:hover {
-  background: var(--pl-primary-deep);
-}
-
+.payout-kyc-note,
 .payout-note {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 17px 20px;
-  margin-top: 2px;
-  border-radius: 10px;
-  background: #f1f3f2;
-  color: #4b5563;
-  font-size: 13px;
+  gap: 9px;
+  color: #53657e;
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.payout-note svg {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: #087343;
-}
+.payout-kyc-note { padding: 0 24px 22px; color: #087343; }
+.payout-kyc-note svg { flex: 0 0 auto; margin-top: 2px; }
 
-.payout-session-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 22px;
-  color: #64748b;
-  font-size: 12px;
-}
+.payout-actions { display: flex; justify-content: flex-end; gap: 10px; margin: 4px 0 22px; }
+.payout-secondary-button,
+.payout-primary-button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 17px; border-radius: 8px; font-size: 13px; font-weight: 650; }
+.payout-secondary-button { border: 1px solid #d2ded5; background: #fff; color: #475569; }
+.payout-primary-button { border: 1px solid #087343; background: #087343; color: #fff; }
+.payout-primary-button:disabled { opacity: .65; cursor: wait; }
+.payout-secondary-button:hover { background: #f1f8f3; }
+.payout-primary-button:hover:not(:disabled) { background: #173d2b; }
 
-.payout-session-note svg {
-  color: #087343;
-}
+.payout-note { padding: 16px 18px; border-radius: 9px; background: #f1f5f2; }
+.payout-note svg { flex: 0 0 auto; margin-top: 2px; color: #087343; }
+.payout-page-state { min-height: 320px; display: grid; place-content: center; justify-items: center; gap: 9px; color: #53657e; font-size: 14px; }
+.payout-spinner { animation: payout-spin .8s linear infinite; }
+@keyframes payout-spin { to { transform: rotate(360deg); } }
 
 .payout-back:focus-visible,
+.payout-edit-link:focus-visible,
 .payout-secondary-button:focus-visible,
-.payout-primary-button:focus-visible {
-  outline: 3px solid rgba(12, 108, 71, 0.22);
-  outline-offset: 2px;
-}
+.payout-primary-button:focus-visible { outline: 3px solid rgba(12, 108, 71, .22); outline-offset: 2px; }
 
-@media (max-width: 768px) {
-  .payout-content {
-    width: auto;
-    padding: 28px 28px 42px;
-  }
-
-  .payout-heading {
-    display: block;
-  }
-
-  .payout-status {
-    margin-top: 14px;
-  }
-
-  .payout-security {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    padding: 20px;
-  }
-
-  .payout-security > div:nth-child(2) {
-    flex-basis: calc(100% - 60px);
-  }
-
-  .payout-encrypted {
-    margin-left: 60px;
-  }
-
-  .payout-card {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    padding: 20px;
-    margin-bottom: 30px;
-  }
-
-  .payout-card-copy {
-    flex-basis: calc(100% - 74px);
-  }
-
-  .payout-secondary-button,
-  .payout-primary-button {
-    width: 100%;
-    margin-top: 4px;
-  }
-}
-
-@media (max-width: 420px) {
-  .payout-content {
-    padding-inline: 20px;
-  }
-
-  .payout-security > div:nth-child(2),
-  .payout-card-copy {
-    flex-basis: calc(100% - 58px);
-  }
-
-  .payout-encrypted {
-    margin-left: 0;
-  }
+@media (max-width: 700px) {
+  .payout-content { width: auto; padding: 24px 20px 42px; }
+  .payout-heading { display: block; }
+  .payout-status { margin-top: 14px; }
+  .payout-security { align-items: flex-start; flex-wrap: wrap; padding: 20px; }
+  .payout-security > div:nth-child(2) { flex-basis: calc(100% - 60px); }
+  .payout-encrypted { margin-left: 60px; }
+  .payout-form-grid { grid-template-columns: 1fr; padding: 20px; }
+  .payout-card-heading { align-items: flex-start; flex-wrap: wrap; padding: 18px 20px; }
+  .payout-kyc-card .payout-card-heading > .payout-edit-link { margin-left: 56px; }
+  .payout-kyc-note { padding: 0 20px 20px; }
+  .payout-actions { flex-direction: column-reverse; }
+  .payout-actions button { width: 100%; }
 }

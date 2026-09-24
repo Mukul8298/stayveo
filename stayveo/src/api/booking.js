@@ -18,6 +18,7 @@ async function request(endpoint, { method = 'GET', body, userId, providerPhone }
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
+        credentials: 'include',
       });
 
       const json = await res.json();
@@ -56,11 +57,12 @@ export function getProviderBookings(providerId, { status, page = 1, limit = 20 }
 }
 
 export function getCurrentProviderBookings(providerPhone, { status, page = 1, limit = 50 } = {}) {
+  void providerPhone;
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   params.set('page', String(page));
   params.set('limit', String(limit));
-  return request(`/bookings/provider/me?${params}`, { providerPhone });
+  return request(`/bookings/provider/me?${params}`);
 }
 
 export function getUserBookings(userId, { status, page = 1, limit = 20 } = {}) {
@@ -72,7 +74,8 @@ export function getUserBookings(userId, { status, page = 1, limit = 20 } = {}) {
 }
 
 export function updateBookingStatus(bookingId, status, providerPhone) {
-  return request(`/bookings/${bookingId}/status`, { method: 'PATCH', body: { status }, providerPhone });
+  void providerPhone;
+  return request(`/bookings/${bookingId}/status`, { method: 'PATCH', body: { status } });
 }
 
 export function getBookingStats(providerId) {
@@ -124,15 +127,11 @@ export function getProfileViewCount(providerId) {
 // ── Combined Dashboard Stats ────────────────────────────────────────────
 
 export async function getProviderDashboardStats(providerId) {
-  const [bookingStats, viewCount, earnings] = await Promise.all([
-    getBookingStats(providerId).then(r => r?.data ?? { total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 }).catch(() => ({ total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 })),
-    getProfileViewCount(providerId).then(r => r?.data ?? { total: 0, unique: 0 }).catch(() => ({ total: 0, unique: 0 })),
-    getProviderEarnings(providerId).then(r => r?.data ?? { total: 0, thisMonth: 0, lastMonth: 0 }).catch(() => ({ total: 0, thisMonth: 0, lastMonth: 0 })),
-  ]);
-
-  return {
-    bookings: bookingStats ?? { total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 },
-    profileViews: viewCount ?? { total: 0, unique: 0 },
-    earnings: earnings ?? { total: 0, thisMonth: 0, lastMonth: 0 },
+  void providerId;
+  const response = await request('/provider/dashboard');
+  return response?.data ?? {
+    bookings: { total: 0, new: 0, accepted: 0, confirmed: 0, in_progress: 0, completed: 0, thisMonthRevenue: 0 },
+    profileViews: { total: 0, unique: 0 },
+    earnings: { thisMonth: 0 },
   };
 }

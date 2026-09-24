@@ -78,6 +78,7 @@ export const tiffinRepository = {
           kitchen."owner_name" AS "kitchen_owner_name",
           kitchen."food_options",
           kitchen."food_type"::text AS "kitchen_food_type",
+          COALESCE(kitchen."extra_meal_price", 0) AS "per_meal_price",
           kitchen."delivery_type"::text AS "kitchen_delivery_type",
           kitchen."pickup_available",
           COALESCE(kitchen."delivery_radius_km", t."delivery_range_km") AS "delivery_radius_km",
@@ -121,6 +122,7 @@ export const tiffinRepository = {
           kitchen."owner_name" AS "kitchen_owner_name",
           kitchen."food_options",
           kitchen."food_type"::text AS "kitchen_food_type",
+          COALESCE(kitchen."extra_meal_price", 0) AS "per_meal_price",
           kitchen."delivery_type"::text AS "kitchen_delivery_type",
           kitchen."pickup_available",
           kitchen."delivery_radius_km",
@@ -233,7 +235,9 @@ export const tiffinRepository = {
       const itemList = Array.isArray(rawItems)
         ? rawItems
         : rawItems && typeof rawItems === 'object'
-          ? (rawItems as Record<string, unknown>).veg || (rawItems as Record<string, unknown>).nonveg || (rawItems as Record<string, unknown>).jain || []
+          ? ['veg', 'nonveg', 'jain']
+            .map((diet) => (rawItems as Record<string, unknown>)[diet])
+            .find((items) => Array.isArray(items) && items.length) || []
           : [];
       const items = Array.isArray(itemList) ? itemList.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : [];
       if (String(menu.mealCategory).toLowerCase() === 'lunch') meals.lunch = items;

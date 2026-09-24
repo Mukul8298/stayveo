@@ -12,8 +12,8 @@ export default function RoomDetailMap({ latitude, longitude, address }) {
 
   const initialViewState = useMemo(() => {
     return {
-      longitude: longitude || 77.5946,
-      latitude: latitude || 12.9716,
+      longitude: longitude ?? 77.5946,
+      latitude: latitude ?? 12.9716,
       zoom: 15,
       pitch: 0,
       bearing: 0,

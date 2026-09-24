@@ -2,13 +2,24 @@
 
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { providerService } from './provider.service.js';
+import { providerRepository } from './provider.repository.js';
+import { providerDashboardService } from './provider-dashboard.service.js';
+import { invalidateProviderDashboardCache, pgProviderDashboardKey } from '../../common/cache/provider-dashboard.js';
 import { sendSuccess, sendCreated } from '../../common/utils/response.js';
-import { USER_ID_HEADER } from '../../common/constants.js';
+import {
+  clearProviderSessionCookie,
+  deleteProviderSession,
+  PROVIDER_SESSION_COOKIE_NAME,
+  providerSessionCookieOptions,
+  touchProviderSession,
+} from '../../common/auth/provider-session.js';
 import type {
   BasicInfoInput,
   CreateProviderInput,
+  PgOnboardingInput,
   PhotoUploadInput,
   ResendOtpInput,
+  SelectTypeInput,
   SendOtpInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
@@ -18,8 +29,7 @@ import type {
 } from './provider.schema.js';
 
 function getProviderPhone(body: { phone?: string }, request: FastifyRequest) {
-  const headerPhone = request.headers['x-provider-phone'];
-  const phone = body.phone || (Array.isArray(headerPhone) ? headerPhone[0] : headerPhone);
+  const phone = request.providerAuth?.phone;
 
   if (!phone) {
     throw { statusCode: 400, message: 'Provider phone is required' };
@@ -28,34 +38,89 @@ function getProviderPhone(body: { phone?: string }, request: FastifyRequest) {
   return phone;
 }
 
+async function invalidatePgDashboard(request: FastifyRequest) {
+  const providerId = request.providerAuth?.profileId;
+  if (!providerId) return;
+  await invalidateProviderDashboardCache(
+    request.server.redis,
+    pgProviderDashboardKey(providerId),
+    request.server.log
+  );
+}
+
 export const providerController = {
   /** POST /provider — Create provider profile */
   async create(
     request: FastifyRequest<{ Body: CreateProviderInput }>,
     reply: FastifyReply
   ) {
-    const userId = request.headers[USER_ID_HEADER] as string;
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
     const provider = await providerService.create(userId, request.body);
     return sendCreated(reply, provider, 'Provider created successfully');
   },
 
   /** GET /provider/me — Get current provider's profile */
   async getMe(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.headers[USER_ID_HEADER] as string;
-    const provider = await providerService.getByUserId(userId);
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const provider = await providerRepository.findCurrentByUserId(userId);
+    if (!provider) throw { statusCode: 404, message: 'Provider profile not found' };
     return sendSuccess(reply, provider);
+  },
+
+  /** GET /provider/dashboard — cached non-financial summary + live revenue */
+  async getDashboard(request: FastifyRequest, reply: FastifyReply) {
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const dashboard = await providerDashboardService.getPgDashboard(
+      request.server.redis,
+      request.server.log,
+      userId
+    );
+    return sendSuccess(reply, dashboard);
   },
 
   /** POST /provider/send-otp */
   async sendOtp(request: FastifyRequest<{ Body: SendOtpInput }>, reply: FastifyReply) {
-    const result = await providerService.sendOtp(request.body);
-    return sendSuccess(reply, result, 'OTP sent');
+    try {
+      const result = await providerService.sendOtp(request.body);
+      return sendSuccess(reply, result, 'OTP sent');
+    } catch (error) {
+      request.log.error({ err: error }, 'Provider OTP delivery/authentication failed');
+      throw error;
+    }
   },
 
   /** POST /provider/verify-otp */
   async verifyOtp(request: FastifyRequest<{ Body: VerifyOtpInput }>, reply: FastifyReply) {
-    const result = await providerService.verifyOtp(request.body);
-    return sendSuccess(reply, result, result.message);
+    const result = await providerService.verifyOtp(request.body, request.server.redis);
+    const { sessionId, ...publicResult } = result;
+
+    if (sessionId) {
+      reply.setCookie(PROVIDER_SESSION_COOKIE_NAME, sessionId, providerSessionCookieOptions());
+    }
+
+    return sendSuccess(reply, publicResult, publicResult.message);
+  },
+
+  /** POST /provider/logout */
+  async logout(request: FastifyRequest, reply: FastifyReply) {
+    const sessionId = request.cookies[PROVIDER_SESSION_COOKIE_NAME];
+    if (sessionId) {
+      try {
+        await deleteProviderSession(request.server.redis, sessionId, request.providerAuth?.userId);
+      } catch (error) {
+        request.server.log.error({ err: error }, 'Provider logout session deletion failed');
+        return reply.status(503).send({
+          success: false,
+          data: null,
+          message: 'Logout service temporarily unavailable',
+        });
+      }
+    }
+    clearProviderSessionCookie(reply);
+    return sendSuccess(reply, null, 'Logged out successfully');
   },
 
   /** POST /provider/resend-otp */
@@ -69,7 +134,17 @@ export const providerController = {
     request: FastifyRequest<{ Body: BasicInfoInput }>,
     reply: FastifyReply
   ) {
-    const profile = await providerService.saveBasicInfo(request.body);
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const profile = await providerService.saveBasicInfo(userId, request.body);
+    const sessionId = request.cookies[PROVIDER_SESSION_COOKIE_NAME];
+    if (sessionId && request.providerSession && profile?.id) {
+      await touchProviderSession(request.server.redis, sessionId, {
+        ...request.providerSession,
+        providerId: profile.id,
+      });
+    }
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, profile, 'Provider basic info saved');
   },
 
@@ -80,6 +155,7 @@ export const providerController = {
   ) {
     const phone = getProviderPhone(request.body, request);
     const profile = await providerService.saveServices(phone, request.body);
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, profile, 'Provider services saved');
   },
 
@@ -90,6 +166,7 @@ export const providerController = {
   ) {
     const phone = getProviderPhone(request.body, request);
     const details = await providerService.saveServiceDetails(phone, request.body);
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, details, 'Service details saved');
   },
 
@@ -100,6 +177,7 @@ export const providerController = {
   ) {
     const phone = getProviderPhone(request.body, request);
     const details = await providerService.savePhotos(phone, request.body);
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, details, 'Photos saved');
   },
 
@@ -110,6 +188,7 @@ export const providerController = {
   ) {
     const phone = getProviderPhone(request.body, request);
     const profile = await providerService.verifyIdentity(phone, request.body);
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, profile, 'Identity verification saved');
   },
 
@@ -121,18 +200,23 @@ export const providerController = {
    * HTTP semantics: GET = read, POST/PUT = write.
    */
   async getDashboardStats(request: FastifyRequest, reply: FastifyReply) {
-    const headerPhone = request.headers['x-provider-phone'];
-    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
-    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
-    const stats = await providerService.getDashboardStats(phone);
-    return sendSuccess(reply, stats);
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const dashboard = await providerDashboardService.getPgDashboard(
+      request.server.redis,
+      request.server.log,
+      userId
+    );
+    return sendSuccess(reply, {
+      activeListings: dashboard.activeListings,
+      totalBookings: dashboard.bookings.total,
+      totalEarnings: dashboard.totalEarnings,
+    });
   },
 
   /** GET /provider/business-details — prefill the edit form */
   async getBusinessDetails(request: FastifyRequest, reply: FastifyReply) {
-    const headerPhone = request.headers['x-provider-phone'];
-    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
-    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
+    const phone = getProviderPhone({}, request);
     const details = await providerService.getBusinessDetails(phone);
     return sendSuccess(reply, details);
   },
@@ -142,10 +226,50 @@ export const providerController = {
     request: FastifyRequest<{ Body: UpdateBusinessDetailsInput }>,
     reply: FastifyReply
   ) {
-    const headerPhone = request.headers['x-provider-phone'];
-    const phone = Array.isArray(headerPhone) ? headerPhone[0] : headerPhone;
-    if (!phone) throw { statusCode: 400, message: 'Provider phone is required' };
+    const phone = getProviderPhone({}, request);
     const updated = await providerService.updateBusinessDetails(phone, request.body);
+    await invalidatePgDashboard(request);
     return sendSuccess(reply, updated, 'Business details updated successfully');
+  },
+
+  /** POST /provider/select-type */
+  async selectType(
+    request: FastifyRequest<{ Body: SelectTypeInput }>,
+    reply: FastifyReply
+  ) {
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const profile = await providerService.selectType(userId, request.body);
+    const sessionId = request.cookies[PROVIDER_SESSION_COOKIE_NAME];
+    if (sessionId && request.providerSession) {
+      await touchProviderSession(request.server.redis, sessionId, {
+        ...request.providerSession,
+        providerType: request.body.providerType,
+      });
+    }
+    return sendSuccess(reply, profile, 'Provider type updated');
+  },
+
+  /** POST /provider/pg-onboarding */
+  async savePgOnboarding(
+    request: FastifyRequest<{ Body: PgOnboardingInput }>,
+    reply: FastifyReply
+  ) {
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const profile = await providerService.savePgOnboarding(userId, request.body);
+    await invalidatePgDashboard(request);
+    return sendSuccess(reply, profile, 'PG Onboarding saved successfully');
+  },
+
+  /** POST /provider/complete-onboarding */
+  async completeOnboarding(
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) {
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const profile = await providerService.completeOnboarding(userId);
+    return sendSuccess(reply, profile, 'Onboarding completed');
   },
 };

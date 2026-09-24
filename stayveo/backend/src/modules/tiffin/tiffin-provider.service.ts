@@ -1,8 +1,16 @@
 // Tiffin provider operations. This module is deliberately separate from the
-// existing PG provider services and resolves ownership from the authenticated
-// provider phone/user headers on every request.
+// existing PG provider services. Onboarding resolves ownership from the
+// authenticated email-login user identity; legacy dashboard methods retain
+// their existing compatibility arguments until they are migrated separately.
 
 import prisma from '../../common/db/prisma.js';
+import type Redis from 'ioredis';
+import type { FastifyBaseLogger } from 'fastify';
+import {
+  readProviderDashboardCache,
+  tiffinProviderDashboardKey,
+  writeProviderDashboardCache,
+} from '../../common/cache/provider-dashboard.js';
 import {
   KitchenVerificationStatus,
   KitchenStatus,
@@ -13,6 +21,7 @@ import {
   TiffinPaymentStatus,
   TiffinPlanType,
   TiffinSubscriptionStatus,
+  ServiceType,
   Prisma,
 } from '@prisma/client';
 import { getCurrentTiffinDate } from '../../common/utils/tiffin-day.js';
@@ -39,6 +48,12 @@ type AnyRecord = Record<string, any>;
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function providerPhone(profile: AnyRecord) {
+  const profileValue = text(profile.phone);
+  const userValue = text(profile.user?.phone_number);
+  return /^tmp[a-f0-9]{12}$/.test(profileValue) ? userValue : profileValue || userValue;
 }
 
 function getSupabaseUrl() {
@@ -102,6 +117,57 @@ function numberOrNull(value: unknown) {
   if (value === '' || value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function requiredNumber(value: unknown, message: string, min: number, max: number) {
+  const parsed = numberOrNull(value);
+  if (parsed === null || parsed < min || parsed > max) throw { statusCode: 400, message };
+  return parsed;
+}
+
+function optionalPhone(value: unknown) {
+  const phone = text(value);
+  if (phone && !/^\d{10,15}$/.test(phone)) {
+    throw { statusCode: 400, message: 'Phone number must contain 10 to 15 digits' };
+  }
+  return phone;
+}
+
+function optionalEmail(value: unknown) {
+  const email = text(value).toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw { statusCode: 400, message: 'Invalid email address' };
+  }
+  return email;
+}
+
+function optionalPincode(value: unknown) {
+  const pincode = text(value);
+  if (pincode && !/^\d{6}$/.test(pincode)) {
+    throw { statusCode: 400, message: 'Invalid pincode' };
+  }
+  return pincode;
+}
+
+function ownedServiceImage(value: unknown, providerId: string, fieldName: string) {
+  const imageUrl = text(value);
+  if (!imageUrl) return null;
+
+  let path = '';
+  try {
+    const parsed = new URL(imageUrl);
+    const marker = '/storage/v1/object/public/pg-images/';
+    if (parsed.pathname.includes(marker)) path = parsed.pathname.split(marker)[1] || '';
+  } catch {
+    // The existing storage helper returns absolute public URLs.
+  }
+
+  const safeProviderId = providerId.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  if (!path.startsWith(`provider-${safeProviderId}/tiffin/`)) {
+    throw { statusCode: 400, message: `${fieldName} must be uploaded through the Tiffin provider storage path` };
+  }
+
+  return imageUrl;
 }
 
 function jsonObject(value: unknown): AnyRecord {
@@ -265,13 +331,16 @@ function serializeKitchen(kitchen: AnyRecord | null, verifications: AnyRecord[] 
   };
 }
 
-async function resolveOwner(phone: unknown, userId?: unknown) {
+async function resolveOwner(phone: unknown, userId?: unknown, options: { requireOtpVerified?: boolean } = {}) {
   const providerPhone = text(phone);
   const uid = text(userId);
 
-  let profile = null;
+  let profile: AnyRecord | null = null;
   if (uid) {
-    profile = await prisma.providerProfile.findUnique({ where: { userId: uid } });
+    profile = await prisma.providerProfile.findUnique({
+      where: { userId: uid },
+      include: { user: { select: { id: true, email: true, phone_number: true, role: true } } },
+    });
   }
   if (!profile && providerPhone) {
     profile = await prisma.providerProfile.findFirst({
@@ -286,8 +355,12 @@ async function resolveOwner(phone: unknown, userId?: unknown) {
   }
 
   if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
-  if (!profile.otpVerified) throw { statusCode: 403, message: 'OTP verification required' };
-
+  // This flag is now set by the email OTP provider-auth flow. Keep the
+  // existing guard for legacy provider operations without reintroducing a
+  // phone-OTP dependency on the session-authenticated onboarding routes.
+  if (options.requireOtpVerified !== false && !profile.otpVerified) {
+    throw { statusCode: 403, message: 'OTP verification required' };
+  }
   const kitchen = await prisma.tiffinKitchen.findUnique({
     where: { ownerId: profile.id },
     include: { mealTimings: true, subscriptionPlans: true, weeklyMenus: true },
@@ -295,17 +368,21 @@ async function resolveOwner(phone: unknown, userId?: unknown) {
   return { profile, kitchen };
 }
 
-async function ensureKitchen(profile: AnyRecord, data: AnyRecord) {
+type PrismaExecutor = typeof prisma | Prisma.TransactionClient;
+
+async function ensureKitchen(db: PrismaExecutor, profile: AnyRecord, data: AnyRecord) {
   const name = text(data.name) || text(profile.businessName) || text(profile.name) || 'Tiffin Service';
   const ownerName = text(data.ownerName) || text(profile.name) || 'Provider';
-  return prisma.tiffinKitchen.upsert({
+  const profileEmail = text(profile.email) || text(profile.user?.email);
+  const profilePhone = providerPhone(profile);
+  return db.tiffinKitchen.upsert({
     where: { ownerId: profile.id },
     create: {
       ownerId: profile.id,
       kitchenName: name,
       ownerName,
-      phone: profile.phone,
-      email: text(data.email) || text(profile.email) || null,
+      phone: profilePhone,
+      email: text(data.email) || profileEmail || null,
       address: text(data.address) || null,
       foodType: TiffinFoodType.VEG,
       deliveryType: TiffinDeliveryType.SELF_DELIVERY,
@@ -315,7 +392,7 @@ async function ensureKitchen(profile: AnyRecord, data: AnyRecord) {
   });
 }
 
-async function updatePlans(kitchenId: string, plans: unknown) {
+async function updatePlans(db: PrismaExecutor, kitchenId: string, plans: unknown) {
   if (!Array.isArray(plans)) return;
   for (const rawPlan of plans) {
     const plan = jsonObject(rawPlan);
@@ -323,7 +400,7 @@ async function updatePlans(kitchenId: string, plans: unknown) {
     const price = numberOrNull(plan.price);
     if (!price || price < 0 || !['daily', 'weekly', 'monthly'].includes(type)) continue;
     const planType = planEnum(type);
-    const existing = await prisma.tiffinSubscriptionPlan.findFirst({ where: { kitchenId, planType } });
+    const existing = await db.tiffinSubscriptionPlan.findFirst({ where: { kitchenId, planType } });
     const values = {
       planName: type === 'daily' ? 'Per Meal' : `${type[0].toUpperCase()}${type.slice(1)} Plan`,
       planType,
@@ -334,22 +411,22 @@ async function updatePlans(kitchenId: string, plans: unknown) {
       description: text(plan.description) || null,
       isActive: true,
     };
-    if (existing) await prisma.tiffinSubscriptionPlan.update({ where: { id: existing.id }, data: values });
-    else await prisma.tiffinSubscriptionPlan.create({ data: { kitchenId, ...values } });
+    if (existing) await db.tiffinSubscriptionPlan.update({ where: { id: existing.id }, data: values });
+    else await db.tiffinSubscriptionPlan.create({ data: { kitchenId, ...values } });
   }
 }
 
-async function updateTimings(kitchenId: string, timing: AnyRecord) {
+async function updateTimings(db: PrismaExecutor, kitchenId: string, timing: AnyRecord) {
   for (const meal of MEAL_TYPES) {
     const value = jsonObject(timing[meal]);
     if (value.enabled === false) {
-      await prisma.tiffinKitchenMealTiming.deleteMany({ where: { kitchenId, mealCategory: mealEnum(meal) } });
+      await db.tiffinKitchenMealTiming.deleteMany({ where: { kitchenId, mealCategory: mealEnum(meal) } });
       continue;
     }
     if (!compareTimes(value.start, value.end)) {
       throw { statusCode: 400, message: `${meal} start time must be before end time` };
     }
-    await prisma.tiffinKitchenMealTiming.upsert({
+    await db.tiffinKitchenMealTiming.upsert({
       where: { kitchenId_mealCategory: { kitchenId, mealCategory: mealEnum(meal) } },
       create: { kitchenId, mealCategory: mealEnum(meal), startTime: text(value.start), endTime: text(value.end) },
       update: { startTime: text(value.start), endTime: text(value.end) },
@@ -357,103 +434,192 @@ async function updateTimings(kitchenId: string, timing: AnyRecord) {
   }
 }
 
+function isOnboardingComplete(kitchen: AnyRecord | null, verifications: AnyRecord[]) {
+  if (!kitchen) return false;
+  const hasPlans = kitchen.subscriptionPlans?.some((plan: AnyRecord) => plan.isActive) === true;
+  const hasAadhaar = verifications.some((item) => item.idType === 'AADHAR');
+  const hasPan = verifications.some((item) => item.idType === 'PAN');
+  return Boolean(
+    kitchen.kitchenName &&
+    kitchen.ownerName &&
+    kitchen.address &&
+    kitchen.latitude !== null &&
+    kitchen.longitude !== null &&
+    hasPlans &&
+    kitchen.mealTimings?.length &&
+    kitchen.coverImage &&
+    hasAadhaar &&
+    hasPan
+  );
+}
+
+/** Resolve the existing Tiffin completion state for provider login routing. */
+export async function getTiffinOnboardingStatus(providerId: string) {
+  const [kitchen, verifications] = await Promise.all([
+    prisma.tiffinKitchen.findUnique({
+      where: { ownerId: providerId },
+      include: { mealTimings: true, subscriptionPlans: true },
+    }),
+    prisma.providerVerification.findMany({
+      where: { providerId, idType: { in: ['AADHAR', 'PAN'] } },
+      select: { idType: true, idNumber: true },
+    }),
+  ]);
+  return { exists: Boolean(kitchen), completed: isOnboardingComplete(kitchen, verifications) };
+}
+
 export const tiffinProviderService = {
-  async getOnboarding(phone: unknown, userId?: unknown) {
-    const { profile, kitchen } = await resolveOwner(phone, userId);
+  async getOnboarding(phone: unknown, userId?: unknown, requireOtpVerified = true) {
+    const { profile, kitchen } = await resolveOwner(phone, userId, { requireOtpVerified });
     const verifications = await prisma.providerVerification.findMany({
       where: { providerId: profile.id, idType: { in: ['AADHAR', 'PAN'] } },
       select: { idType: true, idNumber: true },
     });
-    return { profile: { name: profile.name || '', email: profile.email || '', phone: profile.phone }, data: serializeKitchen(kitchen, verifications) };
+    const email = text(profile.email) || text(profile.user?.email);
+    const phoneNumber = providerPhone(profile);
+    return {
+      identity: {
+        providerId: profile.id,
+        userId: profile.userId,
+        name: profile.name || '',
+        email,
+        phone: phoneNumber,
+      },
+      profile: { name: profile.name || '', email, phone: phoneNumber },
+      exists: Boolean(kitchen),
+      completed: isOnboardingComplete(kitchen, verifications),
+      data: serializeKitchen(kitchen, verifications),
+    };
   },
 
   async saveOnboarding(phone: unknown, userId: unknown, step: string, data: AnyRecord) {
-    const { profile } = await resolveOwner(phone, userId);
-    const kitchen = await ensureKitchen(profile, data);
-    const currentOptions = jsonObject(kitchen.foodOptions);
-    const update: AnyRecord = {};
+    const { profile } = await resolveOwner(phone, userId, { requireOtpVerified: false });
+    await prisma.$transaction(async (tx) => {
+      const kitchen = await ensureKitchen(tx, profile, data);
+      const currentOptions = jsonObject(kitchen.foodOptions);
+      const update: AnyRecord = {};
 
-    switch (step) {
-      case 'business':
-        if (!text(data.name) || !text(data.ownerName)) throw { statusCode: 400, message: 'Service name and owner name are required' };
-        if (text(data.description).length > 1000) throw { statusCode: 400, message: 'Service description must be 1000 characters or fewer' };
-        Object.assign(update, {
-          kitchenName: text(data.name), ownerName: text(data.ownerName), email: text(data.email) || null,
-          address: text(data.address) || null, description: text(data.description) || null,
-          kitchenLogo: text(data.profilePhoto) || null,
-        });
-        break;
-      case 'location':
-        if (!text(data.address) || numberOrNull(data.latitude) === null || numberOrNull(data.longitude) === null) {
-          throw { statusCode: 400, message: 'Address, latitude, and longitude are required' };
-        }
-        Object.assign(update, {
-          address: text(data.address), latitude: numberOrNull(data.latitude), longitude: numberOrNull(data.longitude),
-          pincode: text(data.pincode) || null, city: text(data.city) || null, state: text(data.state) || null,
-          deliveryRadiusKm: numberOrNull(data.deliveryRadiusKm) ?? 5,
-        });
-        break;
-      case 'pricing':
-        Object.assign(update, { extraMealPrice: numberOrNull(data.perMeal) ?? kitchen.extraMealPrice });
-        break;
-      case 'food': {
-        const categories = Array.isArray(data.categories) ? data.categories.map((item) => text(item).toLowerCase()).filter((item) => FOOD_TYPES.includes(item as any)) : [];
-        if (!categories.length) throw { statusCode: 400, message: 'Select at least one food category' };
-        update.foodType = foodEnum(categories);
-        update.allowsJain = categories.includes('jain');
-        update.foodOptions = { ...currentOptions, categories, mealItems: data.mealItems || currentOptions.mealItems || { lunch: [], dinner: [] } };
-        break;
-      }
-      case 'timing':
-        await updateTimings(kitchen.id, jsonObject(data));
-        break;
-      case 'delivery':
-        update.deliveryType = deliveryEnum(data.type);
-        update.pickupAvailable = text(data.type).toLowerCase() === 'both' || text(data.type).toLowerCase().includes('pickup');
-        break;
-      case 'displayImage':
-      case 'coverImage':
-        update.coverImage = text(data.imageUrl) || text(data.coverImage) || null;
-        break;
-      case 'kyc': {
-        if (data.documents) {
-          const incomingDocuments = jsonObject(data.documents);
-          const documents = { ...jsonObject(currentOptions.kycDocuments) };
-          for (const documentType of Object.keys(KYC_DOCUMENTS)) {
-            if (incomingDocuments[documentType] !== undefined) {
-              documents[documentType] = validateKycDocumentPath(profile.id, documentType, incomingDocuments[documentType]);
-            }
-          }
-          update.foodOptions = { ...currentOptions, kycDocuments: documents };
-        }
-        const identityValues = [
-          ['AADHAR', text(data.aadhaarNumber)],
-          ['PAN', text(data.panNumber)],
-        ];
-        for (const [idType, idNumber] of identityValues) {
-          if (!idNumber) continue;
-          await prisma.providerVerification.upsert({
-            where: { providerId_idType: { providerId: profile.id, idType } },
-            create: { providerId: profile.id, idType, idNumber, isVerified: false },
-            update: { idNumber, isVerified: false },
+      switch (step) {
+        case 'business': {
+          if (!text(data.name) || !text(data.ownerName)) throw { statusCode: 400, message: 'Service name and owner name are required' };
+          if (text(data.description).length > 1000) throw { statusCode: 400, message: 'Service description must be 1000 characters or fewer' };
+          const phoneNumber = optionalPhone(data.phone) || providerPhone(profile);
+          const email = optionalEmail(data.email) || text(profile.email) || text(profile.user?.email);
+          const profilePhoto = ownedServiceImage(data.profilePhoto, profile.id, 'Profile photo');
+          Object.assign(update, {
+            kitchenName: text(data.name), ownerName: text(data.ownerName), phone: phoneNumber,
+            email: email || null, address: text(data.address) || null, description: text(data.description) || null,
+            kitchenLogo: profilePhoto,
           });
+          await tx.providerService.upsert({
+            where: { providerId_type: { providerId: profile.id, type: ServiceType.TIFFIN } },
+            create: { providerId: profile.id, type: ServiceType.TIFFIN },
+            update: {},
+          });
+          await tx.providerProfile.update({
+            where: { id: profile.id },
+            data: {
+              name: text(data.ownerName) || profile.name || null,
+              email: email || null,
+              ...(phoneNumber && /^\d{10,15}$/.test(phoneNumber) ? { phone: phoneNumber } : {}),
+            },
+          });
+          if (phoneNumber && /^\d{10,15}$/.test(phoneNumber)) {
+            await tx.user.update({ where: { id: profile.userId }, data: { phone_number: phoneNumber } });
+          }
+          break;
         }
-        break;
+        case 'location': {
+          if (!text(data.address)) throw { statusCode: 400, message: 'Address is required' };
+          const latitude = requiredNumber(data.latitude, 'Latitude must be between -90 and 90', -90, 90);
+          const longitude = requiredNumber(data.longitude, 'Longitude must be between -180 and 180', -180, 180);
+          const deliveryRadiusKm = requiredNumber(data.deliveryRadiusKm ?? 5, 'Delivery radius must be between 0 and 100 km', 0, 100);
+          Object.assign(update, {
+            address: text(data.address), latitude, longitude,
+            pincode: optionalPincode(data.pincode) || null, city: text(data.city) || null, state: text(data.state) || null,
+            deliveryRadiusKm,
+          });
+          break;
+        }
+        case 'pricing': {
+          const dailyPlan = Array.isArray(data.plans)
+            ? data.plans.find((item: AnyRecord) => ['daily', 'custom'].includes(text(item?.type).toLowerCase()))
+            : null;
+          const dailyPlanPrice = numberOrNull(dailyPlan?.price);
+          const perMeal = data.perMeal === '' || data.perMeal === undefined || data.perMeal === null
+            ? dailyPlanPrice ?? Number(kitchen.extraMealPrice)
+            : requiredNumber(data.perMeal, 'Per meal price must be between 0 and 100000', 0, 100000);
+          if (!Number.isFinite(perMeal) || perMeal <= 0) throw { statusCode: 400, message: 'Set a valid daily per-meal price' };
+          Object.assign(update, { extraMealPrice: perMeal });
+          break;
+        }
+        case 'food': {
+          const rawCategories = Array.isArray(data.categories) ? data.categories.map((item) => text(item).toLowerCase()) : [];
+          const categories = rawCategories.filter((item) => FOOD_TYPES.includes(item as any));
+          if (!categories.length || categories.length !== rawCategories.length) throw { statusCode: 400, message: 'Select valid food categories' };
+          update.foodType = foodEnum(categories);
+          update.allowsJain = categories.includes('jain');
+          update.foodOptions = { ...currentOptions, categories, mealItems: data.mealItems || currentOptions.mealItems || { lunch: [], dinner: [] } };
+          break;
+        }
+        case 'timing':
+          await updateTimings(tx, kitchen.id, jsonObject(data));
+          break;
+        case 'delivery':
+          if (!['self_delivery', 'pickup_only', 'both', 'delivery_partner'].includes(text(data.type).toLowerCase())) {
+            throw { statusCode: 400, message: 'Choose a valid delivery option' };
+          }
+          update.deliveryType = deliveryEnum(data.type);
+          update.pickupAvailable = text(data.type).toLowerCase() === 'both' || text(data.type).toLowerCase().includes('pickup');
+          break;
+        case 'displayImage':
+        case 'coverImage': {
+          const imageUrl = ownedServiceImage(data.imageUrl || data.coverImage, profile.id, 'Display image');
+          if (!imageUrl) throw { statusCode: 400, message: 'Upload a display image before continuing' };
+          update.coverImage = imageUrl;
+          break;
+        }
+        case 'kyc': {
+          if (data.documents) {
+            const incomingDocuments = jsonObject(data.documents);
+            const documents = { ...jsonObject(currentOptions.kycDocuments) };
+            for (const documentType of Object.keys(KYC_DOCUMENTS)) {
+              if (incomingDocuments[documentType] !== undefined) {
+                documents[documentType] = validateKycDocumentPath(profile.id, documentType, incomingDocuments[documentType]);
+              }
+            }
+            update.foodOptions = { ...currentOptions, kycDocuments: documents };
+          }
+          const aadhaarNumber = text(data.aadhaarNumber);
+          const panNumber = text(data.panNumber).toUpperCase();
+          if (aadhaarNumber && !/^\d{12}$/.test(aadhaarNumber)) throw { statusCode: 400, message: 'Aadhaar number must contain 12 digits' };
+          if (panNumber && !/^[A-Z]{5}\d{4}[A-Z]$/.test(panNumber)) throw { statusCode: 400, message: 'Invalid PAN number' };
+          const identityValues = [['AADHAR', aadhaarNumber], ['PAN', panNumber]];
+          for (const [idType, idNumber] of identityValues) {
+            if (!idNumber) continue;
+            await tx.providerVerification.upsert({
+              where: { providerId_idType: { providerId: profile.id, idType } },
+              create: { providerId: profile.id, idType, idNumber, isVerified: false },
+              update: { idNumber, isVerified: false },
+            });
+          }
+          break;
+        }
+        default:
+          throw { statusCode: 400, message: 'Unknown Tiffin onboarding step' };
       }
-      default:
-        throw { statusCode: 400, message: 'Unknown Tiffin onboarding step' };
-    }
 
-    if (Object.keys(update).length) {
-      await prisma.tiffinKitchen.update({ where: { id: kitchen.id }, data: update });
-    }
-    if (step === 'pricing') await updatePlans(kitchen.id, data.plans);
+      if (Object.keys(update).length) {
+        await tx.tiffinKitchen.update({ where: { id: kitchen.id }, data: update });
+      }
+      if (step === 'pricing') await updatePlans(tx, kitchen.id, data.plans);
+    });
 
-    return this.getOnboarding(phone, userId);
+    return this.getOnboarding(phone, userId, false);
   },
 
-  async submitOnboarding(phone: unknown, userId?: unknown) {
-    const { profile, kitchen } = await resolveOwner(phone, userId);
+  async submitOnboarding(phone: unknown, userId?: unknown, requireOtpVerified = true) {
+    const { profile, kitchen } = await resolveOwner(phone, userId, { requireOtpVerified });
     if (!kitchen) throw { statusCode: 400, message: 'Complete business details before submitting' };
     const verifications = await prisma.providerVerification.findMany({ where: { providerId: profile.id, idType: { in: ['AADHAR', 'PAN'] } } });
     const hasPlans = kitchen.subscriptionPlans.some((plan: AnyRecord) => plan.isActive);
@@ -465,13 +631,13 @@ export const tiffinProviderService = {
     return { submitted: true, verificationStatus: KitchenVerificationStatus.PENDING };
   },
 
-  async createKycUploadUrl(phone: unknown, userId: unknown, documentType: unknown, contentType: unknown) {
-    const { profile } = await resolveOwner(phone, userId);
+  async createKycUploadUrl(phone: unknown, userId: unknown, documentType: unknown, contentType: unknown, requireOtpVerified = true) {
+    const { profile } = await resolveOwner(phone, userId, { requireOtpVerified });
     const path = createKycPath(profile.id, text(documentType), text(contentType));
     return createSupabaseSignedUpload(path);
   },
 
-  async getDashboard(phone: unknown, userId?: unknown) {
+  async getDashboard(phone: unknown, userId?: unknown, redis?: Redis, logger?: FastifyBaseLogger) {
     const { profile, kitchen } = await resolveOwner(phone, userId);
     if (!kitchen) return { kitchen: null, metrics: { activeStudents: 0, todaysMeals: 0, pendingDeliveries: 0, deliveredMeals: 0 }, kitchenSummary: { totalMeals: 0, lunch: 0, dinner: 0, skipped: 0, pausedStudents: 0 }, deliveries: [], foodSummary: [] };
     await reconcilePaidTiffinReservations(kitchen.id);
@@ -480,27 +646,50 @@ export const tiffinProviderService = {
     const { start, end } = dayBounds();
     const businessDate = new Date(`${today}T00:00:00.000Z`);
     const mealWhere = { kitchenId: kitchen.id, mealDate: { gte: start, lte: end } };
-    const [activeStudents, pausedStudents, logs] = await Promise.all([
-      prisma.tiffinCustomerSubscription.count({ where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.ACTIVE, deletedAt: null, endDate: { gte: businessDate } } }),
-      prisma.tiffinCustomerSubscription.count({ where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.PAUSED, deletedAt: null, endDate: { gte: businessDate } } }),
-      prisma.tiffinMealLog.findMany({ where: mealWhere, orderBy: [{ mealCategory: 'asc' }, { createdAt: 'asc' }], take: 100 }),
-    ]);
+    const cacheKey = tiffinProviderDashboardKey(profile.id);
+    const cached = redis && logger
+      ? await readProviderDashboardCache<{
+          kitchen: { name: string | null; verificationStatus: string; status: string };
+          metrics: { activeStudents: number; todaysMeals: number; pendingDeliveries: number; deliveredMeals: number };
+          kitchenSummary: { totalMeals: number; lunch: number; dinner: number; skipped: number; pausedStudents: number };
+          foodSummary: Array<{ preference: string; count: number }>;
+          providerId: string;
+        }>(redis, cacheKey, logger)
+      : null;
+    const logs = await prisma.tiffinMealLog.findMany({ where: mealWhere, orderBy: [{ mealCategory: 'asc' }, { createdAt: 'asc' }], take: 100 });
     const users = await prisma.user.findMany({ where: { id: { in: logs.map((log) => log.customerId) } }, include: { studentProfile: true } });
     const byId = new Map(users.map((user) => [user.id, user]));
-    const foodSummary = await prisma.tiffinCustomerSubscription.groupBy({ by: ['dietPreference'], where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.ACTIVE, deletedAt: null, endDate: { gte: businessDate } }, _count: { _all: true } });
-    const todaysMeals = logs.filter((log) => ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
-    const pendingDeliveries = logs.filter((log) => log.status === MealLogStatus.SCHEDULED).length;
-    const deliveredMeals = logs.filter((log) => log.status === MealLogStatus.DELIVERED).length;
-    const skipped = logs.filter((log) => log.status === MealLogStatus.SKIPPED).length;
-    const lunch = logs.filter((log) => log.mealCategory === MealCategory.LUNCH && ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
-    const dinner = logs.filter((log) => log.mealCategory === MealCategory.DINNER && ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
+    let summary = cached && cached.metrics && cached.kitchenSummary && Array.isArray(cached.foodSummary)
+      ? cached
+      : null;
+    if (!summary) {
+      const [activeStudents, pausedStudents, foodSummary] = await Promise.all([
+        prisma.tiffinCustomerSubscription.count({ where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.ACTIVE, deletedAt: null, endDate: { gte: businessDate } } }),
+        prisma.tiffinCustomerSubscription.count({ where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.PAUSED, deletedAt: null, endDate: { gte: businessDate } } }),
+        prisma.tiffinCustomerSubscription.groupBy({ by: ['dietPreference'], where: { kitchenId: kitchen.id, status: TiffinSubscriptionStatus.ACTIVE, deletedAt: null, endDate: { gte: businessDate } }, _count: { _all: true } }),
+      ]);
+      const todaysMeals = logs.filter((log) => ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
+      const pendingDeliveries = logs.filter((log) => log.status === MealLogStatus.SCHEDULED).length;
+      const deliveredMeals = logs.filter((log) => log.status === MealLogStatus.DELIVERED).length;
+      const skipped = logs.filter((log) => log.status === MealLogStatus.SKIPPED).length;
+      const lunch = logs.filter((log) => log.mealCategory === MealCategory.LUNCH && ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
+      const dinner = logs.filter((log) => log.mealCategory === MealCategory.DINNER && ([MealLogStatus.SCHEDULED, MealLogStatus.DELIVERED] as MealLogStatus[]).includes(log.status)).length;
+      summary = {
+        kitchen: { name: kitchen.kitchenName, verificationStatus: kitchen.verificationStatus, status: kitchen.status },
+        metrics: { activeStudents, todaysMeals, pendingDeliveries, deliveredMeals },
+        kitchenSummary: { totalMeals: todaysMeals, lunch, dinner, skipped, pausedStudents },
+        foodSummary: foodSummary.map((item) => ({ preference: String(item.dietPreference).toLowerCase(), count: item._count._all })),
+        providerId: profile.id,
+      };
+      if (redis && logger) await writeProviderDashboardCache(redis, cacheKey, summary, logger);
+    }
     return {
-      kitchen: { name: kitchen.kitchenName, verificationStatus: kitchen.verificationStatus, status: kitchen.status },
-      metrics: { activeStudents, todaysMeals, pendingDeliveries, deliveredMeals },
-      kitchenSummary: { totalMeals: todaysMeals, lunch, dinner, skipped, pausedStudents },
-      foodSummary: foodSummary.map((item) => ({ preference: String(item.dietPreference).toLowerCase(), count: item._count._all })),
+      kitchen: summary.kitchen,
+      metrics: summary.metrics,
+      kitchenSummary: summary.kitchenSummary,
+      foodSummary: summary.foodSummary,
       deliveries: logs.map((log) => serializeMealLog(log, byId.get(log.customerId))),
-      providerId: profile.id,
+      providerId: summary.providerId,
     };
   },
 

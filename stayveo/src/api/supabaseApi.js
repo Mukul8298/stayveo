@@ -310,8 +310,8 @@ function mapRoomListingToListing(record, index = 0) {
     owner: record?.provider?.name || 'Property Owner',
     providerId: record?.providerId || record?.provider?.id || null,
     providerPhone: record?.provider?.phone || null,
-    latitude: record?.latitude ? Number(record.latitude) : null,
-    longitude: record?.longitude ? Number(record.longitude) : null,
+    latitude: record?.latitude === null || record?.latitude === undefined ? null : Number(record.latitude),
+    longitude: record?.longitude === null || record?.longitude === undefined ? null : Number(record.longitude),
     description: record?.description || `${record?.title || 'PG'} near your campus.`,
   };
 }
@@ -368,6 +368,13 @@ export function subscribeToPGChanges(callback) {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'pg_details' },
+      (payload) => {
+        callback?.(payload);
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'room_listings' },
       (payload) => {
         callback?.(payload);
       }

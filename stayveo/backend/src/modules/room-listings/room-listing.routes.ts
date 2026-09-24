@@ -12,12 +12,14 @@
 
 import { FastifyInstance } from 'fastify';
 import { roomListingController, publicRoomListingController } from './room-listing.controller.js';
+import { authenticateProvider } from '../../common/hooks/authenticate-provider.js';
 
 export async function publicRoomListingRoutes(fastify: FastifyInstance) {
   fastify.get('/public', publicRoomListingController.list);
 }
 
 export default async function roomListingRoutes(fastify: FastifyInstance) {
+  fastify.addHook('preHandler', authenticateProvider);
   fastify.post('/',                roomListingController.create);
   fastify.get('/',                 roomListingController.list);
   fastify.get('/:id',              roomListingController.getOne);

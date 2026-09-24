@@ -1,101 +1,142 @@
-// ─── Provider Onboarding Context ────────────────────────────────────────
-// Persists provider onboarding state in localStorage so it survives
-// page refreshes. Cleared on successful onboarding completion.
-// ────────────────────────────────────────────────────────────────────────
+// ─── Provider Context ──────────────────────────────────────────────────
+// Local storage keeps non-sensitive onboarding/UI state convenient between
+// steps. Provider identity and authentication always come from the current
+// HttpOnly provider session and /api/v1/provider/me.
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { getProviderBusinessDetails } from '../api/provider';
+import { getProviderCurrentProfile } from '../api/client';
 
 const ProviderContext = createContext(null);
 const STORAGE_KEY = 'providerOnboarding';
 
-function loadState() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...INITIAL_STATE, ...JSON.parse(saved) } : null;
-  } catch {
-    return null;
-  }
-}
-
 const INITIAL_STATE = {
   phone: '',
   providerId: '',
+  userId: '',
   name: '',
   email: '',
   otpVerified: false,
   isExistingUser: false,
   isVerified: false,
-  services: [],        // e.g. ['PG', 'TIFFIN']
+  services: [],
   activeServiceType: '',
-  completedSteps: [],  // e.g. ['otp', 'basic-info', 'services']
+  completedSteps: [],
 };
 
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? { ...INITIAL_STATE, ...JSON.parse(saved) } : INITIAL_STATE;
+  } catch {
+    return INITIAL_STATE;
+  }
+}
+
+function normalizeServiceType(service) {
+  const raw = service?.type || service?.serviceType || service?.service_type || service;
+  if (!raw) return '';
+  const normalized = String(raw).toUpperCase();
+  return normalized === 'PG' || normalized === 'TIFFIN' ? normalized : '';
+}
+
+function providerStateFromServer(raw, previous) {
+  const profile = raw || {};
+  const user = profile.user || {};
+  const services = (Array.isArray(profile.services) ? profile.services : [])
+    .map(normalizeServiceType)
+    .filter((type, index, values) => type && values.indexOf(type) === index);
+  if (profile.tiffinService && !services.includes('TIFFIN')) services.push('TIFFIN');
+  const activeServiceType = services.length === 1 ? services[0] : previous.activeServiceType;
+
+  return {
+    ...previous,
+    providerId: profile.providerId || profile.id || previous.providerId,
+    userId: profile.userId || user.id || previous.userId,
+    phone: profile.phone || profile.phone_number || user.phone_number || previous.phone,
+    email: profile.email || user.email || previous.email,
+    name: profile.name || previous.name,
+    isVerified: Boolean(profile.isVerified ?? previous.isVerified),
+    otpVerified: Boolean(profile.otpVerified ?? true),
+    services: services.length ? services : previous.services,
+    activeServiceType,
+    isExistingUser: true,
+  };
+}
+
 export function ProviderProvider({ children }) {
-  const [state, setState] = useState(() => loadState() || INITIAL_STATE);
-  const [providerLoading, setProviderLoading] = useState(() => {
-    const saved = loadState();
-    return Boolean((saved?.phone || saved?.email || saved?.providerId) && !saved?.activeServiceType && !saved?.services?.length);
-  });
-  const hydrationAttempted = useRef(false);
+  const [state, setState] = useState(loadState);
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [providerAuthenticated, setProviderAuthenticated] = useState(false);
+  const [providerSessionState, setProviderSessionState] = useState('loading');
+  const hydrationVersion = useRef(0);
 
   const updateProvider = useCallback((updates) => {
-    setState((prev) => {
-      const next = { ...prev, ...updates };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    hydrationVersion.current += 1;
+    setState((previous) => {
+      const next = { ...previous, ...updates };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* convenience cache only */ }
       return next;
     });
+    if (updates.userId || updates.providerId || updates.isAuthenticated) {
+      setProviderAuthenticated(true);
+      setProviderSessionState('authenticated');
+    }
   }, []);
 
   const clearProvider = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    hydrationVersion.current += 1;
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore storage failures */ }
     setState(INITIAL_STATE);
-    hydrationAttempted.current = false;
+    setProviderAuthenticated(false);
+    setProviderSessionState('unauthenticated');
     setProviderLoading(false);
   }, []);
 
-  // Older sessions may only contain the provider's name and phone. Resolve
-  // the saved service records from the existing profile endpoint before a
-  // provider-aware page renders its persona.
-  useEffect(() => {
-    const identity = state.phone || state.email || state.providerId;
-    if (!identity || state.activeServiceType || state.services?.length || hydrationAttempted.current) {
-      setProviderLoading(false);
-      return undefined;
-    }
-
-    hydrationAttempted.current = true;
+  const refreshProvider = useCallback(async () => {
+    const requestVersion = hydrationVersion.current;
     setProviderLoading(true);
-    let cancelled = false;
-
-    getProviderBusinessDetails(identity)
-      .then((response) => {
-        if (cancelled) return;
-        const details = response?.data || {};
-        const services = Array.isArray(details.services)
-          ? details.services
-            .map((service) => service?.type || service?.serviceType || service)
-            .filter(Boolean)
-          : [];
-        updateProvider({
-          name: details.name || state.name,
-          email: details.email || state.email,
-          services,
-        });
-      })
-      .catch(() => {
-        // The page still renders with neutral copy when profile hydration is
-        // unavailable; provider data is never replaced with a guessed type.
-      })
-      .finally(() => {
-        if (!cancelled) setProviderLoading(false);
+    try {
+      const response = await getProviderCurrentProfile();
+      if (requestVersion !== hydrationVersion.current) return null;
+      const current = response?.data;
+      setState((previous) => {
+        const next = providerStateFromServer(current, previous);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* convenience cache only */ }
+        return next;
       });
+      setProviderAuthenticated(true);
+      setProviderSessionState('authenticated');
+      return current;
+    } catch (error) {
+      if (requestVersion !== hydrationVersion.current) return null;
+      // A valid provider session can briefly have no profile during the first
+      // onboarding step. Only a rejected/expired session makes the user
+      // unauthenticated; the server response remains the authority.
+      setProviderAuthenticated(false);
+      setProviderSessionState(error?.details?.status === 401 ? 'unauthenticated' : 'unavailable');
+      return null;
+    } finally {
+      setProviderLoading(false);
+    }
+  }, []);
 
-    return () => { cancelled = true; };
-  }, [state.phone, state.activeServiceType, state.services, state.name, state.email, updateProvider]);
+  useEffect(() => {
+    // The async refresh synchronizes this context with the server-side
+    // session; keep the effect itself free of synchronous state writes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refreshProvider();
+  }, [refreshProvider]);
 
   return (
-    <ProviderContext.Provider value={{ provider: state, updateProvider, clearProvider, providerLoading }}>
+    <ProviderContext.Provider value={{
+      provider: state,
+      updateProvider,
+      clearProvider,
+      refreshProvider,
+      providerLoading,
+      providerAuthenticated,
+      providerSessionState,
+    }}>
       {children}
     </ProviderContext.Provider>
   );

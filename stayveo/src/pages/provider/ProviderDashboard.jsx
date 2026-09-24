@@ -16,6 +16,7 @@ import {
   BedDouble,
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
+import { providerLogout } from '../../api/provider';
 import { getProviderDashboardStats } from '../../api/booking';
 import Button from '../../components/Button';
 import './ProviderDashboard.css';
@@ -52,9 +53,11 @@ export default function ProviderDashboard() {
       .finally(() => setLoading(false));
   }, [providerId]);
 
-  const handleLogout = () => {
-    clearProvider();
-    navigate('/role-select');
+  const handleLogout = async () => {
+    try { await providerLogout(); } finally {
+      clearProvider();
+      navigate('/role-select');
+    }
   };
 
   const hour = new Date().getHours();

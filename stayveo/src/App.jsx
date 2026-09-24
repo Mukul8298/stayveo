@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import BottomNav from './components/BottomNav';
 
 // Eagerly loaded critical landing / onboarding pages for instant load
@@ -28,6 +28,7 @@ const SavedListings = lazy(() => import('./pages/SavedListings'));
 const ProviderLogin = lazy(() => import('./pages/provider/ProviderLogin'));
 const ProviderTypeSelect = lazy(() => import('./pages/provider/ProviderTypeSelect'));
 const ProviderOnboarding = lazy(() => import('./pages/provider/ProviderOnboarding'));
+const PGProviderOnboarding = lazy(() => import('./pages/provider/PGProviderOnboarding'));
 const ProviderVerification = lazy(() => import('./pages/provider/ProviderVerification'));
 const ProviderDashboard = lazy(() => import('./pages/provider/ProviderDashboard'));
 const ProviderBookings = lazy(() => import('./pages/provider/ProviderBookings'));
@@ -111,7 +112,8 @@ function AppContent() {
           {/* Provider — Auth / Onboarding (no dashboard shell) */}
           <Route path="/provider/login" element={<ProviderLogin />} />
           <Route path="/provider/select" element={<ProviderTypeSelect />} />
-          <Route path="/provider/onboarding" element={<ProviderOnboarding />} />
+          <Route path="/provider/pg/onboarding" element={<PGProviderOnboarding />} />
+          <Route path="/provider/onboarding" element={<Navigate to="/provider/pg/onboarding" replace />} />
           <Route path="/provider/verify" element={<ProviderVerification />} />
 
           {/* Provider — isolated Tiffin onboarding and dashboard */}

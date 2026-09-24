@@ -8,12 +8,18 @@ import { roomListingService } from './room-listing.service.js';
 import { roomListingRepository } from './room-listing.repository.js';
 import { sendSuccess, sendCreated } from '../../common/utils/response.js';
 import type { CreateRoomListingInput, UpdateRoomListingInput } from './room-listing.schema.js';
+import { invalidateProviderDashboardCache, pgProviderDashboardKey } from '../../common/cache/provider-dashboard.js';
 
 function getPhone(request: FastifyRequest): string {
-  const h = request.headers['x-provider-phone'];
-  const phone = Array.isArray(h) ? h[0] : h;
-  if (!phone) throw { statusCode: 400, message: 'x-provider-phone header is required' };
+  const phone = request.providerAuth?.phone;
+  if (!phone) throw { statusCode: 401, message: 'Provider authentication required' };
   return phone;
+}
+
+async function invalidateDashboard(request: FastifyRequest) {
+  const providerId = request.providerAuth?.profileId;
+  if (!providerId) return;
+  await invalidateProviderDashboardCache(request.server.redis, pgProviderDashboardKey(providerId), request.server.log);
 }
 
 export const roomListingController = {
@@ -24,6 +30,7 @@ export const roomListingController = {
   ) {
     const phone   = getPhone(request);
     const listing = await roomListingService.create(phone, request.body);
+    await invalidateDashboard(request);
     return sendCreated(reply, listing, 'Room listing created');
   },
 
@@ -51,6 +58,7 @@ export const roomListingController = {
   ) {
     const phone   = getPhone(request);
     const listing = await roomListingService.update(phone, request.params.id, request.body);
+    await invalidateDashboard(request);
     return sendSuccess(reply, listing, 'Listing updated');
   },
 
@@ -64,6 +72,7 @@ export const roomListingController = {
   ) {
     const phone   = getPhone(request);
     const listing = await roomListingService.toggle(phone, request.params.id, request.body.isActive);
+    await invalidateDashboard(request);
     return sendSuccess(reply, listing, listing.isActive ? 'Listing activated' : 'Listing closed');
   },
 
@@ -74,6 +83,7 @@ export const roomListingController = {
   ) {
     const phone = getPhone(request);
     await roomListingService.remove(phone, request.params.id);
+    await invalidateDashboard(request);
     return sendSuccess(reply, null, 'Listing removed');
   },
 
@@ -87,13 +97,16 @@ export const roomListingController = {
       throw { statusCode: 400, message: 'Inventory delta must be a non-zero integer between -100 and 100' };
     }
     const listing = await roomListingService.adjustInventory(phone, request.params.id, delta);
+    await invalidateDashboard(request);
     return sendSuccess(reply, listing, delta > 0 ? 'Beds added' : 'Beds removed');
   },
 };
 
 export const publicRoomListingController = {
   async list(_request: FastifyRequest, reply: FastifyReply) {
-    reply.header('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
+    // Availability changes after reservations and provider inventory updates.
+    // Do not let a browser/CDN serve an old availableBeds value.
+    reply.header('Cache-Control', 'no-store');
     const listings = await roomListingRepository.findActiveForStudents();
     return sendSuccess(reply, listings);
   },

@@ -38,8 +38,19 @@ function menuItems(value: unknown, preference: string) {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean);
   if (!value || typeof value !== 'object') return [];
   const source = value as AnyRecord;
-  const preferred = source[preference] || source.veg || source.nonveg || source.jain || Object.values(source).find(Array.isArray);
-  return Array.isArray(preferred) ? preferred.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : [];
+  const items = (candidate: unknown) => Array.isArray(candidate)
+    ? candidate.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
+    : [];
+  const veg = items(source.veg);
+  const nonveg = items(source.nonveg);
+  const jain = items(source.jain);
+
+  // BOTH is deterministic: prefer non-vegetarian food whenever it is
+  // planned for the day, otherwise fall back to the available vegetarian menu.
+  if (preference === 'both') return nonveg.length ? nonveg : veg;
+  if (preference === 'nonveg') return nonveg.length ? nonveg : veg;
+  if (preference === 'jain') return jain.length ? jain : veg;
+  return veg.length ? veg : nonveg.length ? nonveg : jain;
 }
 
 function mealCategory(value: string) {

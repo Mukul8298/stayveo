@@ -41,6 +41,28 @@ export const authRepository = {
     });
   },
 
+  /** Find the current user for a validated session without selecting secrets. */
+  async findByIdWithProfiles(id: string) {
+    return prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        phone_number: true,
+        role: true,
+        collegeId: true,
+        collegeName: true,
+        studentProfile: true,
+        providerProfile: {
+          include: {
+            services: { select: { type: true } },
+          },
+        },
+        provider: true,
+      },
+    });
+  },
+
   /** Create a new user with email, hashed password, and role */
   async createUser(email: string, passwordHash: string, role: UserRole) {
     return prisma.user.create({

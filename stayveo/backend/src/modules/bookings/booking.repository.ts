@@ -421,4 +421,56 @@ export const bookingRepository = {
       thisMonthRevenue: Number.isFinite(monthlyRevenueTotal) ? monthlyRevenueTotal : 0,
     };
   },
+
+  async countSummaryByProvider(providerId: string | string[]) {
+    const where = { providerId: Array.isArray(providerId) ? { in: providerId } : providerId };
+    const [total, newCount, acceptedCount, inProgressCount, completedCount] = await Promise.all([
+      prisma.booking.count({ where }),
+      prisma.booking.count({ where: { ...where, status: 'NEW' } }),
+      prisma.booking.count({ where: { ...where, status: 'ACCEPTED' } }),
+      prisma.booking.count({ where: { ...where, status: 'IN_PROGRESS' } }),
+      prisma.booking.count({ where: { ...where, status: 'COMPLETED' } }),
+    ]);
+    return {
+      total,
+      new: newCount,
+      accepted: acceptedCount,
+      confirmed: acceptedCount + inProgressCount + completedCount,
+      in_progress: inProgressCount,
+      completed: completedCount,
+    };
+  },
+
+  async monthlyRevenueByProvider(providerId: string | string[]) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const result = await prisma.booking.aggregate({
+      where: {
+        providerId: Array.isArray(providerId) ? { in: providerId } : providerId,
+        status: { in: ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'] },
+        createdAt: { gte: startOfMonth, lt: startOfNextMonth },
+      },
+      _sum: {
+        reservationFee: true,
+        platformFee: true,
+        foodCharges: true,
+        electricityCharges: true,
+        waterCharges: true,
+        maintenanceCharges: true,
+        parkingCharges: true,
+        otherCharges: true,
+      },
+    });
+    return [
+      result._sum.reservationFee,
+      result._sum.platformFee,
+      result._sum.foodCharges,
+      result._sum.electricityCharges,
+      result._sum.waterCharges,
+      result._sum.maintenanceCharges,
+      result._sum.parkingCharges,
+      result._sum.otherCharges,
+    ].reduce((sum, amount) => sum + Number(amount || 0), 0);
+  },
 };

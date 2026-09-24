@@ -2,76 +2,74 @@ import { request } from './client';
 
 const base = '/tiffin/provider';
 
-function ownerOptions(provider) {
-  return {
-    providerPhone: provider?.phone,
-    userId: provider?.userId || provider?.user_id,
-  };
+// Provider identity comes only from the HttpOnly provider session cookie.
+// Keep the argument for component compatibility, but never send it as an
+// authority to the backend.
+function legacyOwnerOptions(_provider) {
+  void _provider;
+  return {};
 }
 
-export function getTiffinOnboarding(provider) {
-  return request(`${base}/onboarding`, ownerOptions(provider));
+export function getTiffinOnboarding() {
+  return request(`${base}/onboarding`);
 }
 
-export function saveTiffinOnboarding(provider, step, data) {
+export function saveTiffinOnboarding(_provider, step, data) {
   return request(`${base}/onboarding`, {
     method: 'PUT',
     body: { step, data },
-    ...ownerOptions(provider),
   });
 }
 
-export function submitTiffinOnboarding(provider) {
+export function submitTiffinOnboarding() {
   return request(`${base}/onboarding/submit`, {
     method: 'POST',
-    ...ownerOptions(provider),
   });
 }
 
-export function createTiffinKycUploadUrl(provider, data) {
+export function createTiffinKycUploadUrl(_provider, data) {
   return request(`${base}/kyc/upload-url`, {
     method: 'POST',
     body: data,
-    ...ownerOptions(provider),
   });
 }
 
 export function getTiffinDashboard(provider) {
-  return request(`${base}/dashboard`, ownerOptions(provider));
+  return request(`${base}/dashboard`, legacyOwnerOptions(provider));
 }
 
 export function getTiffinMealChanges(provider, filter = '') {
   const params = filter ? `?filter=${encodeURIComponent(filter)}` : '';
-  return request(`${base}/meal-changes${params}`, ownerOptions(provider));
+  return request(`${base}/meal-changes${params}`, legacyOwnerOptions(provider));
 }
 
 export function getTiffinCustomers(provider, query = {}) {
   const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value));
-  return request(`${base}/customers${params.toString() ? `?${params}` : ''}`, ownerOptions(provider));
+  return request(`${base}/customers${params.toString() ? `?${params}` : ''}`, legacyOwnerOptions(provider));
 }
 
 export function getTiffinCustomer(provider, id) {
-  return request(`${base}/customers/${id}`, ownerOptions(provider));
+  return request(`${base}/customers/${id}`, legacyOwnerOptions(provider));
 }
 
 export function createTiffinCustomer(provider, data) {
   return request(`${base}/customers`, {
     method: 'POST',
     body: data,
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }
 
 export function getTiffinDeliveries(provider, query = {}) {
   const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value));
-  return request(`${base}/deliveries${params.toString() ? `?${params}` : ''}`, ownerOptions(provider));
+  return request(`${base}/deliveries${params.toString() ? `?${params}` : ''}`, legacyOwnerOptions(provider));
 }
 
 export function updateTiffinDelivery(provider, id, delivered = true) {
   return request(`${base}/deliveries/${id}`, {
     method: 'PATCH',
     body: { delivered },
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }
 
@@ -79,46 +77,46 @@ export function markAllTiffinDeliveries(provider, ids) {
   return request(`${base}/deliveries/mark-all`, {
     method: 'POST',
     body: { ids },
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }
 
 export function getTiffinMenu(provider) {
-  return request(`${base}/menu`, ownerOptions(provider));
+  return request(`${base}/menu`, legacyOwnerOptions(provider));
 }
 
 export function saveTiffinMenu(provider, menus) {
   return request(`${base}/menu`, {
     method: 'PUT',
     body: { menus },
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }
 
 export function getTiffinReports(provider) {
-  return request(`${base}/reports`, ownerOptions(provider));
+  return request(`${base}/reports`, legacyOwnerOptions(provider));
 }
 
 export function getTiffinSettings(provider) {
-  return request(`${base}/settings`, ownerOptions(provider));
+  return request(`${base}/settings`, legacyOwnerOptions(provider));
 }
 
 export function updateTiffinSettings(provider, data) {
   return request(`${base}/settings`, {
     method: 'PUT',
     body: data,
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }
 
 export function getTiffinBusinessDetails(provider) {
-  return request(`${base}/business-details`, ownerOptions(provider));
+  return request(`${base}/business-details`, legacyOwnerOptions(provider));
 }
 
 export function updateTiffinBusinessDetails(provider, data) {
   return request(`${base}/business-details`, {
     method: 'PUT',
     body: data,
-    ...ownerOptions(provider),
+    ...legacyOwnerOptions(provider),
   });
 }

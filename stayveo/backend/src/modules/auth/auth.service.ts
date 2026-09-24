@@ -18,6 +18,8 @@ import { generateOtp, hashOtp, verifyOtp as verifyOtpHash } from '../../common/u
 import { sendOtpEmail } from '../../common/utils/email.service.js';
 import { yearToDisplay } from '../../common/utils/year.js';
 import { UserRole } from '@prisma/client';
+import Redis from 'ioredis';
+import { createProfileSetupToken, createSession } from '../../common/auth/session.js';
 
 const BCRYPT_ROUNDS = 10;
 const OTP_EXPIRY_MINUTES = 5;
@@ -123,7 +125,7 @@ export const authService = {
    * - Login challenge  → authenticate existing user
    * - Signup challenge → create user, then authenticate
    */
-  async verifyOtp(input: VerifyOtpInput) {
+  async verifyOtp(input: VerifyOtpInput, redis: Redis) {
     const { email, otp, role } = verifyOtpSchema.parse(input);
     const prismaRole = role === 'STUDENT' ? UserRole.STUDENT : UserRole.PROVIDER;
 
@@ -161,7 +163,9 @@ export const authService = {
       const hasProfile = !!user.studentProfile;
 
       if (hasProfile) {
+        const sessionId = await createSession(redis, user.id, user.role);
         return {
+          sessionId,
           isProfileComplete: true,
           userId: user.id,
           message: `Welcome back ${user.studentProfile!.fullName} 👋`,
@@ -182,12 +186,12 @@ export const authService = {
           },
         };
       }
-
       return {
+        profileSetupToken: createProfileSetupToken(user.id, user.role),
         isProfileComplete: false,
         userId: user.id,
         nextStep: 'complete_profile',
-        message: 'Verified. Please complete your profile.',
+        message: 'Verified. Please complete your profile.'
       };
     }
 
@@ -199,10 +203,34 @@ export const authService = {
     const newUser = await authRepository.createUser(email, challenge.passwordHash, prismaRole);
 
     return {
+      profileSetupToken: createProfileSetupToken(newUser.id, newUser.role),
       isProfileComplete: false,
       userId: newUser.id,
       nextStep: 'complete_profile',
       message: 'Account created. Please complete your profile.',
+    };
+  },
+
+  /** Resolve the current authenticated user from the server-side session. */
+  async getCurrentUser(userId: string) {
+    const user = await authRepository.findByIdWithProfiles(userId);
+    if (!user) throw { statusCode: 401, message: 'Authentication required' };
+
+    const profile = user.role === UserRole.STUDENT
+      ? user.studentProfile
+      : user.providerProfile || user.provider;
+
+    return {
+      authenticated: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone_number,
+        role: user.role,
+        collegeId: user.collegeId,
+        collegeName: user.collegeName,
+        profile,
+      },
     };
   },
 

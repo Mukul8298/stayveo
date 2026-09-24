@@ -5,6 +5,7 @@ import Rating from './Rating';
 import { useSavedListings } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { formatDistance } from '../utils/calculateDistance';
 import './ListingCard.css';
 
 // ── ListingCard ─────────────────────────────────────────────────────────
@@ -42,10 +43,10 @@ export default function ListingCard({ listing, variant = 'horizontal' }) {
 
   // Defensive destructuring — handle completely missing listing
   const {
-    id, title = 'PG Room', price = 0, distance = 0,
+    id, title = 'PG Room', price = 0, distance = null,
     distanceLabel, rating = 0, reviews = 0, verified, images = [], services, roomType
   } = listing || {};
-  const safeDistanceLabel = distanceLabel || (Number.isFinite(distance) ? `${distance}km` : 'Distance unavailable');
+  const safeDistanceLabel = distanceLabel || formatDistance(distance);
 
   // ── Image handling with progressive fallback ────────────────────────
   // 1. Try the first image from the listing

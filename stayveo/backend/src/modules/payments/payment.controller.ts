@@ -24,10 +24,9 @@ export const paymentController = {
     request: FastifyRequest<{ Params: { providerId: string } }>,
     reply: FastifyReply
   ) {
-    const providerHeader = request.headers['x-provider-phone'];
-    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
-    if (!providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
-    const providerIds = await bookingService.resolveProviderIds(providerPhone);
+    const providerUserId = request.providerAuth?.userId;
+    if (!providerUserId) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
+    const providerIds = await bookingService.resolveProviderIdsByUserId(providerUserId);
     if (!providerIds.includes(request.params.providerId)) {
       return reply.status(403).send({ success: false, data: null, message: 'You do not own this provider account' });
     }
@@ -40,10 +39,9 @@ export const paymentController = {
     request: FastifyRequest<{ Params: { providerId: string } }>,
     reply: FastifyReply
   ) {
-    const providerHeader = request.headers['x-provider-phone'];
-    const providerPhone = Array.isArray(providerHeader) ? providerHeader[0] : providerHeader;
-    if (!providerPhone) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
-    const providerIds = await bookingService.resolveProviderIds(providerPhone);
+    const providerUserId = request.providerAuth?.userId;
+    if (!providerUserId) return reply.status(401).send({ success: false, data: null, message: 'Provider authentication required' });
+    const providerIds = await bookingService.resolveProviderIdsByUserId(providerUserId);
     if (!providerIds.includes(request.params.providerId)) {
       return reply.status(403).send({ success: false, data: null, message: 'You do not own this provider account' });
     }

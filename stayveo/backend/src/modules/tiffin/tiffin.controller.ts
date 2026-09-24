@@ -7,9 +7,29 @@ import { USER_ID_HEADER } from '../../common/constants.js';
 import type { CreateTiffinInput, TiffinFilterInput } from './tiffin.schema.js';
 import { tiffinReservationService } from './tiffin-reservation.service.js';
 import { tiffinStudentService } from './tiffin-student.service.js';
+import { invalidateProviderDashboardCache, tiffinProviderDashboardKey } from '../../common/cache/provider-dashboard.js';
 
 function userId(request: FastifyRequest) {
   return request.headers[USER_ID_HEADER] as string;
+}
+
+async function invalidateTiffinDashboard(request: FastifyRequest, subscriptionId?: string) {
+  if (!subscriptionId) return;
+  try {
+    const subscription = await request.server.prisma.tiffinCustomerSubscription.findUnique({
+      where: { id: subscriptionId },
+      select: { kitchen: { select: { ownerId: true } } },
+    });
+    if (subscription?.kitchen.ownerId) {
+      await invalidateProviderDashboardCache(
+        request.server.redis,
+        tiffinProviderDashboardKey(subscription.kitchen.ownerId),
+        request.server.log
+      );
+    }
+  } catch (error) {
+    request.server.log.warn({ err: error }, 'Tiffin provider dashboard cache invalidation failed');
+  }
 }
 
 export const tiffinController = {
@@ -55,6 +75,7 @@ export const tiffinController = {
     reply: FastifyReply
   ) {
     const reservation = await tiffinReservationService.create(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, reservation.id);
     return sendCreated(reply, reservation, 'Reservation created and awaiting payment');
   },
 
@@ -63,14 +84,18 @@ export const tiffinController = {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.confirm(request.params.id, userId(request)), 'Reservation confirmed');
+    const result = await tiffinReservationService.confirm(request.params.id, userId(request));
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Reservation confirmed');
   },
 
   async failReservationPayment(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.failPayment(request.params.id, userId(request)), 'Mock payment marked failed');
+    const result = await tiffinReservationService.failPayment(request.params.id, userId(request));
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Mock payment marked failed');
   },
 
   async getReservation(
@@ -91,35 +116,45 @@ export const tiffinController = {
     request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.createPayment(request.params.id, userId(request), request.body || {}), 'Payment attempt ready');
+    const result = await tiffinReservationService.createPayment(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Payment attempt ready');
   },
 
   async processMockPayment(
     request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.processPayment(request.params.id, userId(request), request.body || {}), 'Mock payment is processing');
+    const result = await tiffinReservationService.processPayment(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Mock payment is processing');
   },
 
   async completeMockPayment(
     request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.completePayment(request.params.id, userId(request), request.body || {}), 'Mock payment verified and reservation updated');
+    const result = await tiffinReservationService.completePayment(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Mock payment verified and reservation updated');
   },
 
   async failMockPayment(
     request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.failPayment(request.params.id, userId(request), request.body || {}), 'Mock payment marked failed');
+    const result = await tiffinReservationService.failPayment(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Mock payment marked failed');
   },
 
   async cancelMockPayment(
     request: FastifyRequest<{ Params: { id: string }; Body: Record<string, unknown> }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.cancelPayment(request.params.id, userId(request), request.body || {}), 'Mock payment cancelled');
+    const result = await tiffinReservationService.cancelPayment(request.params.id, userId(request), request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Mock payment cancelled');
   },
 
   async myReservations(request: FastifyRequest, reply: FastifyReply) {
@@ -134,17 +169,23 @@ export const tiffinController = {
     request: FastifyRequest<{ Params: { id: string }; Body: { meal?: string; date?: string } }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinStudentService.skipMeal(userId(request), request.params.id, request.body || {}), 'Meal skipped');
+    const result = await tiffinStudentService.skipMeal(userId(request), request.params.id, request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Meal skipped');
   },
 
   async pauseSubscription(
     request: FastifyRequest<{ Params: { id: string }; Body: { startDate?: string; endDate?: string } }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinStudentService.pauseSubscription(userId(request), request.params.id, request.body || {}), 'Subscription paused');
+    const result = await tiffinStudentService.pauseSubscription(userId(request), request.params.id, request.body || {});
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Subscription paused');
   },
 
   async resumeSubscription(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
-    return sendSuccess(reply, await tiffinStudentService.resumeSubscription(userId(request), request.params.id), 'Subscription resumed');
+    const result = await tiffinStudentService.resumeSubscription(userId(request), request.params.id);
+    await invalidateTiffinDashboard(request, request.params.id);
+    return sendSuccess(reply, result, 'Subscription resumed');
   },
 };

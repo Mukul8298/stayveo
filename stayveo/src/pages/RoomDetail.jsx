@@ -206,6 +206,7 @@ export default function RoomDetail() {
   const extraImages = room?.images ? room.images.slice(1) : [];
   const providerPhone = room?.providerPhone || 'Phone number unavailable';
   const canCallProvider = Boolean(room?.providerPhone);
+  const availableBeds = Number.isFinite(Number(room?.availableBeds)) ? Number(room.availableBeds) : null;
 
   return (
     <div className={`room-detail ${isInteractionOverlayOpen ? 'rd-overlay-open' : ''}`} id="room-detail">
@@ -253,7 +254,7 @@ export default function RoomDetail() {
             <span className="rd-capacity-icon"><BedDouble size={19} /></span>
             <div>
               <span className="rd-capacity-label">No. of Beds</span>
-              <strong>{Number(room?.numberOfBeds || room?.capacity || 1)} bed{Number(room?.numberOfBeds || room?.capacity || 1) === 1 ? '' : 's'}</strong>
+              <strong>{availableBeds === null ? 'Availability unavailable' : `${availableBeds} bed${availableBeds === 1 ? '' : 's'} available`}</strong>
             </div>
           </div>
         </div>

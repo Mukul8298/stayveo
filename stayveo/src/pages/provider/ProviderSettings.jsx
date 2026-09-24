@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Camera,
   CheckCircle2,
@@ -10,17 +11,41 @@ import {
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
 import { SERVICE_TYPES, getProviderPersona } from '../../config/providerServices';
+import { getProviderBankDetails, providerLogout } from '../../api/provider';
 import './ProviderSettings.css';
 
 export default function ProviderSettings() {
   const navigate = useNavigate();
-  const { provider, clearProvider, providerLoading } = useProvider();
-  const persona = getProviderPersona(provider);
-  const settingsBase = persona.type === SERVICE_TYPES.TIFFIN ? '/provider/tiffin/settings' : '/provider/settings';
+  const location = useLocation();
+  const { provider, clearProvider, providerLoading, providerAuthenticated } = useProvider();
+  const [bankSummary, setBankSummary] = useState({ loading: true, linked: false, masked: '', ifscCode: '' });
+  const routeIsTiffin = location.pathname.startsWith('/provider/tiffin/');
+  const persona = getProviderPersona(routeIsTiffin ? { ...provider, activeServiceType: SERVICE_TYPES.TIFFIN } : provider);
+  const settingsBase = routeIsTiffin || persona.type === SERVICE_TYPES.TIFFIN ? '/provider/tiffin/settings' : '/provider/settings';
   const PersonaIcon = persona.icon;
   const providerName = provider.name || 'Provider';
   const initial = providerName.trim().charAt(0).toUpperCase() || 'P';
   const contactItems = [provider.email, provider.phone].filter(Boolean);
+
+  useEffect(() => {
+    if (providerLoading || !providerAuthenticated) return undefined;
+    let cancelled = false;
+    getProviderBankDetails()
+      .then((response) => {
+        if (cancelled) return;
+        const details = response?.data || {};
+        setBankSummary({
+          loading: false,
+          linked: Boolean(details.linked && details.bankDetails),
+          masked: details.bankDetails?.accountNumberMasked || '',
+          ifscCode: details.bankDetails?.ifscCode || '',
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setBankSummary((current) => ({ ...current, loading: false }));
+      });
+    return () => { cancelled = true; };
+  }, [providerLoading, providerAuthenticated]);
 
   const accountItems = [
     {
@@ -32,7 +57,11 @@ export default function ProviderSettings() {
     {
       icon: CreditCard,
       label: 'Bank Details',
-      description: 'Manage your UPI ID and bank account details for direct payouts.',
+      description: bankSummary.loading
+        ? 'Loading payout account status...'
+        : bankSummary.linked
+          ? `✓ Bank account linked · ${bankSummary.masked}${bankSummary.ifscCode ? ` · IFSC: ${bankSummary.ifscCode}` : ''}`
+          : 'No bank account linked · Connect your payout account.',
       path: `${settingsBase}/bank-details`,
     },
   ];
@@ -53,9 +82,11 @@ export default function ProviderSettings() {
     },
   ];
 
-  function handleLogout() {
-    clearProvider();
-    navigate('/provider/login', { replace: true });
+  async function handleLogout() {
+    try { await providerLogout(); } finally {
+      clearProvider();
+      navigate('/provider/login', { replace: true });
+    }
   }
 
   return (

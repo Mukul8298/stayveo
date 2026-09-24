@@ -15,8 +15,8 @@ class ProviderApiError extends Error {
 }
 
 async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) {
+  void phone;
   const headers = { 'Content-Type': 'application/json' };
-  if (phone) headers['x-provider-phone'] = phone;
 
   let lastError;
 
@@ -26,6 +26,7 @@ async function providerRequest(endpoint, { method = 'POST', body, phone } = {}) 
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
+        credentials: 'include',
       });
 
       const json = await res.json().catch(() => null);
@@ -60,7 +61,31 @@ export function providerResendOtp(email) {
   return providerRequest('/resend-otp', { body: { email } });
 }
 
-// ── Onboarding Steps ────────────────────────────────────────────────────
+export function providerLogout() {
+  return providerRequest('/logout', { method: 'POST' });
+}
+
+// Shared bank-details API for PG and Tiffin provider Settings. Ownership is
+// resolved by the HttpOnly provider session on the backend.
+export function getProviderBankDetails() {
+  return providerRequest('/bank-details', { method: 'GET' });
+}
+
+export function updateProviderBankDetails(data) {
+  return providerRequest('/bank-details', { method: 'PUT', body: data });
+}
+
+export function saveSelectType(providerType) {
+  return providerRequest('/select-type', { body: { providerType } });
+}
+
+export function savePgOnboarding(data) {
+  return providerRequest('/pg-onboarding', { body: data });
+}
+
+export function completeOnboarding() {
+  return providerRequest('/complete-onboarding', { method: 'POST' });
+}
 
 export function saveBasicInfo({ name, phone, email }) {
   return providerRequest('/basic-info', { body: { name, phone, email } });

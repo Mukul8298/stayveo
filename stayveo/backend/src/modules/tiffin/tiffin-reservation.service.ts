@@ -28,6 +28,72 @@ function amountForPlan(plan: AnyRecord) {
   return Number(plan.discountPrice ?? plan.price ?? 0);
 }
 
+function normalizedPlanType(plan: AnyRecord) {
+  const type = String(plan.planType || '').toLowerCase();
+  return type === 'custom' ? 'daily' : type;
+}
+
+function durationForPlan(plan: AnyRecord) {
+  const type = normalizedPlanType(plan);
+  if (type === 'daily') return 1;
+  if (type === 'monthly') return 30;
+  if (type === 'weekly') return 7;
+  return Number(plan.durationDays) || 1;
+}
+
+function jsonObject(value: unknown): AnyRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {};
+}
+
+function normalizeFoodCategory(value: unknown) {
+  const category = text(value).toLowerCase().replace(/[\s_-]+/g, '');
+  if (category === 'veg' || category === 'vegetarian') return 'veg';
+  if (category === 'nonveg' || category === 'nonvegetarian') return 'nonveg';
+  if (category === 'jain') return 'jain';
+  return '';
+}
+
+function providerFoodCategories(kitchen: AnyRecord) {
+  const options = jsonObject(kitchen.foodOptions);
+  const categories = Array.isArray(options.categories)
+    ? options.categories.map(normalizeFoodCategory).filter(Boolean)
+    : [];
+  if (categories.length) return [...new Set(categories)];
+  const foodType = String(kitchen.foodType || 'veg').toLowerCase();
+  if (foodType === 'both') return ['veg', 'nonveg'];
+  return [foodType === 'nonveg' || foodType === 'jain' ? foodType : 'veg'];
+}
+
+function selectedDietPreferences(data: AnyRecord) {
+  const values = Array.isArray(data.dietPreferences)
+    ? data.dietPreferences
+    : [data.dietPreference];
+  const preferences = [...new Set(values.flatMap((item) => {
+    const normalized = text(item).toLowerCase();
+    if (normalized === 'both') return ['veg', 'nonveg'];
+    const category = normalizeFoodCategory(normalized);
+    return category ? [category] : [];
+  }))];
+  if (!preferences.length) throw { statusCode: 400, message: 'Select at least one food preference' };
+  if (preferences.includes('jain') && preferences.length > 1) {
+    throw { statusCode: 400, message: 'Jain preference cannot be combined with another food preference' };
+  }
+  return preferences;
+}
+
+function assertSupportedDietPreferences(kitchen: AnyRecord, preferences: string[]) {
+  const supported = providerFoodCategories(kitchen);
+  if (preferences.some((preference) => !supported.includes(preference))) {
+    throw { statusCode: 400, message: 'Selected food preference is not offered by this Tiffin provider' };
+  }
+}
+
+function dietPreferencesForValue(value: unknown) {
+  const preference = String(value || 'veg').toLowerCase();
+  if (preference === 'both') return ['veg', 'nonveg'];
+  return [preference === 'nonveg' || preference === 'jain' ? preference : 'veg'];
+}
+
 function serializePlan(plan: AnyRecord) {
   return {
     id: plan.id,
@@ -97,6 +163,7 @@ function serializeReservation(subscription: AnyRecord, kitchen: AnyRecord, payme
     endDate: datePart(subscription.endDate),
     deliveryAddress: subscription.deliveryAddress || '',
     dietPreference: String(subscription.dietPreference || '').toLowerCase(),
+    dietPreferences: dietPreferencesForValue(subscription.dietPreference),
     createdAt: subscription.createdAt,
     confirmedAt: subscription.confirmedAt,
   };
@@ -106,6 +173,28 @@ function dietEnum(value: string) {
   if (value === 'nonveg') return TiffinFoodType.NONVEG;
   if (value === 'jain') return TiffinFoodType.JAIN;
   return TiffinFoodType.VEG;
+}
+
+function dietEnumForPreferences(preferences: string[]) {
+  if (preferences.includes('veg') && preferences.includes('nonveg')) return TiffinFoodType.BOTH;
+  return dietEnum(preferences[0] || 'veg');
+}
+
+function perMealPriceForPlan(kitchen: AnyRecord, plan: AnyRecord) {
+  const dailyPlan = (kitchen.subscriptionPlans || []).find((item: AnyRecord) => normalizedPlanType(item) === 'daily');
+  const dailyPrice = Number(dailyPlan?.price);
+  if (Number.isFinite(dailyPrice) && dailyPrice > 0) return dailyPrice;
+  const configuredPrice = Number(kitchen.extraMealPrice);
+  if (Number.isFinite(configuredPrice) && configuredPrice > 0) return configuredPrice;
+  const planPrice = Number(plan.price);
+  return Number.isFinite(planPrice) && planPrice > 0 ? planPrice : 0;
+}
+
+function calculateReservationAmount(kitchen: AnyRecord, plan: AnyRecord, selectedMealCount: number) {
+  const perMealPrice = perMealPriceForPlan(kitchen, plan);
+  if (!perMealPrice) throw { statusCode: 400, message: 'This Tiffin provider has not configured a valid per-meal price' };
+  const amount = perMealPrice * selectedMealCount * durationForPlan(plan);
+  return Number(amount.toFixed(2));
 }
 
 function hasMenuItems(value: unknown): boolean {
@@ -339,6 +428,8 @@ export const tiffinReservationService = {
         address: kitchen.address || '',
         deliveryRadiusKm: Number(kitchen.deliveryRadiusKm || 0),
         foodType: String(kitchen.foodType || '').toLowerCase(),
+        foodCategories: providerFoodCategories(kitchen),
+        perMealPrice: perMealPriceForPlan(kitchen, plan),
         deliveryType: String(kitchen.deliveryType || '').toLowerCase(),
       },
       plans: kitchen.subscriptionPlans.map(serializePlan),
@@ -359,8 +450,11 @@ export const tiffinReservationService = {
     if (startDateKey < today) throw { statusCode: 400, message: 'Start date cannot be in the past' };
     if (!data.optedLunch && !data.optedDinner) throw { statusCode: 400, message: 'Select at least one meal' };
 
-    const amount = amountForPlan(plan);
-    if (!Number.isFinite(amount) || amount < 0) throw { statusCode: 400, message: 'The selected meal plan has an invalid price' };
+    const preferences = selectedDietPreferences(data);
+    assertSupportedDietPreferences(kitchen, preferences);
+    const selectedMealCount = Number(data.optedLunch) + Number(data.optedDinner);
+    const durationDays = durationForPlan(plan);
+    const amount = calculateReservationAmount(kitchen, plan, selectedMealCount);
     const idempotencyKey = data.idempotencyKey || crypto.randomUUID();
 
     const existingPayment = await prisma.tiffinPayment.findUnique({ where: { idempotencyKey } });
@@ -389,7 +483,7 @@ export const tiffinReservationService = {
 
     const startDate = dateOnly(startDateKey);
     const endDate = new Date(startDate);
-    endDate.setUTCDate(endDate.getUTCDate() + plan.durationDays - 1);
+    endDate.setUTCDate(endDate.getUTCDate() + durationDays - 1);
     const subscriptionCode = `TIF-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const subscription = await prisma.$transaction(async (tx) => {
       const created = await tx.tiffinCustomerSubscription.create({
@@ -398,7 +492,7 @@ export const tiffinReservationService = {
           kitchenId: kitchen.id,
           customerId: user.id,
           planId: plan.id,
-          dietPreference: dietEnum(data.dietPreference),
+          dietPreference: dietEnumForPreferences(preferences),
           customInstructions: text(data.customInstructions) || null,
           optedLunch: data.optedLunch,
           optedDinner: data.optedDinner,
@@ -410,10 +504,10 @@ export const tiffinReservationService = {
           currency: 'INR',
           startDate,
           endDate,
-          totalMealsAllocated: plan.totalMeals,
-          mealsRemaining: plan.totalMeals,
-          totalEntitledDays: plan.durationDays,
-          remainingDays: plan.durationDays,
+          totalMealsAllocated: selectedMealCount * durationDays,
+          mealsRemaining: selectedMealCount * durationDays,
+          totalEntitledDays: durationDays,
+          remainingDays: durationDays,
           paymentStatus: TiffinPaymentStatus.PENDING,
           status: TiffinSubscriptionStatus.PENDING,
         },

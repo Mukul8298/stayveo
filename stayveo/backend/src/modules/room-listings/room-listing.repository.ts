@@ -237,6 +237,8 @@ export const roomListingRepository = {
         title: listing.pgName,
         description: null,
         address: listing.address,
+        latitude: listing.latitude == null ? null : Number(listing.latitude),
+        longitude: listing.longitude == null ? null : Number(listing.longitude),
         roomType: listing.roomType,
         price: listing.minPrice,
         securityDeposit: listing.securityDeposit,

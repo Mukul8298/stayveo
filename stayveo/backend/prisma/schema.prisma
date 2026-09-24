@@ -200,25 +200,40 @@ model Provider {
   @@map("providers")
 }
 
+// Tracks how far through the onboarding wizard a provider has progressed.
+enum OnboardingStatus {
+  PENDING       @map("pending")
+  SELECT_TYPE   @map("select_type")
+  ONBOARDING    @map("onboarding")
+  COMPLETED     @map("completed")
+
+  @@map("onboarding_status")
+}
+
 // ─── PROVIDER ONBOARDING PROFILE ───────────────────────────────────────
 
 model ProviderProfile {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId        String   @unique @map("user_id") @db.Uuid
-  phone         String   @unique @db.VarChar(15)
-  name          String?
-  email         String?
-  businessName  String?  @map("business_name")
-  address       String?
-  contactNumber String?  @map("contact_number") @db.VarChar(20)
-  description   String?
-  isVerified    Boolean  @default(false) @map("is_verified")
-  otpVerified   Boolean  @default(false) @map("otp_verified")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String            @unique @map("user_id") @db.Uuid
+  phone            String            @unique @db.VarChar(15)
+  name             String?
+  email            String?
+  businessName     String?           @map("business_name")
+  address          String?
+  contactNumber    String?           @map("contact_number") @db.VarChar(20)
+  description      String?
+  latitude         Decimal?          @db.Decimal(9, 6)
+  longitude        Decimal?          @db.Decimal(9, 6)
+  isVerified       Boolean           @default(false) @map("is_verified")
+  otpVerified      Boolean           @default(false) @map("otp_verified")
+  providerType     ServiceType?      @map("provider_type")
+  onboardingStatus OnboardingStatus  @default(PENDING) @map("onboarding_status")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   services          ProviderService[]
   verifications     ProviderVerification[]
+  bankDetails       ProviderBankDetails?
   roomListings      RoomListing[]
   mealPlans         MealPlan[]
 
@@ -302,6 +317,24 @@ model ProviderVerification {
 
   @@unique([providerId, idType])
   @@map("provider_verifications")
+}
+
+// One payout bank account per onboarding provider profile. The accountNumber
+// column stores an encrypted value; API responses only expose its masked
+// suffix.
+model ProviderBankDetails {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId        String   @unique @map("provider_id") @db.Uuid
+  accountHolderName String   @map("account_holder_name") @db.VarChar(200)
+  accountNumber     String   @map("account_number") @db.VarChar(512)
+  ifscCode          String   @map("ifsc_code") @db.VarChar(11)
+  bankName          String   @map("bank_name") @db.VarChar(200)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  providerProfile ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("provider_bank_details")
 }
 
 // ─── SERVICES (junction: provider ↔ service types) ──────────────────────

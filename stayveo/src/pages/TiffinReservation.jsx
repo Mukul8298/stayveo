@@ -50,6 +50,46 @@ function titleCase(value) {
   return String(value || '').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+const FOOD_LABELS = {
+  veg: 'Vegetarian',
+  nonveg: 'Non-Vegetarian',
+  jain: 'Jain',
+};
+
+function normalizeFoodCategory(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[_\s-]+/g, '');
+  if (['veg', 'vegetarian'].includes(normalized)) return 'veg';
+  if (['nonveg', 'nonvegetarian'].includes(normalized)) return 'nonveg';
+  if (normalized === 'jain') return 'jain';
+  return '';
+}
+
+function normalizeFoodCategories(value) {
+  const values = Array.isArray(value) ? value : [value];
+  const categories = values.flatMap((item) => String(item || '').toLowerCase() === 'both'
+    ? ['veg', 'nonveg']
+    : [normalizeFoodCategory(item)]);
+  return [...new Set(categories.filter(Boolean))];
+}
+
+function planDurationDays(plan) {
+  const type = String(plan?.type || '').toLowerCase();
+  if (type === 'daily' || type === 'custom') return 1;
+  if (type === 'weekly') return 7;
+  if (type === 'monthly') return 30;
+  return Number(plan?.durationDays) || 1;
+}
+
+function calculatedPlanAmount(plan, perMealPrice, mealCount) {
+  const selectedMeals = Math.max(0, Number(mealCount) || 0);
+  if (!selectedMeals) return 0;
+  const price = Number(perMealPrice);
+  if (Number.isFinite(price) && price > 0) {
+    return Number((price * selectedMeals * planDurationDays(plan)).toFixed(2));
+  }
+  return Number(plan?.price || 0);
+}
+
 function reservationUrl(serviceId, reservationId) {
   return `/tiffin/${encodeURIComponent(serviceId)}/reservation?reservationId=${encodeURIComponent(reservationId)}`;
 }
@@ -75,6 +115,7 @@ export default function TiffinReservation() {
     deliveryLongitude: null,
     startDate: todayInIndia(),
     dietPreference: 'veg',
+    dietPreferences: ['veg'],
     customInstructions: '',
     optedLunch: true,
     optedDinner: true,
@@ -119,7 +160,13 @@ export default function TiffinReservation() {
             deliveryLatitude: student.latitude ?? null,
             deliveryLongitude: student.longitude ?? null,
             startDate: data.defaultStartDate || current.startDate,
-            dietPreference: ['veg', 'nonveg', 'jain'].includes(student.foodPreference) ? student.foodPreference : 'veg',
+            dietPreference: normalizeFoodCategories(student.foodPreferences || student.foodPreference)[0] || 'veg',
+            dietPreferences: (() => {
+              const supported = normalizeFoodCategories(data.service?.foodCategories || data.service?.foodType);
+              const saved = normalizeFoodCategories(student.foodPreferences || student.foodPreference)
+                .filter((category) => supported.includes(category));
+              return saved.length ? saved : [supported[0] || 'veg'];
+            })(),
           }));
           if (data.existingReservation) setReservation(data.existingReservation);
         }
@@ -160,10 +207,35 @@ export default function TiffinReservation() {
     return context.plans?.find((plan) => plan.id === form.planId) || context.selectedPlan || context.plans?.[0] || null;
   }, [context, form.planId]);
 
+  const supportedFoodCategories = useMemo(() => {
+    const categories = normalizeFoodCategories(context?.service?.foodCategories || context?.service?.foodType);
+    return categories.length ? categories : ['veg'];
+  }, [context]);
+  const selectedMealCount = Number(form.optedLunch) + Number(form.optedDinner);
+  const perMealPrice = Number(context?.service?.perMealPrice);
+  const reservationAmount = calculatedPlanAmount(selectedPlan, perMealPrice, selectedMealCount);
+
   const paymentEnabled = Boolean(context?.payment?.enabled || reservation?.testPayment || reservation?.payment?.gateway === 'mock');
 
   function updateField(name, value) {
     setForm((current) => ({ ...current, [name]: value }));
+    setError('');
+  }
+
+  function updateDietPreferences(category, checked) {
+    setForm((current) => {
+      const currentPreferences = normalizeFoodCategories(current.dietPreferences || current.dietPreference);
+      let nextPreferences;
+      if (category === 'jain') {
+        nextPreferences = checked ? ['jain'] : [];
+      } else {
+        const nonJain = currentPreferences.filter((preference) => preference !== 'jain');
+        nextPreferences = checked
+          ? [...new Set([...nonJain, category])]
+          : nonJain.filter((preference) => preference !== category);
+      }
+      return { ...current, dietPreferences: nextPreferences, dietPreference: nextPreferences[0] || '' };
+    });
     setError('');
   }
 
@@ -213,12 +285,15 @@ export default function TiffinReservation() {
     if (!selectedPlan?.id) return setError('Choose an available meal plan.');
     if (!form.deliveryAddress.trim()) return setError('Enter a delivery address.');
     if (!form.optedLunch && !form.optedDinner) return setError('Select at least one meal.');
+    if (!form.dietPreferences?.length) return setError('Select at least one food preference.');
     setSubmitting(true);
     setError('');
     try {
       const response = await createTiffinReservation(id, userId, {
         ...form,
         planId: selectedPlan.id,
+        dietPreference: form.dietPreferences[0],
+        dietPreferences: form.dietPreferences,
         deliveryAddress: form.deliveryAddress.trim(),
       });
       setReservation(response?.data);
@@ -267,7 +342,7 @@ export default function TiffinReservation() {
               <div className="tiffin-reservation-card-heading"><span className="tiffin-reservation-step">1</span><div><h2>Service summary</h2><p>The selected service and current plan pricing.</p></div></div>
               <div className="tiffin-reservation-service"><img src={image} alt="" /><div><h3>{service.name || provider?.name || 'Tiffin Service'}</h3><p><MapPin size={13} /> {service.address || provider?.address || 'Delivery address will be used for your order'}</p><span>{service.deliveryRadiusKm || provider?.deliveryRadiusKm || 0} km delivery coverage</span></div></div>
               <div className="tiffin-reservation-plans">
-                {(context?.plans || []).map((plan) => <button type="button" key={plan.id} className={`tiffin-reservation-plan ${form.planId === plan.id ? 'is-selected' : ''}`} onClick={() => updateField('planId', plan.id)}><span><strong>{plan.name || titleCase(plan.type)}</strong><small>{plan.description || `${plan.durationDays} day meal plan`}</small></span><strong>{money(plan.price)}</strong></button>)}
+                {(context?.plans || []).map((plan) => <button type="button" key={plan.id} className={`tiffin-reservation-plan ${form.planId === plan.id ? 'is-selected' : ''}`} onClick={() => updateField('planId', plan.id)}><span><strong>{plan.name || titleCase(plan.type)}</strong><small>{plan.description || `${plan.durationDays} day meal plan`}</small></span><strong>{money(calculatedPlanAmount(plan, perMealPrice, selectedMealCount))}</strong></button>)}
               </div>
             </section>
 
@@ -277,7 +352,7 @@ export default function TiffinReservation() {
                 <label><span>Student name</span><input value={context?.student?.name || ''} readOnly /></label>
                 <label><span>Phone number</span><input value={context?.student?.phone || ''} readOnly /></label>
                 <label className="is-wide"><span>Delivery address</span><textarea value={form.deliveryAddress} onChange={(event) => updateField('deliveryAddress', event.target.value)} placeholder="Enter the address where your meals should be delivered" rows={3} maxLength={500} required /></label>
-                <label><span>Food preference</span><select value={form.dietPreference} onChange={(event) => updateField('dietPreference', event.target.value)}><option value="veg">Vegetarian</option><option value="nonveg">Non-Vegetarian</option><option value="jain">Jain</option></select></label>
+                <div className="tiffin-reservation-meals"><span>Food preference</span><div>{supportedFoodCategories.map((category) => <label key={category}><input type="checkbox" checked={form.dietPreferences?.includes(category) || false} onChange={(event) => updateDietPreferences(category, event.target.checked)} /> {FOOD_LABELS[category]}</label>)}</div></div>
                 <label><span>Additional instructions <em>Optional</em></span><input value={form.customInstructions} onChange={(event) => updateField('customInstructions', event.target.value)} placeholder="Gate, floor, or delivery notes" maxLength={1000} /></label>
               </div>
             </section>
@@ -294,7 +369,7 @@ export default function TiffinReservation() {
             <SummaryRow label="Selected plan" value={selectedPlan?.name || titleCase(selectedPlan?.type)} />
             <SummaryRow label="Start date" value={form.startDate || '—'} />
             <SummaryRow label="Payment status" value={context?.payment?.enabled ? 'Development test mode' : 'Payment pending'} />
-            <div className="tiffin-reservation-total"><span>Total</span><strong>{money(selectedPlan?.price)}</strong></div>
+            <div className="tiffin-reservation-total"><span>Total</span><strong>{money(reservationAmount)}</strong></div>
             <button type="submit" className="tiffin-subscribe-button tiffin-reservation-submit" disabled={submitting || !selectedPlan?.id}>{submitting ? <><Loader2 size={16} className="spinning" /> Saving...</> : 'Save reservation & pay'}</button>
             <p className="tiffin-reservation-payment-note">{context?.payment?.label || 'Development payment mode — no real payment will be charged.'}</p>
           </aside>

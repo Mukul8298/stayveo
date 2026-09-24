@@ -5,6 +5,8 @@ import { createStudentProfileSchema, updateStudentProfileSchema } from './studen
 import type { CreateStudentInput, UpdateStudentInput } from './student.schema.js';
 import { userService } from '../users/user.service.js';
 import { parseYear } from '../../common/utils/year.js';
+import Redis from 'ioredis';
+import { createSession } from '../../common/auth/session.js';
 
 export const studentService = {
   /** Get student profile for the current user */
@@ -15,7 +17,7 @@ export const studentService = {
   },
 
   /** Create a student profile (validates user exists first) */
-  async createProfile(userId: string, input: CreateStudentInput) {
+  async createProfile(userId: string, input: CreateStudentInput, redis: Redis) {
     const data = createStudentProfileSchema.parse(input);
 
     // Ensure user exists
@@ -26,7 +28,9 @@ export const studentService = {
     if (existing) throw { statusCode: 409, message: 'Student profile already exists' };
 
     const profile = await studentRepository.create(userId, data);
-    return profile;
+    const user = await userService.getById(userId);
+    const sessionId = await createSession(redis, user.id, user.role);
+    return { profile, sessionId };
   },
 
   /** Update student profile */
@@ -40,4 +44,3 @@ export const studentService = {
     return profile;
   },
 };
-

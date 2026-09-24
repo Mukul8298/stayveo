@@ -18,12 +18,16 @@ import {
   verifyIdSchema,
   verifyOtpSchema,
   resendOtpSchema,
+  selectTypeSchema,
+  pgOnboardingSchema,
 } from './provider.schema.js';
 import type {
   BasicInfoInput,
   CreateProviderInput,
+  PgOnboardingInput,
   PhotoUploadInput,
   ResendOtpInput,
+  SelectTypeInput,
   ServiceDetailsInput,
   ServiceSelectionInput,
   UpdateBusinessDetailsInput,
@@ -37,12 +41,46 @@ import { generateOtp, hashOtp, verifyOtp as verifyOtpHash } from '../../common/u
 import { sendOtpEmail } from '../../common/utils/email.service.js';
 import { UserRole } from '@prisma/client';
 import prisma from '../../common/db/prisma.js';
+import type Redis from 'ioredis';
+import { createProviderSession, type ProviderType } from '../../common/auth/provider-session.js';
+import { getTiffinOnboardingStatus } from '../tiffin/tiffin-provider.service.js';
 
 const BCRYPT_ROUNDS = 10;
 const OTP_EXPIRY_MINUTES = 5;
 
+function providerTypeForServices(types: string[]): ProviderType {
+  return types.includes('TIFFIN') && !types.includes('PG') ? 'TIFFIN' : 'PG';
+}
+
 function otpExpiry(): Date {
   return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
+
+async function createAndSendProviderOtp(input: {
+  email: string;
+  purpose: string;
+  otp: string;
+  userId?: string;
+  passwordHash?: string;
+}) {
+  const challenge = await authRepository.createChallenge({
+    email: input.email,
+    role: UserRole.PROVIDER,
+    purpose: input.purpose,
+    otpHash: hashOtp(input.otp),
+    passwordHash: input.passwordHash,
+    userId: input.userId,
+    expiresAt: otpExpiry(),
+  });
+
+  try {
+    await sendOtpEmail(input.email, input.otp);
+  } catch (error) {
+    // Do not leave an OTP challenge that cannot be delivered. The original
+    // delivery error is preserved for the controller/server log.
+    await authRepository.deleteChallenge(challenge.id).catch(() => {});
+    throw error;
+  }
 }
 
 export const providerService = {
@@ -119,19 +157,13 @@ export const providerService = {
 
       // Generate & send OTP
       const otp = generateOtp();
-      const otpHash = hashOtp(otp);
-
       await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
-      await authRepository.createChallenge({
+      await createAndSendProviderOtp({
         email,
-        role: UserRole.PROVIDER,
         purpose: 'provider_login',
-        otpHash,
+        otp,
         userId: existingUser.id,
-        expiresAt: otpExpiry(),
       });
-
-      await sendOtpEmail(email, otp);
 
       return {
         requiresOtp: true,
@@ -143,19 +175,13 @@ export const providerService = {
     // New provider signup
     const hashedPassword = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
     const otp = generateOtp();
-    const otpHash = hashOtp(otp);
-
     await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
-    await authRepository.createChallenge({
+    await createAndSendProviderOtp({
       email,
-      role: UserRole.PROVIDER,
       purpose: 'provider_signup',
-      otpHash,
+      otp,
       passwordHash: hashedPassword,
-      expiresAt: otpExpiry(),
     });
-
-    await sendOtpEmail(email, otp);
 
     return {
       requiresOtp: true,
@@ -170,7 +196,7 @@ export const providerService = {
    * Login  → load existing provider profile, determine nextStep
    * Signup → create user + pending provider profile, return basic_info step
    */
-  async verifyOtp(input: VerifyOtpInput) {
+  async verifyOtp(input: VerifyOtpInput, redis: Redis) {
     const data = verifyOtpSchema.parse(input);
     const email = data.email;
 
@@ -213,7 +239,9 @@ export const providerService = {
 
       if (!profile) {
         // User exists but no provider profile yet — treat as new onboarding
+        const sessionId = await createProviderSession(redis, user.id, user.role, 'PG', null);
         return {
+          sessionId,
           message: 'Verified. Let\'s set up your provider profile.',
           nextStep: 'basic_info' as const,
           providerId: null,
@@ -226,19 +254,49 @@ export const providerService = {
       }
 
       const selectedTypes = profile.services.map((s) => s.type);
-      const tiffinOnly = selectedTypes.includes('TIFFIN') && !selectedTypes.includes('PG');
-      let nextStep: 'dashboard' | 'basic_info' | 'tiffin_dashboard' | 'tiffin_onboarding' = profile.name ? 'dashboard' : 'basic_info';
-      if (profile.name && tiffinOnly) {
-        const kitchen = await prisma.tiffinKitchen.findUnique({ where: { ownerId: profile.id }, select: { id: true } });
-        nextStep = kitchen ? 'tiffin_dashboard' : 'tiffin_onboarding';
+      const tiffinStatus = await getTiffinOnboardingStatus(profile.id);
+      const hasTiffinService = selectedTypes.includes('TIFFIN') || tiffinStatus.exists;
+      const tiffinOnly = hasTiffinService && !selectedTypes.includes('PG');
+
+      let nextStep: 'dashboard' | 'select_type' | 'pg_onboarding' | 'tiffin_dashboard' | 'tiffin_onboarding' = 'select_type';
+
+      if (profile.onboardingStatus === 'COMPLETED') {
+        nextStep = profile.providerType === 'TIFFIN' || tiffinOnly ? 'tiffin_dashboard' : 'dashboard';
+      } else if (profile.onboardingStatus === 'ONBOARDING') {
+        nextStep = profile.providerType === 'TIFFIN' ? 'tiffin_onboarding' : 'pg_onboarding';
+      } else if (profile.onboardingStatus === 'SELECT_TYPE') {
+        nextStep = 'select_type';
+      } else {
+        // Fallback for legacy profiles without onboardingStatus set
+        if (tiffinOnly) {
+          nextStep = tiffinStatus.completed ? 'tiffin_dashboard' : 'tiffin_onboarding';
+        } else if (profile.name) {
+          nextStep = 'dashboard';
+        } else {
+          nextStep = 'select_type';
+        }
       }
 
+      // Email OTP is now the provider verification step. Preserve the
+      // existing flag for legacy provider onboarding code, but no longer
+      // require the old phone-verification flow.
+      const verifiedProfile = await prisma.providerProfile.update({
+        where: { id: profile.id },
+        data: {
+          otpVerified: true,
+          email: profile.email || user.email || null,
+        },
+      });
+      const effectiveType: ProviderType = profile.providerType === 'TIFFIN' ? 'TIFFIN' : 'PG';
+      const sessionId = await createProviderSession(redis, user.id, user.role, effectiveType, profile.id);
+
       return {
+        sessionId,
         message: profile.name ? 'Welcome back' : 'Verified. Please complete onboarding.',
         nextStep,
         providerId: profile.id,
         userId: user.id,
-        phone: profile.phone,
+        phone: verifiedProfile.phone,
         name: profile.name,
         services: selectedTypes,
         isVerified: profile.isVerified,
@@ -259,11 +317,14 @@ export const providerService = {
       },
     });
 
-    // Create a minimal pending provider profile (phone will be set during basic-info)
+    // Create a minimal pending provider profile
     const newProfile = await prisma.providerProfile.create({
       data: {
         userId: newUser.id,
-        phone: '', // Will be populated during basic-info onboarding step
+        phone: `tmp${newUser.id.replace(/-/g, '').slice(0, 12)}`,
+        email,
+        otpVerified: true,
+        onboardingStatus: 'SELECT_TYPE',
       },
       include: {
         user: { select: { id: true, phone_number: true, role: true } },
@@ -274,9 +335,12 @@ export const providerService = {
       },
     });
 
+    const sessionId = await createProviderSession(redis, newUser.id, newUser.role, 'PG', newProfile.id);
+
     return {
+      sessionId,
       message: 'Account created. Let\'s set up your provider profile.',
-      nextStep: 'basic_info' as const,
+      nextStep: 'select_type' as const,
       providerId: newProfile.id,
       userId: newUser.id,
       phone: '',
@@ -308,19 +372,13 @@ export const providerService = {
     await authRepository.deleteChallengesByEmail(email, UserRole.PROVIDER);
 
     const otp = generateOtp();
-    const otpHash = hashOtp(otp);
-
-    await authRepository.createChallenge({
+    await createAndSendProviderOtp({
       email,
-      role: UserRole.PROVIDER,
       purpose,
-      otpHash,
+      otp,
       passwordHash: passwordHash ?? undefined,
       userId: userId ?? undefined,
-      expiresAt: otpExpiry(),
     });
-
-    await sendOtpEmail(email, otp);
 
     return {
       message: 'New verification code sent to your email.',
@@ -329,15 +387,9 @@ export const providerService = {
   },
 
   /** Save common provider onboarding info */
-  async saveBasicInfo(input: BasicInfoInput) {
+  async saveBasicInfo(userId: string, input: BasicInfoInput) {
     const data = basicInfoSchema.parse(input);
-    const existing = await providerRepository.findOnboardingByPhone(data.phone);
-
-    if (existing && !existing.otpVerified) {
-      throw { statusCode: 403, message: 'OTP verification required before onboarding' };
-    }
-
-    return providerRepository.saveBasicInfo(data);
+    return providerRepository.saveBasicInfoForUser(userId, data);
   },
 
   /** Save multi-service selection */
@@ -400,5 +452,22 @@ export const providerService = {
     const data = updateBusinessDetailsSchema.parse(input);
     await providerService.getVerifiedOnboardingProfile(phone);
     return providerRepository.updateOnboardingProfileFields(phone, data);
+  },
+
+  /** Select provider type (PG or TIFFIN) */
+  async selectType(userId: string, input: SelectTypeInput) {
+    const data = selectTypeSchema.parse(input);
+    return providerRepository.updateProviderType(userId, data.providerType);
+  },
+
+  /** Save PG Provider Onboarding details */
+  async savePgOnboarding(userId: string, input: PgOnboardingInput) {
+    const data = pgOnboardingSchema.parse(input);
+    return providerRepository.savePgOnboarding(userId, data);
+  },
+
+  /** Mark onboarding completed */
+  async completeOnboarding(userId: string) {
+    return providerRepository.completeOnboarding(userId);
   },
 };

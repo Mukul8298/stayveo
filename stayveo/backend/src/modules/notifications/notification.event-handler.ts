@@ -14,16 +14,26 @@ export const notificationEventHandler = {
       }
       const booking = await prisma.booking.findUnique({ where: { id: event.bookingId }, include: { receipt: true } });
       if (!booking) return;
-      const [provider, student] = await Promise.all([
+      const [provider, student, roomListing, pgDetails] = await Promise.all([
         prisma.providerProfile.findUnique({ where: { id: booking.providerId } }),
         prisma.user.findUnique({ where: { id: booking.userId }, include: { studentProfile: true } }),
+        booking.roomId
+          ? prisma.roomListing.findUnique({ where: { id: booking.roomId }, select: { id: true, title: true, roomType: true } })
+          : null,
+        booking.roomId
+          ? prisma.pGDetails.findUnique({ where: { id: booking.roomId }, select: { id: true, pgName: true, roomType: true } })
+          : null,
       ]);
       const receiptPayload = (booking.receipt?.payload || {}) as Record<string, unknown>;
+      const eventPropertyName = typeof event.payload?.propertyName === 'string' ? event.payload.propertyName : null;
+      const propertyName = roomListing?.title || pgDetails?.pgName || eventPropertyName || 'your property';
       const payload = {
         ...receiptPayload, ...event.payload, reservationId: booking.reservationId || event.reservationId,
         studentName: booking.studentName || student?.studentProfile?.fullName || 'Student', studentPhone: booking.studentPhone || student?.phone_number || null,
         providerName: provider?.name || provider?.businessName || 'Provider', providerContact: provider?.contactNumber || provider?.phone || null,
-        roomType: booking.roomType || 'Room', reservationFee: number(booking.reservationFee), monthlyRent: number(booking.monthlyRent),
+        propertyId: booking.roomId,
+        propertyName,
+        roomType: booking.roomType || roomListing?.roomType || pgDetails?.roomType || 'Room', reservationFee: number(booking.reservationFee), monthlyRent: number(booking.monthlyRent),
         securityDeposit: number(booking.securityDeposit), platformFee: number(booking.platformFee), totalPaid: number(booking.reservationFee) + number(booking.platformFee),
       };
       if (event.type === 'BOOKING_INITIATED') {

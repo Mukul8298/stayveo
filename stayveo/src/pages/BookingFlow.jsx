@@ -24,6 +24,7 @@ import { fetchPGListings, FALLBACK_IMAGE } from '../api/supabaseApi';
 import { createBooking, createPayment } from '../api/booking';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useDistanceFromCollege } from '../hooks/useDistanceFromCollege';
 import './BookingFlow.css';
 
 const DEFAULT_PLATFORM_FEE = 299;
@@ -72,6 +73,8 @@ export default function BookingFlow() {
   const [step, setStep] = useState('visit');
   const [visitDate, setVisitDate] = useState('');
   const [visitDateError, setVisitDateError] = useState('');
+  const { itemsWithDistance } = useDistanceFromCollege(room ? [room] : []);
+  const roomWithDistance = itemsWithDistance[0] || room;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -126,9 +129,7 @@ export default function BookingFlow() {
 
   const roomTypeLabel = room?.roomType || room?.type || 'Single Room';
   const amenityLabel = room?.amenities?.includes('AC') ? 'AC' : room?.amenities?.[0] || 'Verified amenities';
-  const distanceLabel = room?.distanceLabel || (
-    Number.isFinite(Number(room?.distanceKm)) ? `${Number(room.distanceKm).toFixed(1)} km from campus` : 'Near your campus'
-  );
+  const distanceLabel = roomWithDistance?.distanceLabel || 'Distance unavailable';
   const availabilityText = Number(room?.availableBeds) > 0
     ? `Only ${room.availableBeds} slot${Number(room.availableBeds) === 1 ? '' : 's'} remaining`
     : 'High demand near your campus';

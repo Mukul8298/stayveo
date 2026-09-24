@@ -20,10 +20,17 @@ export const studentRepository = {
 
     return prisma.$transaction(async (tx) => {
       if (collegeId || collegeName) {
+        // Verify the college FK exists before setting it — avoids P2003
+        let validCollegeId: string | null = null;
+        if (collegeId) {
+          const college = await tx.college.findUnique({ where: { id: collegeId }, select: { id: true } });
+          validCollegeId = college ? collegeId : null;
+        }
+
         await tx.user.update({
           where: { id: userId },
           data: {
-            collegeId: collegeId || null,
+            collegeId: validCollegeId,
             collegeName: collegeName || profileData.college,
           },
         });
@@ -44,10 +51,21 @@ export const studentRepository = {
 
     return prisma.$transaction(async (tx) => {
       if (collegeId !== undefined || collegeName !== undefined) {
+        // Verify the college FK exists before setting it — avoids P2003
+        let validCollegeId: string | null | undefined = undefined;
+        if (collegeId !== undefined) {
+          if (collegeId) {
+            const college = await tx.college.findUnique({ where: { id: collegeId }, select: { id: true } });
+            validCollegeId = college ? collegeId : null;
+          } else {
+            validCollegeId = null;
+          }
+        }
+
         await tx.user.update({
           where: { id: userId },
           data: {
-            ...(collegeId !== undefined ? { collegeId } : {}),
+            ...(validCollegeId !== undefined ? { collegeId: validCollegeId } : {}),
             ...(collegeName !== undefined ? { collegeName } : {}),
           },
         });

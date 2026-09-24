@@ -90,6 +90,7 @@ export function normalizeTiffinProvider(record = {}) {
     longitude: longitudeValue !== null && Number.isFinite(Number(longitudeValue)) ? Number(longitudeValue) : null,
     foodType,
     foodCategories,
+    perMealPrice: Number(firstValue(record.per_meal_price, record.perMealPrice, 0)) || 0,
     cuisine: firstValue(record.cuisine, record.style, foodCategories.includes('nonveg') ? 'Homestyle · Multi-Cuisine' : 'Homestyle · Vegetarian'),
     serviceOptions: normalizeServiceOptions(record),
     deliveryRadiusKm: Number(firstValue(record.delivery_radius_km, record.deliveryRadiusKm, record.delivery_range_km, 0)) || 0,

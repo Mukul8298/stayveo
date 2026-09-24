@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════════
+   PG Provider Onboarding — 5-step wizard
+   Reuses ProviderOnboarding.css patterns (po- prefix) for consistency
+   ═══════════════════════════════════════════════════════════════════ */
+
+.pgo-page {
+  min-height: 100vh; display: flex; flex-direction: column; background: white;
+}
+
+/* ── Top Bar ─────────────────────────────────────────────────── */
+.pgo-top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+}
+.pgo-step-info { display: flex; align-items: center; gap: var(--space-2); }
+.pgo-step-num { font-size: var(--text-xs); font-weight: 500; color: var(--neutral-400); }
+.pgo-step-icon { font-size: 20px; }
+
+/* ── Stepper ─────────────────────────────────────────────────── */
+.pgo-stepper {
+  display: flex; align-items: center; gap: 0; padding: 0 var(--space-5);
+  margin-bottom: var(--space-2);
+}
+.pgo-stepper-dot {
+  width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--neutral-200);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--neutral-400);
+  transition: all 0.3s var(--ease-out); flex-shrink: 0; background: white;
+}
+.pgo-stepper-dot.active {
+  border-color: var(--accent-500); color: white; background: var(--accent-500);
+  box-shadow: 0 2px 8px rgba(34,197,94,0.3);
+}
+.pgo-stepper-dot.done {
+  border-color: var(--accent-500); color: white; background: var(--accent-500);
+}
+.pgo-stepper-line {
+  flex: 1; height: 2px; background: var(--neutral-200); transition: background 0.3s;
+}
+.pgo-stepper-line.done { background: var(--accent-500); }
+
+/* ── Progress Bar ────────────────────────────────────────────── */
+.pgo-progress { height: 4px; background: var(--neutral-100); margin: 0 var(--space-5); border-radius: var(--radius-full); }
+.pgo-progress-bar {
+  height: 100%; background: linear-gradient(90deg, #22C55E, #16A34A);
+  border-radius: var(--radius-full); transition: width 0.4s var(--ease-out);
+}
+
+/* ── Content ─────────────────────────────────────────────────── */
+.pgo-content { flex: 1; padding: var(--space-6) var(--space-5); overflow-y: auto; }
+.pgo-title {
+  font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700;
+  margin-bottom: var(--space-2); animation: fadeInUp 0.3s var(--ease-out);
+}
+.pgo-subtitle {
+  font-size: var(--text-sm); color: var(--neutral-500); margin-bottom: var(--space-6);
+  animation: fadeInUp 0.3s var(--ease-out) 0.05s both;
+}
+
+/* ── Fields ──────────────────────────────────────────────────── */
+.pgo-fields {
+  display: flex; flex-direction: column; gap: var(--space-5);
+  animation: fadeInUp 0.3s var(--ease-out) 0.05s both;
+}
+.pgo-field label {
+  display: block; font-size: var(--text-sm); font-weight: 600;
+  color: var(--neutral-700); margin-bottom: var(--space-2);
+}
+.pgo-field label .pgo-optional {
+  font-weight: 400; color: var(--neutral-400); font-size: var(--text-xs);
+}
+
+.pgo-phone-row {
+  display: flex; align-items: center; border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-md); overflow: hidden;
+}
+.pgo-phone-row:focus-within { border-color: var(--accent-400); box-shadow: 0 0 0 3px rgba(34,197,94,0.08); }
+.pgo-phone-prefix {
+  padding: var(--space-3) var(--space-4); background: var(--neutral-50);
+  border-right: 1px solid var(--neutral-200); font-weight: 600;
+  color: var(--neutral-700); font-size: var(--text-base);
+}
+.pgo-phone-row .input-field { border: none; box-shadow: none; }
+.pgo-phone-row .input-field:focus { box-shadow: none; }
+
+/* ── Verify ID ───────────────────────────────────────────────── */
+.pgo-verify-cards { display: flex; flex-direction: column; gap: var(--space-4); }
+.pgo-verify-card {
+  padding: var(--space-4); border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-lg); transition: all var(--duration-fast);
+  animation: fadeInUp 0.3s var(--ease-out) both;
+}
+.pgo-verify-card:nth-child(2) { animation-delay: 0.08s; }
+.pgo-verify-card h3 {
+  font-family: var(--font-display); font-size: var(--text-base); font-weight: 600;
+  margin-bottom: var(--space-1); display: flex; align-items: center; gap: var(--space-2);
+}
+.pgo-verify-card p { font-size: var(--text-xs); color: var(--neutral-500); margin-bottom: var(--space-3); }
+.pgo-required { color: var(--danger-500); font-size: 10px; font-weight: 700; }
+.pgo-verify-card .input-field { background: var(--neutral-50); }
+
+/* ── Location section ────────────────────────────────────────── */
+.pgo-location-section { margin-top: var(--space-2); }
+.pgo-location-section h3 {
+  font-family: var(--font-display); font-size: var(--text-base); font-weight: 700;
+  display: flex; align-items: center; gap: var(--space-2);
+  color: var(--neutral-800); margin-bottom: var(--space-1);
+}
+.pgo-location-section p {
+  font-size: var(--text-xs); color: var(--neutral-400); margin-bottom: var(--space-4);
+}
+.pgo-map-coords {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  margin-top: var(--space-3); padding: var(--space-3);
+  border-radius: var(--radius-md); background: var(--accent-50);
+  border: 1px solid var(--accent-100); font-size: var(--text-xs);
+  color: var(--accent-600); font-weight: 500;
+  animation: fadeInUp 0.3s var(--ease-out);
+}
+
+/* ── Review ───────────────────────────────────────────────────── */
+.pgo-review-section {
+  display: flex; flex-direction: column; gap: var(--space-5);
+  animation: fadeInUp 0.3s var(--ease-out) 0.05s both;
+}
+.pgo-review-card {
+  padding: var(--space-4); border: 1.5px solid var(--neutral-200);
+  border-radius: var(--radius-lg); background: var(--neutral-50);
+}
+.pgo-review-card h3 {
+  font-family: var(--font-display); font-size: var(--text-base); font-weight: 600;
+  color: var(--neutral-700); margin-bottom: var(--space-3);
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.pgo-review-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--neutral-100);
+}
+.pgo-review-row:last-child { border-bottom: none; }
+.pgo-review-label { font-size: var(--text-sm); color: var(--neutral-500); }
+.pgo-review-value { font-size: var(--text-sm); font-weight: 600; color: var(--neutral-800); text-align: right; max-width: 60%; }
+
+/* ── Success ─────────────────────────────────────────────────── */
+.pgo-success {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center; min-height: 60vh;
+  animation: scaleIn 0.5s var(--ease-spring);
+}
+.pgo-success-icon {
+  width: 88px; height: 88px; border-radius: 50%;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: white; display: flex; align-items: center; justify-content: center;
+  margin-bottom: var(--space-5); box-shadow: 0 8px 32px rgba(34,197,94,0.3);
+  animation: float 3s ease-in-out infinite;
+}
+.pgo-success h1 {
+  font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+.pgo-success p { font-size: var(--text-sm); color: var(--neutral-500); max-width: 280px; margin-bottom: var(--space-6); }
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.pgo-footer {
+  padding: var(--space-4) var(--space-5);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--neutral-100);
+  display: flex; gap: var(--space-3);
+}
+.pgo-footer .btn { flex: 1; }
+
+/* ── Error ────────────────────────────────────────────────────── */
+.pgo-error {
+  padding: var(--space-3); margin-bottom: var(--space-4);
+  background: #FEF2F2; color: #DC2626; border-radius: var(--radius-md);
+  font-size: var(--text-sm); text-align: center; font-weight: 500;
+  animation: fadeIn var(--duration-fast);
+}
+
+/* ── Textarea ────────────────────────────────────────────────── */
+.pgo-textarea {
+  width: 100%; min-height: 100px; padding: var(--space-3) var(--space-4);
+  border: 1.5px solid var(--neutral-200); border-radius: var(--radius-md);
+  font-size: var(--text-base); font-family: var(--font-body);
+  resize: vertical; transition: all var(--duration-fast);
+}
+.pgo-textarea:focus {
+  outline: none; border-color: var(--accent-400);
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.08);
+}
+
+.spin { animation: spin 1s linear infinite; }

@@ -5,7 +5,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { userService } from './user.service.js';
 import { sendSuccess, sendCreated } from '../../common/utils/response.js';
-import { USER_ID_HEADER } from '../../common/constants.js';
 import type { CreateUserInput, UpdateUserInput, UpdateUserProfileInput } from './user.schema.js';
 
 export const userController = {
@@ -17,14 +16,14 @@ export const userController = {
 
   /** GET /users/me — Get current user profile */
   async getMe(request: FastifyRequest, reply: FastifyReply) {
-    const userId = request.headers[USER_ID_HEADER] as string;
+    const userId = request.user!.id;
     const user = await userService.getWithProfile(userId);
     return sendSuccess(reply, user);
   },
 
   /** PUT /users/me — Update current user */
   async updateMe(request: FastifyRequest<{ Body: UpdateUserInput }>, reply: FastifyReply) {
-    const userId = request.headers[USER_ID_HEADER] as string;
+    const userId = request.user!.id;
     const user = await userService.update(userId, request.body);
     return sendSuccess(reply, user, 'User updated successfully');
   },
@@ -36,7 +35,7 @@ export const userController = {
     request: FastifyRequest<{ Body: UpdateUserProfileInput }>,
     reply: FastifyReply
   ) {
-    const userId = request.headers[USER_ID_HEADER] as string | undefined;
+    const userId = request.user!.id;
     const user = await userService.updateProfile(request.body, userId);
     return sendSuccess(reply, user, 'Profile updated successfully');
   },

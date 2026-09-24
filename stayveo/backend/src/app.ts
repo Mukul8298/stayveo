@@ -5,11 +5,13 @@
 
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import sensible from '@fastify/sensible';
 import rateLimit from '@fastify/rate-limit';
 
 // Plugins
 import prismaPlugin from './plugins/prisma.js';
+import redisPlugin from './plugins/redis.js';
 
 // Error handler
 import { globalErrorHandler } from './errors/handler.js';
@@ -96,7 +98,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(sensible); // adds httpErrors, to(), etc.
+  await app.register(cookie);
   await app.register(prismaPlugin);
+  await app.register(redisPlugin);
 
   // ── Health Check ──────────────────────────────────────────────────
   app.get('/health', async () => ({

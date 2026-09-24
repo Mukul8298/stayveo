@@ -16,7 +16,6 @@ import {
   Trash2,
   Truck,
   Utensils,
-  X,
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
@@ -91,35 +90,62 @@ function inputValue(value) { return value === null || value === undefined ? '' :
 export default function TiffinOnboarding() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { provider } = useProvider();
+  const { provider, updateProvider } = useProvider();
+  const [authenticatedProvider, setAuthenticatedProvider] = useState(provider);
   const [stepIndex, setStepIndex] = useState(0);
   const [form, setForm] = useState(() => mergeSavedData(null, provider));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const activeProvider = authenticatedProvider;
+
   const step = STEPS[stepIndex];
   const current = form[step.key] || {};
   const canContinue = validateStep(step.key, current);
 
   useEffect(() => {
-    if (!provider.otpVerified && !provider.phone && !provider.email) {
-      navigate('/provider/login', { replace: true });
-      return;
-    }
     let cancelled = false;
-    getTiffinOnboarding(provider)
+    getTiffinOnboarding()
       .then((response) => {
-        if (!cancelled) setForm(mergeSavedData(response.data?.data, provider));
+        if (cancelled) return;
+        const identity = response.data?.identity || response.data?.profile || {};
+        const nextProvider = {
+          ...provider,
+          providerId: identity.providerId || provider.providerId,
+          userId: identity.userId || provider.userId,
+          name: identity.name || provider.name,
+          email: identity.email || provider.email,
+          phone: identity.phone || provider.phone,
+          otpVerified: true,
+        };
+        setAuthenticatedProvider(nextProvider);
+        const contextUpdates = {
+          providerId: nextProvider.providerId,
+          userId: nextProvider.userId,
+          name: nextProvider.name,
+          email: nextProvider.email,
+          phone: nextProvider.phone,
+          otpVerified: true,
+        };
+        if (Object.entries(contextUpdates).some(([key, value]) => provider[key] !== value)) {
+          updateProvider(contextUpdates);
+        }
+        setForm(mergeSavedData(response.data?.data, nextProvider));
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || 'Unable to load your Tiffin progress');
+        if (cancelled) return;
+        if (err?.details?.status === 401) {
+          navigate('/provider/login', { replace: true });
+          return;
+        }
+        setError(err.message || 'Unable to load your Tiffin progress');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [navigate, provider]);
+  }, [navigate, provider, updateProvider]);
 
   function updateSection(key, updates) {
     setForm((previous) => ({ ...previous, [key]: { ...previous[key], ...updates } }));
@@ -140,16 +166,16 @@ export default function TiffinOnboarding() {
       toast.error('Profile pictures must be smaller than 5 MB');
       return;
     }
-    if (!provider.providerId) {
+    if (!activeProvider.providerId) {
       toast.error('Provider identity is required before uploading a profile picture');
       return;
     }
     const previousPhoto = form.business.profilePhoto;
     setSaving(true);
     try {
-      const uploaded = await uploadImage({ file, providerId: provider.providerId, listingId: 'tiffin-profile', serviceType: STORAGE_SERVICE_TYPES.TIFFIN, imageId: crypto.randomUUID?.() || `${Date.now()}` });
+      const uploaded = await uploadImage({ file, providerId: activeProvider.providerId, listingId: 'tiffin-profile', serviceType: STORAGE_SERVICE_TYPES.TIFFIN, imageId: crypto.randomUUID?.() || `${Date.now()}` });
       updateSection('business', { profilePhoto: uploaded.publicUrl });
-      if (isOwnedTiffinProfileImage(previousPhoto, provider.providerId)) {
+      if (isOwnedTiffinProfileImage(previousPhoto, activeProvider.providerId)) {
         await removeImageFromStorage(previousPhoto).catch(() => {});
       }
       toast.success('Profile photo uploaded');
@@ -164,7 +190,7 @@ export default function TiffinOnboarding() {
     const previousPhoto = form.business.profilePhoto;
     if (!previousPhoto) return;
     updateSection('business', { profilePhoto: '' });
-    if (!isOwnedTiffinProfileImage(previousPhoto, provider.providerId)) return;
+    if (!isOwnedTiffinProfileImage(previousPhoto, activeProvider.providerId)) return;
     setSaving(true);
     try {
       await removeImageFromStorage(previousPhoto);
@@ -215,7 +241,7 @@ export default function TiffinOnboarding() {
         const previousUrl = form.displayImage.imageUrl;
         const uploaded = await uploadImage({
           file,
-          providerId: provider.providerId,
+          providerId: activeProvider.providerId,
           listingId: 'display-image',
           serviceType: STORAGE_SERVICE_TYPES.TIFFIN,
           imageId: crypto.randomUUID?.() || `${Date.now()}`,
@@ -223,14 +249,14 @@ export default function TiffinOnboarding() {
         pendingDisplayFileRef.current = null;
         dataToSave = { imageUrl: uploaded.publicUrl };
         // Remove old image if it was an uploaded one (not a blob URL)
-        if (previousUrl && !previousUrl.startsWith('blob:') && isOwnedTiffinProfileImage(previousUrl, provider.providerId)) {
+        if (previousUrl && !previousUrl.startsWith('blob:') && isOwnedTiffinProfileImage(previousUrl, activeProvider.providerId)) {
           await removeImageFromStorage(previousUrl).catch(() => {});
         }
       }
 
-      const response = await saveTiffinOnboarding(provider, step.key, dataToSave);
+      const response = await saveTiffinOnboarding(activeProvider, step.key, dataToSave);
       const saved = response.data?.data;
-      if (saved) setForm(mergeSavedData(saved, provider));
+      if (saved) setForm(mergeSavedData(saved, activeProvider));
       setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
     } catch (err) {
       setError(err.message || 'Could not save this section');
@@ -244,7 +270,7 @@ export default function TiffinOnboarding() {
     setSaving(true);
     setError('');
     try {
-      await submitTiffinOnboarding(provider);
+      await submitTiffinOnboarding(activeProvider);
       toast.success('Tiffin service submitted for verification');
       navigate('/provider/tiffin/dashboard', { replace: true });
     } catch (err) {
@@ -298,7 +324,7 @@ export default function TiffinOnboarding() {
             </div>
           )}
           {error && <div className="tpo-error" role="alert">{error}</div>}
-          {step.key === 'business' && <BusinessStep data={current} provider={provider} onChange={(updates) => updateSection('business', updates)} onPhoto={handleProfilePhoto} onRemovePhoto={removeProfilePhoto} />}
+          {step.key === 'business' && <BusinessStep data={current} provider={activeProvider} onChange={(updates) => updateSection('business', updates)} onPhoto={handleProfilePhoto} onRemovePhoto={removeProfilePhoto} />}
           {step.key === 'location' && <LocationStep data={current} onChange={(updates) => updateSection('location', updates)} />}
           {step.key === 'pricing' && <PricingStep data={current} onChange={(updates) => updateSection('pricing', updates)} onPlan={updatePlan} />}
           {step.key === 'food' && <FoodStep data={current} onChange={(updates) => updateSection('food', updates)} />}

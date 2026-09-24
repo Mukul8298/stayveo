@@ -14,7 +14,9 @@ function getResend(): Resend {
   if (!_resend) {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
-      throw new Error('RESEND_API_KEY environment variable is not set');
+      const error = new Error('OTP email service is not configured');
+      Object.assign(error, { statusCode: 503, code: 'OTP_EMAIL_NOT_CONFIGURED' });
+      throw error;
     }
     _resend = new Resend(apiKey);
   }
@@ -52,12 +54,15 @@ export async function sendOtpEmail(
   });
 
   if (error) {
-    console.error('Resend API error:', error);
-    throw new Error(`Failed to send verification email: ${error.message}`);
+    const deliveryError = new Error('OTP email service is temporarily unavailable');
+    Object.assign(deliveryError, { statusCode: 502, code: 'OTP_EMAIL_DELIVERY_FAILED', cause: error });
+    throw deliveryError;
   }
 
   if (!data?.id) {
-    throw new Error('Resend returned no email ID');
+    const deliveryError = new Error('OTP email service returned an invalid response');
+    Object.assign(deliveryError, { statusCode: 502, code: 'OTP_EMAIL_INVALID_RESPONSE' });
+    throw deliveryError;
   }
 
   console.log(`OTP email sent successfully, Resend ID: ${data.id}`);

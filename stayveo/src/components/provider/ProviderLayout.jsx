@@ -30,7 +30,9 @@ import {
   House,
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
+import { providerLogout } from '../../api/provider';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
+import ProviderAuthGate from './ProviderAuthGate';
 import './ProviderLayout.css';
 
 // ── Page title mapping ─────────────────────────────────────────────────
@@ -133,9 +135,11 @@ export default function ProviderLayout() {
     }
   }
 
-  function handleLogout() {
-    clearProvider();
-    navigate('/provider/login', { replace: true });
+  async function handleLogout() {
+    try { await providerLogout(); } finally {
+      clearProvider();
+      navigate('/provider/login', { replace: true });
+    }
   }
 
   return (
@@ -217,7 +221,7 @@ export default function ProviderLayout() {
 
         {/* ─── Page Content ───────────────────────────────────────── */}
         <div className="pl-content">
-          <Outlet />
+          <ProviderAuthGate><Outlet /></ProviderAuthGate>
         </div>
       </div>
 

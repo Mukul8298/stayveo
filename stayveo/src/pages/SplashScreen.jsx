@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import './SplashScreen.css';
 
 export default function SplashScreen() {
   const navigate = useNavigate();
+  const { authState } = useAuth();
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => setProgress(p => Math.min(p + 2, 100)), 40);
-    const timer = setTimeout(() => navigate('/role-select'), 2200);
+    if (authState.isLoading) return () => clearInterval(interval);
+    const timer = setTimeout(
+      () => navigate(authState.isAuthenticated ? '/home' : '/role-select'),
+      2200
+    );
     return () => { clearInterval(interval); clearTimeout(timer); };
-  }, [navigate]);
+  }, [authState.isLoading, authState.isAuthenticated, navigate]);
 
   return (
     <div className="splash" id="splash-screen">
