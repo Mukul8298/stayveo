@@ -86,6 +86,20 @@
   color: var(--neutral-600);
 }
 
+.auth-forgot-link,
+.pl-forgot-link {
+  align-self: flex-end;
+  border: 0;
+  background: transparent;
+  color: var(--accent-600);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .input-field-wrap {
   display: flex;
   align-items: center;

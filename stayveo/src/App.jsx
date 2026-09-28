@@ -6,6 +6,7 @@ import BottomNav from './components/BottomNav';
 import SplashScreen from './pages/SplashScreen';
 import RoleSelection from './pages/RoleSelection';
 import AuthScreen from './pages/AuthScreen';
+import ForgotPassword from './pages/ForgotPassword';
 import CollegeSelection from './pages/CollegeSelection';
 import StudentOnboarding from './pages/StudentOnboarding';
 import HomeScreen from './pages/HomeScreen';
@@ -60,7 +61,7 @@ const TiffinProviderLayout = lazy(() => import('./components/tiffin-provider/Tif
 import ProviderLayout from './components/provider/ProviderLayout';
 const ProviderBankDetails = lazy(() => import('./pages/provider/ProviderBankDetails'));
 
-const noStudentNav = ['/', '/role-select', '/auth', '/college-select', '/onboarding'];
+const noStudentNav = ['/', '/role-select', '/auth', '/forgot-password', '/college-select', '/onboarding'];
 
 function PageFallback() {
   return (
@@ -89,6 +90,7 @@ function AppContent() {
           <Route path="/" element={<SplashScreen />} />
           <Route path="/role-select" element={<RoleSelection />} />
           <Route path="/auth" element={<AuthScreen />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/college-select" element={<CollegeSelection />} />
           <Route path="/onboarding" element={<StudentOnboarding />} />
 

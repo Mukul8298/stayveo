@@ -37,7 +37,9 @@ export const providerDashboardService = {
       select: { id: true },
     });
     const providerIds = [profile.id, legacyProvider?.id].filter(Boolean) as string[];
-    const key = pgProviderDashboardKey(profile.id);
+    const providerId = profile.id;
+    const key = pgProviderDashboardKey(providerId);
+    logger.debug?.({ providerId, cacheKey: key }, 'Reading PG provider dashboard cache');
     let cached = await readProviderDashboardCache<CachedPgDashboard>(redis, key, logger);
     if (
       !cached ||
@@ -52,10 +54,10 @@ export const providerDashboardService = {
 
     if (!cached) {
       const [activeListings, bookings, totalViews, uniqueViews] = await Promise.all([
-        prisma.providerService.count({ where: { providerId: profile.id } }),
+        prisma.providerService.count({ where: { providerId } }),
         bookingRepository.countSummaryByProvider(providerIds),
-        profileViewService.getCount(profile.id),
-        profileViewService.getUniqueCount(profile.id),
+        profileViewService.getCount(providerId),
+        profileViewService.getUniqueCount(providerId),
       ]);
 
       cached = {
@@ -69,7 +71,7 @@ export const providerDashboardService = {
     const [thisMonthRevenue, totalEarningsResult] = await Promise.all([
       bookingRepository.monthlyRevenueByProvider(providerIds),
       prisma.payment.aggregate({
-        where: { providerId: profile.id, status: 'PAID' },
+        where: { providerId, status: 'PAID' },
         _sum: { amount: true },
       }),
     ]);
@@ -81,7 +83,7 @@ export const providerDashboardService = {
       // value is intentionally live, never read from the Redis cache.
       earnings: { thisMonth: thisMonthRevenue },
       totalEarnings: Number(totalEarningsResult._sum.amount || 0),
-      providerId: profile.id,
+      providerId,
     };
   },
 };

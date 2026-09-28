@@ -26,3 +26,11 @@ export function resumeTiffinSubscription(subscriptionId, userId) {
     userId,
   });
 }
+
+export function createTiffinRenewal(subscriptionId, userId, data = {}) {
+  return request(`/tiffin/my-subscriptions/${encodeURIComponent(subscriptionId)}/renewal`, { method: 'POST', body: data, userId });
+}
+
+export function verifyTiffinRenewal(subscriptionId, userId, data = {}) {
+  return request(`/tiffin/my-subscriptions/${encodeURIComponent(subscriptionId)}/renewal/verify`, { method: 'POST', body: data, userId });
+}

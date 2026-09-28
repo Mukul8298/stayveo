@@ -118,7 +118,7 @@ export default function AuthScreen() {
     <div className="auth-page" id="auth-screen">
       <button
         className="auth-back"
-        onClick={() => (step === 'otp' ? setStep('credentials') : navigate(-1))}
+        onClick={() => (step === 'otp' ? setStep('credentials') : navigate('/role-select', { replace: true }))}
       >
         <ArrowLeft size={20} />
       </button>
@@ -172,6 +172,7 @@ export default function AuthScreen() {
                   required
                 />
               </div>
+              <button type="button" className="auth-forgot-link" onClick={() => navigate('/forgot-password?role=STUDENT', { replace: true })}>Forgot password?</button>
             </div>
 
             <Button

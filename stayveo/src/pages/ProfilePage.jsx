@@ -311,7 +311,9 @@ export default function ProfilePage() {
   };
 
   const handleUpdateProfile = async () => {
-    const validationError = validateProfile(info, authState.phone);
+    // Phone is optional for email-authenticated users. The identity gate
+    // must use the authenticated user ID hydrated from the server session.
+    const validationError = validateProfile(info, authState.userId);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -589,7 +591,7 @@ export default function ProfilePage() {
         ))}
       </div>
 
-      <button className="profile-logout" onClick={() => { clearAuth(); toast.info('Logged out'); navigate('/'); }}>
+      <button className="profile-logout" onClick={async () => { await clearAuth(); toast.info('Logged out'); navigate('/role-select', { replace: true }); }}>
         <LogOut size={18} /> Log Out
       </button>
     </div>

@@ -1,7 +1,8 @@
-import { MealCategory, MealLogStatus, Prisma, TiffinPaymentStatus, TiffinSubscriptionStatus } from '@prisma/client';
+import { MealCategory, MealLogStatus, Prisma, SubscriptionSkipStatus, TiffinPaymentStatus, TiffinSubscriptionStatus } from '@prisma/client';
 import prisma from '../../common/db/prisma.js';
 import { getCurrentTiffinDate, getCurrentTiffinDay } from '../../common/utils/tiffin-day.js';
 import { ensureTodayMealLogs, reconcilePaidTiffinReservations } from './tiffin-reservation.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 
 type AnyRecord = Record<string, any>;
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -65,6 +66,22 @@ function assertStudent(userId: unknown) {
   const id = text(userId);
   if (!id) throw { statusCode: 401, message: 'Student authentication is required' };
   return id;
+}
+
+async function resolveKitchenOwnerUserId(ownerId: string | null | undefined) {
+  if (!ownerId) return null;
+
+  // TiffinKitchen.ownerId is the existing provider-profile ID. Notifications
+  // are addressed to the related users.id, not the provider-profile ID.
+  const profile = await prisma.providerProfile.findUnique({
+    where: { id: ownerId },
+    select: { userId: true },
+  });
+  if (profile?.userId) return profile.userId;
+
+  // Keep compatibility with any legacy kitchen rows that stored users.id.
+  const user = await prisma.user.findUnique({ where: { id: ownerId }, select: { id: true } });
+  return user?.id || null;
 }
 
 async function findSubscription(userId: string, subscriptionId?: string, client: DbClient = prisma) {
@@ -230,11 +247,32 @@ export const tiffinStudentService = {
 
     const subscription = await findSubscription(customerId, subscriptionId);
     if (!subscription || subscription.status !== TiffinSubscriptionStatus.ACTIVE) throw { statusCode: 404, message: 'Active Tiffin subscription not found' };
-    if (mealDate < dateKey(subscription.startDate)! || mealDate > dateKey(subscription.endDate)!) throw { statusCode: 400, message: 'Meal date is outside your subscription' };
+    const mealEndDate = meal === 'dinner' ? subscription.dinnerEndDate || subscription.endDate : subscription.lunchEndDate || subscription.endDate;
+    if (mealDate < dateKey(subscription.startDate)! || mealDate > dateKey(mealEndDate)!) throw { statusCode: 400, message: 'Meal date is outside this meal entitlement' };
 
     const day = getCurrentTiffinDay(dateAtNoon(mealDate));
     const menu = await prisma.tiffinKitchenWeeklyMenu.findFirst({ where: { kitchenId: subscription.kitchenId, dayOfWeek: day, mealCategory: mealCategory(meal) }, select: { items: true } });
     if (!menuItems(menu?.items, String(subscription.dietPreference).toLowerCase()).length) throw { statusCode: 400, message: `No ${meal} is planned for ${mealDate}` };
+
+    const existingSkip = await prisma.tiffinSubscriptionSkip.findUnique({ where: { subscriptionId_skipDate_mealCategory: { subscriptionId, skipDate: dateOnly(mealDate), mealCategory: mealCategory(meal) } } });
+    if (existingSkip?.status === SubscriptionSkipStatus.ACTIVE) return getSpace(customerId);
+
+    const existingMeal = await prisma.tiffinMealLog.findUnique({ where: { subscriptionId_mealDate_mealCategory: { subscriptionId, mealDate: dateOnly(mealDate), mealCategory: mealCategory(meal) } } });
+    if (existingMeal?.status === MealLogStatus.SKIPPED) return getSpace(customerId);
+    if (existingMeal?.status === MealLogStatus.DELIVERED) throw { statusCode: 409, message: 'A delivered meal cannot be skipped' };
+    if (existingMeal?.status === MealLogStatus.CANCELLED) throw { statusCode: 409, message: 'This meal is no longer available to skip' };
+
+    const student = await prisma.user.findUnique({ where: { id: customerId }, include: { studentProfile: true } });
+    const ownerUserId = await resolveKitchenOwnerUserId(subscription.kitchen.ownerId);
+    if (ownerUserId) {
+      await notificationService.createFromTemplate(
+        ownerUserId,
+        'tiffin_meal_skipped',
+        'provider',
+        { studentName: student?.studentProfile?.fullName || student?.email || 'Student', mealCategory: meal, skipDate: mealDate, subscriptionId },
+        'TIFFIN_MEAL_SKIPPED'
+      );
+    }
 
     await prisma.$transaction(async (tx) => {
       const existing = await tx.tiffinMealLog.findUnique({ where: { subscriptionId_mealDate_mealCategory: { subscriptionId, mealDate: dateOnly(mealDate), mealCategory: mealCategory(meal) } } });
@@ -246,6 +284,17 @@ export const tiffinStudentService = {
       } else {
         await tx.tiffinMealLog.create({ data: { subscriptionId, kitchenId: subscription.kitchenId, customerId, mealDate: dateOnly(mealDate), mealCategory: mealCategory(meal), status: MealLogStatus.SKIPPED, skippedAt: new Date() } });
       }
+      await tx.tiffinSubscriptionSkip.create({
+        data: {
+          subscriptionId,
+          studentId: customerId,
+          skipDate: dateOnly(mealDate),
+          mealCategory: mealCategory(meal),
+          mealCount: 1,
+          status: SubscriptionSkipStatus.ACTIVE,
+          ownerNotifiedAt: ownerUserId ? new Date() : null,
+        },
+      });
       await tx.tiffinCustomerSubscription.update({ where: { id: subscriptionId }, data: { mealsSkipped: { increment: 1 } } });
       await tx.tiffinActivityLog.create({
         data: {

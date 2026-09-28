@@ -260,17 +260,17 @@ export const providerService = {
 
       let nextStep: 'dashboard' | 'select_type' | 'pg_onboarding' | 'tiffin_dashboard' | 'tiffin_onboarding' = 'select_type';
 
-      if (profile.onboardingStatus === 'COMPLETED') {
-        nextStep = profile.providerType === 'TIFFIN' || tiffinOnly ? 'tiffin_dashboard' : 'dashboard';
+      if (profile.providerType === 'TIFFIN' || tiffinOnly) {
+        nextStep = tiffinStatus.completed || profile.onboardingStatus === 'COMPLETED' ? 'tiffin_dashboard' : 'tiffin_onboarding';
+      } else if (profile.onboardingStatus === 'COMPLETED') {
+        nextStep = 'dashboard';
       } else if (profile.onboardingStatus === 'ONBOARDING') {
-        nextStep = profile.providerType === 'TIFFIN' ? 'tiffin_onboarding' : 'pg_onboarding';
+        nextStep = 'pg_onboarding';
       } else if (profile.onboardingStatus === 'SELECT_TYPE') {
         nextStep = 'select_type';
       } else {
         // Fallback for legacy profiles without onboardingStatus set
-        if (tiffinOnly) {
-          nextStep = tiffinStatus.completed ? 'tiffin_dashboard' : 'tiffin_onboarding';
-        } else if (profile.name) {
+        if (profile.name) {
           nextStep = 'dashboard';
         } else {
           nextStep = 'select_type';
@@ -452,6 +452,19 @@ export const providerService = {
     const data = updateBusinessDetailsSchema.parse(input);
     await providerService.getVerifiedOnboardingProfile(phone);
     return providerRepository.updateOnboardingProfileFields(phone, data);
+  },
+
+  async getBusinessDetailsByUserId(userId: string) {
+    const profile = await providerRepository.getOnboardingProfileByUserId(userId);
+    if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
+    if (!profile.otpVerified) throw { statusCode: 403, message: 'OTP verification required before onboarding' };
+    return profile;
+  },
+
+  async updateBusinessDetailsByUserId(userId: string, input: UpdateBusinessDetailsInput) {
+    const data = updateBusinessDetailsSchema.parse(input);
+    await providerService.getBusinessDetailsByUserId(userId);
+    return providerRepository.updateOnboardingProfileFieldsByUserId(userId, data);
   },
 
   /** Select provider type (PG or TIFFIN) */

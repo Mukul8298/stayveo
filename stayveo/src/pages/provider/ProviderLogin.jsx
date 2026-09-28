@@ -119,7 +119,7 @@ export default function ProviderLogin() {
     <div className="pl-page" id="provider-login">
       <button
         className="pl-back"
-        onClick={() => (step === 'otp' ? setStep('credentials') : navigate(-1))}
+        onClick={() => (step === 'otp' ? setStep('credentials') : navigate('/role-select', { replace: true }))}
       >
         <ArrowLeft size={20} />
       </button>
@@ -173,6 +173,7 @@ export default function ProviderLogin() {
                   required
                 />
               </div>
+              <button type="button" className="pl-forgot-link" onClick={() => navigate('/forgot-password?role=PROVIDER', { replace: true })}>Forgot password?</button>
             </div>
 
             <Button

@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import {
   clearProviderSessionCookie,
+  deleteProviderSession,
   getProviderSession,
   PROVIDER_SESSION_COOKIE_NAME,
   touchProviderSession,
@@ -58,12 +59,24 @@ export async function authenticateProvider(request: FastifyRequest, reply: Fasti
     select: {
       id: true,
       role: true,
-      providerProfile: { select: { id: true, phone: true } },
+      providerProfile: { select: { id: true, phone: true, providerType: true } },
     },
   });
 
-  if (!user || user.role !== 'PROVIDER' || user.role !== session.role) {
-    await request.server.redis.del(`provider:session:${sessionId}`);
+  const providerProfileMatchesSession =
+    session.providerId === null || session.providerId === user?.providerProfile?.id;
+  const providerTypeMatchesProfile =
+    !user?.providerProfile?.providerType ||
+    user.providerProfile.providerType === session.providerType;
+
+  if (
+    !user ||
+    user.role !== 'PROVIDER' ||
+    user.role !== session.role ||
+    !providerProfileMatchesSession ||
+    !providerTypeMatchesProfile
+  ) {
+    await deleteProviderSession(request.server.redis, sessionId, session.userId);
     clearProviderSessionCookie(reply);
     return reply.status(401).send({
       success: false,

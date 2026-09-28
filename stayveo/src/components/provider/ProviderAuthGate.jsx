@@ -12,7 +12,7 @@ export default function ProviderAuthGate({ children }) {
     if (providerSessionState === 'unavailable') {
       return <div className="provider-route-loading" role="alert">Unable to verify your provider session. Check the backend connection and refresh.</div>;
     }
-    return <Navigate to="/provider/login" replace />;
+    return <Navigate to="/role-select" replace />;
   }
 
   return children;

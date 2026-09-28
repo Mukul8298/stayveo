@@ -35,6 +35,7 @@ export async function sendOtpEmail(
   to: string,
   otp: number | string,
   name?: string,
+  purpose: 'verification' | 'password-reset' = 'verification',
 ): Promise<string> {
   const resend = getResend();
 
@@ -46,8 +47,8 @@ export async function sendOtpEmail(
   const { data, error } = await resend.emails.send({
     from: FROM_ADDRESS,
     to: [to],
-    subject: 'Your StayVeo verification code',
-    html: `<p>Your StayVeo verification code is: <strong>${otp}</strong></p><p>This code expires in 5 minutes.</p>`,
+    subject: purpose === 'password-reset' ? 'Your StayVeo password reset code' : 'Your StayVeo verification code',
+    html: `<p>Your StayVeo ${purpose === 'password-reset' ? 'password reset' : 'verification'} code is: <strong>${otp}</strong></p><p>This code expires in 5 minutes.</p>`,
     headers: {
       'X-Entity-Ref-ID': `stayveo-otp-${Date.now()}`,
     },

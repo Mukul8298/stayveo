@@ -1,6 +1,6 @@
 import type { TiffinPaymentStatus } from '@prisma/client';
 
-export type PaymentMode = 'mock' | 'none' | 'razorpay';
+export type PaymentMode = 'none' | 'razorpay';
 
 export type ProviderPaymentRecord = {
   id: string;
@@ -24,11 +24,6 @@ export type ProviderOrder = {
   providerOrderId: string;
 };
 
-export type SimulatedPayment = {
-  providerPaymentId: string;
-  transactionId: string;
-};
-
 export type VerifyProviderPaymentInput = {
   payment: ProviderPaymentRecord;
   providerPaymentId: string;
@@ -42,9 +37,4 @@ export interface PaymentProvider {
   createOrder(input: CreateProviderOrderInput): Promise<ProviderOrder>;
   verifyPayment(input: VerifyProviderPaymentInput): Promise<{ verified: true }>;
 
-  /**
-   * Development-only hook. A real gateway will provide its payment result
-   * through checkout callbacks/webhooks instead of this method.
-   */
-  simulatePayment?(input: { payment: ProviderPaymentRecord; outcome: 'success' }): Promise<SimulatedPayment>;
 }

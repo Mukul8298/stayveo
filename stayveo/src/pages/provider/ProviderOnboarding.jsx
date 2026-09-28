@@ -718,7 +718,7 @@ export default function ProviderOnboarding() {
 
   // Redirect if not OTP-verified. This must stay after hooks to preserve hook order.
   if (!provider.otpVerified) {
-    return <Navigate to="/provider/login" replace />;
+    return <Navigate to="/role-select" replace />;
   }
 
   // ── Render ────────────────────────────────────────────────────────────

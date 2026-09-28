@@ -13,6 +13,14 @@ export const createPaymentSchema = z.object({
   status: z.enum(['paid', 'success', 'captured', 'completed', 'pending', 'processing', 'failed']).default('pending'),
   payment_method: z.string().min(1).max(60).optional(),
   transaction_id: z.string().min(1).max(128).optional(),
+  idempotency_key: z.string().min(8).max(128).optional(),
+});
+
+export const verifyPaymentSchema = z.object({
+  payment_id: z.string().uuid(),
+  razorpay_order_id: z.string().min(1).max(128),
+  razorpay_payment_id: z.string().min(1).max(128),
+  razorpay_signature: z.string().min(1).max(256),
 });
 
 export const earningsFilterSchema = z.object({
@@ -22,3 +30,4 @@ export const earningsFilterSchema = z.object({
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 export type EarningsFilterInput = z.infer<typeof earningsFilterSchema>;
+export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;

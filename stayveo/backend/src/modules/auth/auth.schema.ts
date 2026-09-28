@@ -39,3 +39,25 @@ export const resendOtpSchema = z.object({
 export type StartAuthInput = z.infer<typeof startAuthSchema>;
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export type ResendOtpInput = z.infer<typeof resendOtpSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: emailField,
+});
+
+export const verifyPasswordResetSchema = z.object({
+  email: emailField,
+  otp: otpField,
+});
+
+export const resetPasswordSchema = z.object({
+  resetToken: z.string().min(20).max(256),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type VerifyPasswordResetInput = z.infer<typeof verifyPasswordResetSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

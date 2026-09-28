@@ -3,7 +3,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { authService } from './auth.service.js';
 import { sendSuccess } from '../../common/utils/response.js';
-import type { StartAuthInput, VerifyOtpInput, ResendOtpInput } from './auth.schema.js';
+import type { StartAuthInput, VerifyOtpInput, ResendOtpInput, ForgotPasswordInput, VerifyPasswordResetInput, ResetPasswordInput } from './auth.schema.js';
 import {
   clearSessionCookie,
   clearProfileSetupCookie,
@@ -51,6 +51,30 @@ export const authController = {
 
     const result = await authService.getCurrentUser(request.user.id);
     return sendSuccess(reply, result, 'Authenticated');
+  },
+
+  async forgotPassword(
+    request: FastifyRequest<{ Body: ForgotPasswordInput }>,
+    reply: FastifyReply
+  ) {
+    const result = await authService.forgotPassword(request.body);
+    return sendSuccess(reply, result, result.message);
+  },
+
+  async verifyPasswordReset(
+    request: FastifyRequest<{ Body: VerifyPasswordResetInput }>,
+    reply: FastifyReply
+  ) {
+    const result = await authService.verifyPasswordReset(request.body, request.server.redis);
+    return sendSuccess(reply, result, 'Reset code verified');
+  },
+
+  async resetPassword(
+    request: FastifyRequest<{ Body: ResetPasswordInput }>,
+    reply: FastifyReply
+  ) {
+    const result = await authService.resetPassword(request.body, request.server.redis);
+    return sendSuccess(reply, result, result.message);
   },
 
   /** POST /auth/logout */

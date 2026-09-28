@@ -108,6 +108,7 @@ export const authRepository = {
     };
     if (purpose) {
       where.purpose = purpose;
+      if (purpose === 'password_reset') where.verifiedAt = null;
     }
 
     return prisma.emailAuthChallenge.findFirst({
@@ -125,6 +126,51 @@ export const authRepository = {
   async deleteChallengesByEmail(email: string, role: UserRole) {
     return prisma.emailAuthChallenge.deleteMany({
       where: { email, role },
+    });
+  },
+
+  async markPasswordResetVerified(id: string, resetTokenHash: string) {
+    return prisma.emailAuthChallenge.updateMany({
+      where: { id, purpose: 'password_reset', verifiedAt: null },
+      data: { verifiedAt: new Date(), resetTokenHash },
+    });
+  },
+
+  async consumePasswordReset(id: string, resetTokenHash: string, passwordHash: string) {
+    return prisma.$transaction(async (tx) => {
+      const challenge = await tx.emailAuthChallenge.findFirst({
+        where: {
+          id,
+          purpose: 'password_reset',
+          resetTokenHash,
+          verifiedAt: { not: null },
+          expiresAt: { gt: new Date() },
+        },
+        select: { userId: true },
+      });
+
+      if (!challenge?.userId) {
+        throw { statusCode: 400, message: 'Reset link is invalid or expired' };
+      }
+
+      const consumed = await tx.emailAuthChallenge.deleteMany({
+        where: {
+          id,
+          purpose: 'password_reset',
+          resetTokenHash,
+          verifiedAt: { not: null },
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (consumed.count !== 1) {
+        throw { statusCode: 400, message: 'Reset link is invalid or expired' };
+      }
+
+      return tx.user.update({
+        where: { id: challenge.userId },
+        data: { passwordHash },
+        select: { id: true, role: true },
+      });
     });
   },
 };

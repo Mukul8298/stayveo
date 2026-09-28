@@ -9,6 +9,7 @@ import { sendSuccess, sendCreated } from '../../common/utils/response.js';
 import {
   clearProviderSessionCookie,
   deleteProviderSession,
+  getProviderSession,
   PROVIDER_SESSION_COOKIE_NAME,
   providerSessionCookieOptions,
   touchProviderSession,
@@ -109,7 +110,8 @@ export const providerController = {
     const sessionId = request.cookies[PROVIDER_SESSION_COOKIE_NAME];
     if (sessionId) {
       try {
-        await deleteProviderSession(request.server.redis, sessionId, request.providerAuth?.userId);
+        const session = await getProviderSession(request.server.redis, sessionId);
+        await deleteProviderSession(request.server.redis, sessionId, session?.userId);
       } catch (error) {
         request.server.log.error({ err: error }, 'Provider logout session deletion failed');
         return reply.status(503).send({
@@ -216,8 +218,9 @@ export const providerController = {
 
   /** GET /provider/business-details — prefill the edit form */
   async getBusinessDetails(request: FastifyRequest, reply: FastifyReply) {
-    const phone = getProviderPhone({}, request);
-    const details = await providerService.getBusinessDetails(phone);
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const details = await providerService.getBusinessDetailsByUserId(userId);
     return sendSuccess(reply, details);
   },
 
@@ -226,8 +229,9 @@ export const providerController = {
     request: FastifyRequest<{ Body: UpdateBusinessDetailsInput }>,
     reply: FastifyReply
   ) {
-    const phone = getProviderPhone({}, request);
-    const updated = await providerService.updateBusinessDetails(phone, request.body);
+    const userId = request.providerAuth?.userId;
+    if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
+    const updated = await providerService.updateBusinessDetailsByUserId(userId, request.body);
     await invalidatePgDashboard(request);
     return sendSuccess(reply, updated, 'Business details updated successfully');
   },

@@ -4,8 +4,15 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { paymentService } from './payment.service.js';
 import { bookingService } from '../bookings/booking.service.js';
 import { sendSuccess, sendCreated } from '../../common/utils/response.js';
-import type { CreatePaymentInput } from './payment.schema.js';
+import type { CreatePaymentInput, VerifyPaymentInput } from './payment.schema.js';
 import { USER_ID_HEADER } from '../../common/constants.js';
+import { paymentWebhookService } from './payment-webhook.service.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    rawBody?: string;
+  }
+}
 
 export const paymentController = {
   /** POST /payments — Create a payment */
@@ -17,6 +24,22 @@ export const paymentController = {
     if (!userId) return reply.status(401).send({ success: false, data: null, message: 'User ID required' });
     const payment = await paymentService.create(request.body, userId);
     return sendCreated(reply, payment, 'Payment recorded');
+  },
+
+  async verify(
+    request: FastifyRequest<{ Body: VerifyPaymentInput }>,
+    reply: FastifyReply
+  ) {
+    const userId = request.headers[USER_ID_HEADER] as string;
+    if (!userId) return reply.status(401).send({ success: false, data: null, message: 'User ID required' });
+    const payment = await paymentService.verify(request.body, userId);
+    return sendSuccess(reply, payment, 'Payment verified');
+  },
+
+  async razorpayWebhook(request: FastifyRequest, reply: FastifyReply) {
+    const signature = String(request.headers['x-razorpay-signature'] || '');
+    const result = await paymentWebhookService.handleRazorpay(request.rawBody || JSON.stringify(request.body || {}), signature);
+    return sendSuccess(reply, result, 'Webhook received');
   },
 
   /** GET /payments/provider/:providerId — List provider payments */

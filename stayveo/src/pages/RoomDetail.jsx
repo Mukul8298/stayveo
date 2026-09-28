@@ -300,7 +300,7 @@ export default function RoomDetail() {
 
         <div className="rd-section">
           <h3>Location</h3>
-          <RoomDetailMap latitude={room?.latitude} longitude={room?.longitude} address={room?.address} />
+          <RoomDetailMap key={room?.id || id} latitude={room?.latitude} longitude={room?.longitude} address={room?.address} />
         </div>
 
         {/* ─── Owner Section with Call action ──────────────────────── */}

@@ -104,8 +104,8 @@ export default function ProviderProfile() {
   // data if another provider logs in on the same device.
   async function handleLogout() {
     try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
       clearProvider();
-      navigate('/provider/login', { replace: true });
     }
   }
 

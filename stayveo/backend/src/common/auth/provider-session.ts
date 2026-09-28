@@ -16,20 +16,35 @@ export interface ProviderSessionData {
 }
 
 const createProviderSessionScript = `
-  local previousSessionId = redis.call('GET', KEYS[1])
-  if previousSessionId and previousSessionId ~= ARGV[1] then
-    redis.call('DEL', 'provider:session:' .. previousSessionId)
+  -- Migrate the old single-session pointer, if present, without revoking it.
+  local legacySessionId = redis.call('GET', KEYS[3])
+  if legacySessionId and legacySessionId ~= ARGV[1] then
+    if redis.call('EXISTS', 'provider:session:' .. legacySessionId) == 1 then
+      redis.call('SADD', KEYS[1], legacySessionId)
+    end
   end
+
   redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
-  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[3])
-  return previousSessionId
+  redis.call('SADD', KEYS[1], ARGV[1])
+  redis.call('DEL', KEYS[3])
+
+  -- Bound cleanup to one SSCAN batch so expired session IDs do not grow the
+  -- account set indefinitely, without scanning the full set on every request.
+  local scan = redis.call('SSCAN', KEYS[1], '0', 'COUNT', '100')
+  for _, member in ipairs(scan[2]) do
+    if redis.call('EXISTS', 'provider:session:' .. member) == 0 then
+      redis.call('SREM', KEYS[1], member)
+    end
+  end
+  return 1
 `;
 
 const deleteProviderSessionScript = `
-  if redis.call('GET', KEYS[1]) == ARGV[1] then
-    redis.call('DEL', KEYS[1])
-  end
+  redis.call('SREM', KEYS[1], ARGV[1])
   redis.call('DEL', KEYS[2])
+  if redis.call('GET', KEYS[3]) == ARGV[1] then
+    redis.call('DEL', KEYS[3])
+  end
   return 1
 `;
 
@@ -41,11 +56,29 @@ const touchProviderSessionScript = `
   return 1
 `;
 
+const invalidateAllProviderSessionsScript = `
+  local members = redis.call('SMEMBERS', KEYS[1])
+  for _, member in ipairs(members) do
+    redis.call('DEL', 'provider:session:' .. member)
+  end
+  local legacy = redis.call('GET', KEYS[2])
+  if legacy then
+    redis.call('DEL', 'provider:session:' .. legacy)
+  end
+  redis.call('DEL', KEYS[1])
+  redis.call('DEL', KEYS[2])
+  return #members
+`;
+
 function providerSessionKey(sessionId: string) {
   return `provider:session:${sessionId}`;
 }
 
 function providerUserSessionKey(userId: string) {
+  return `provider:user_sessions:${userId}`;
+}
+
+function legacyProviderUserSessionKey(userId: string) {
   return `provider:user_session:${userId}`;
 }
 
@@ -66,7 +99,7 @@ function validSessionId(sessionId: string) {
   return /^[A-Za-z0-9_-]{43}$/.test(sessionId);
 }
 
-/** Create or replace the single active provider session for an account. */
+/** Create an additional provider session without revoking existing sessions. */
 export async function createProviderSession(
   redis: Redis,
   userId: string,
@@ -87,9 +120,10 @@ export async function createProviderSession(
 
   await redis.eval(
     createProviderSessionScript,
-    2,
+    3,
     providerUserSessionKey(userId),
     providerSessionKey(sessionId),
+    legacyProviderUserSessionKey(userId),
     sessionId,
     JSON.stringify(data),
     String(PROVIDER_SESSION_TTL_SECONDS)
@@ -98,7 +132,7 @@ export async function createProviderSession(
   return sessionId;
 }
 
-/** Read a provider session and ensure it is still the account's current session. */
+/** Read and validate an individual provider session. */
 export async function getProviderSession(redis: Redis, sessionId: string) {
   if (!validSessionId(sessionId)) return null;
 
@@ -112,8 +146,6 @@ export async function getProviderSession(redis: Redis, sessionId: string) {
       return null;
     }
 
-    const currentSessionId = await redis.get(providerUserSessionKey(parsed.userId));
-    if (currentSessionId !== sessionId) return null;
     return parsed;
   } catch {
     await redis.del(providerSessionKey(sessionId));
@@ -137,7 +169,7 @@ export async function touchProviderSession(
   return didUpdate === 1 ? updated : null;
 }
 
-/** Delete a provider session without deleting a newer replacement. */
+/** Delete only the specified provider session and its set membership. */
 export async function deleteProviderSession(
   redis: Redis,
   sessionId: string,
@@ -153,10 +185,21 @@ export async function deleteProviderSession(
 
   await redis.eval(
     deleteProviderSessionScript,
-    2,
+    3,
     providerUserSessionKey(resolvedUserId),
     providerSessionKey(sessionId),
+    legacyProviderUserSessionKey(resolvedUserId),
     sessionId
+  );
+}
+
+/** Invalidate all tracked provider sessions only for an explicit password reset. */
+export async function invalidateAllProviderSessions(redis: Redis, userId: string) {
+  await redis.eval(
+    invalidateAllProviderSessionsScript,
+    2,
+    providerUserSessionKey(userId),
+    legacyProviderUserSessionKey(userId)
   );
 }
 

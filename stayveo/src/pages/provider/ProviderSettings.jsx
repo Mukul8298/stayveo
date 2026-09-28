@@ -84,8 +84,8 @@ export default function ProviderSettings() {
 
   async function handleLogout() {
     try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
       clearProvider();
-      navigate('/provider/login', { replace: true });
     }
   }
 

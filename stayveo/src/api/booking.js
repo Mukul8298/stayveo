@@ -106,6 +106,10 @@ export function createPayment(paymentData, userId) {
   return request('/payments', { method: 'POST', body: paymentData, userId });
 }
 
+export function verifyPayment(paymentData, userId) {
+  return request(`/payments/${encodeURIComponent(paymentData.payment_id)}/verify`, { method: 'POST', body: paymentData, userId });
+}
+
 export function getProviderPayments(providerId) {
   return request(`/payments/provider/${providerId}`);
 }

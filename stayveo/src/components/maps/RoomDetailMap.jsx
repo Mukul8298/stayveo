@@ -8,17 +8,24 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const MAP_STYLE = 'mapbox://styles/mapbox/light-v11';
 
 export default function RoomDetailMap({ latitude, longitude, address }) {
-  const hasCoordinates = typeof latitude === 'number' && typeof longitude === 'number' && !isNaN(latitude) && !isNaN(longitude);
+  const normalizedLatitude = latitude === null || latitude === undefined || latitude === '' ? NaN : Number(latitude);
+  const normalizedLongitude = longitude === null || longitude === undefined || longitude === '' ? NaN : Number(longitude);
+  const hasCoordinates = Number.isFinite(normalizedLatitude)
+    && Number.isFinite(normalizedLongitude)
+    && normalizedLatitude >= -90
+    && normalizedLatitude <= 90
+    && normalizedLongitude >= -180
+    && normalizedLongitude <= 180;
 
   const initialViewState = useMemo(() => {
     return {
-      longitude: longitude ?? 77.5946,
-      latitude: latitude ?? 12.9716,
+      longitude: hasCoordinates ? normalizedLongitude : 77.5946,
+      latitude: hasCoordinates ? normalizedLatitude : 12.9716,
       zoom: 15,
       pitch: 0,
       bearing: 0,
     };
-  }, [latitude, longitude]);
+  }, [hasCoordinates, normalizedLatitude, normalizedLongitude]);
 
   const [viewState, setViewState] = useState(initialViewState);
 
@@ -36,8 +43,8 @@ export default function RoomDetailMap({ latitude, longitude, address }) {
     return (
       <div className="rd-map-fallback">
         <MapPin size={24} />
-        <h4>No Coordinates Available</h4>
-        <p>Location coordinates are not specified for this property.</p>
+        <h4>Location unavailable</h4>
+        <p>The property location has not been provided yet.</p>
       </div>
     );
   }
@@ -47,7 +54,7 @@ export default function RoomDetailMap({ latitude, longitude, address }) {
   };
 
   return (
-    <div className="rd-map-container">
+    <div className="rd-map-container" aria-label={`Property location${address ? `: ${address}` : ''}`}>
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
@@ -61,13 +68,16 @@ export default function RoomDetailMap({ latitude, longitude, address }) {
         attributionControl={false}
         reuseMaps
       >
-        <Marker latitude={latitude} longitude={longitude} anchor="bottom">
+        <Marker latitude={normalizedLatitude} longitude={normalizedLongitude} anchor="bottom">
           <div className="rd-map-marker" aria-label="Property location">
             <MapPin size={24} fill="currentColor" strokeWidth={2.5} />
           </div>
         </Marker>
       </Map>
 
+      <div className="rd-map-coordinates">
+        {normalizedLatitude.toFixed(6)}, {normalizedLongitude.toFixed(6)}
+      </div>
       <button className="rd-map-directions-btn" onClick={handleOpenInMaps}>
         <Navigation size={14} />
         <span>Directions</span>

@@ -21,13 +21,14 @@ import {
   Zap,
 } from 'lucide-react';
 import { fetchPGListings, FALLBACK_IMAGE } from '../api/supabaseApi';
-import { createBooking, createPayment } from '../api/booking';
+import { createBooking, createPayment, verifyPayment } from '../api/booking';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useDistanceFromCollege } from '../hooks/useDistanceFromCollege';
+import { openRazorpayCheckout } from '../lib/razorpay';
 import './BookingFlow.css';
 
-const DEFAULT_PLATFORM_FEE = 299;
+const DEFAULT_PLATFORM_FEE = 99;
 
 const formatCurrency = value => `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
@@ -36,6 +37,16 @@ function getLocalDateString(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function addCalendarMonths(date = new Date(), months = 2) {
+  const result = new Date(date);
+  const originalDay = result.getDate();
+  result.setDate(1);
+  result.setMonth(result.getMonth() + months);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(originalDay, lastDay));
+  return result;
 }
 
 const firstNumber = (...values) => {
@@ -107,8 +118,8 @@ export default function BookingFlow() {
     const parkingCharges = firstNumber(room?.parkingCharges) ?? 0;
     const otherCharges = firstNumber(room?.otherCharges) ?? 0;
     const reservationFee = firstNumber(room?.reservationFee) ?? 0;
-    const platformFee = firstNumber(room?.platformFee) ?? DEFAULT_PLATFORM_FEE;
-    const totalPayableNow = reservationFee + platformFee;
+    const platformFee = DEFAULT_PLATFORM_FEE;
+    const totalPayableNow = reservationFee;
     const totalMonthlyCost = monthlyRent + foodCharges + electricityCharges + waterCharges + maintenanceCharges + parkingCharges + otherCharges;
 
     return {
@@ -137,12 +148,13 @@ export default function BookingFlow() {
 
   const handleVisitDateContinue = () => {
     const today = getLocalDateString();
+    const maxVisitDate = getLocalDateString(addCalendarMonths());
     if (!visitDate) {
       setVisitDateError('Please select a visit date.');
       return;
     }
-    if (visitDate < today) {
-      setVisitDateError('Please select a valid visit date.');
+    if (visitDate < today || visitDate > maxVisitDate) {
+      setVisitDateError('Please select a date from today up to the next 2 months.');
       return;
     }
     setVisitDateError('');
@@ -151,14 +163,15 @@ export default function BookingFlow() {
 
   const handleReserveSlot = async () => {
     const today = getLocalDateString();
+    const maxVisitDate = getLocalDateString(addCalendarMonths());
     if (!visitDate) {
       setStep('visit');
       setVisitDateError('Please select a visit date.');
       return;
     }
-    if (visitDate < today) {
+    if (visitDate < today || visitDate > maxVisitDate) {
       setStep('visit');
-      setVisitDateError('Please select a valid visit date.');
+      setVisitDateError('Please select a date from today up to the next 2 months.');
       return;
     }
     if (!authState?.userId) {
@@ -204,11 +217,28 @@ export default function BookingFlow() {
         provider_id: room?.providerId,
         amount: pricing.totalPayableNow,
         type: 'reservation',
-        status: 'paid',
+        status: 'pending',
         payment_method: 'UPI',
-        transaction_id: `SV-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+        idempotency_key: `pg-booking-${res.data.id}`,
       }, authState.userId);
-      setBookingId(payment?.data?.reservation?.booking?.reservationId || res?.data?.reservationId || 'Processing');
+      const checkout = payment?.data?.razorpay;
+      if (!checkout) throw new Error('Payment checkout could not be created. Please try again.');
+      const checkoutResult = await openRazorpayCheckout({
+        key: checkout.keyId,
+        orderId: checkout.orderId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        description: `StayVeo reservation for ${room?.title || 'PG Room'}`,
+        prefill: { name: displayName || authState?.name || 'Student', contact: authState?.phone || '' },
+        notes: { paymentId: payment.data.id, bookingId: res.data.id },
+      });
+      const verified = await verifyPayment({
+        payment_id: payment.data.id,
+        razorpay_order_id: checkoutResult.razorpay_order_id,
+        razorpay_payment_id: checkoutResult.razorpay_payment_id,
+        razorpay_signature: checkoutResult.razorpay_signature,
+      }, authState.userId);
+      setBookingId(verified?.data?.booking?.reservationId || res?.data?.reservationId || 'Processing');
       toast.success('Slot reserved successfully');
       setReserved(true);
     } catch (err) {
@@ -261,6 +291,7 @@ export default function BookingFlow() {
 
   if (!reserved && step === 'visit') {
     const today = getLocalDateString();
+    const maxVisitDate = getLocalDateString(addCalendarMonths());
     return (
       <div className="booking-page" id="booking-visit-date">
         <div className="page-header booking-header">
@@ -287,7 +318,7 @@ export default function BookingFlow() {
             <div className="booking-card-heading">
               <div>
                 <h2>Visit Date</h2>
-                <p>Select the date you want to visit this property.</p>
+                <p>Select today or any visit date within the next 2 months.</p>
               </div>
               <CalendarCheck2 size={22} />
             </div>
@@ -297,6 +328,7 @@ export default function BookingFlow() {
                 type="date"
                 value={visitDate}
                 min={today}
+                max={maxVisitDate}
                 onChange={(event) => {
                   setVisitDate(event.target.value);
                   setVisitDateError('');
@@ -350,11 +382,11 @@ export default function BookingFlow() {
                 <strong>{formatCurrency(pricing.totalPayableNow)}</strong>
                 {bookingId && <small>Reservation ID #{bookingId}</small>}
               </div>
-              <span className="booking-paid-pill">Paid via UPI</span>
+              <span className="booking-paid-pill">Paid via Razorpay</span>
             </div>
             <div className="booking-receipt-note">
               <Info size={20} />
-              <p>A copy of this receipt has been sent to your registered email.</p>
+              <p>Your verified payment receipt is available with this reservation.</p>
             </div>
           </BookingCard>
 
@@ -436,7 +468,7 @@ export default function BookingFlow() {
           </div>
           <div className="booking-price-list">
             <PricingRow label="Reservation Fee" value={pricing.reservationFee} />
-            <PricingRow label="Platform Fee" value={pricing.platformFee} />
+            <PricingRow label="StayVeo commission (included)" value={pricing.platformFee} muted />
             <div className="booking-divider" />
             <PricingRow label="Total Payable" value={pricing.totalPayableNow} strong />
           </div>
@@ -456,7 +488,7 @@ export default function BookingFlow() {
         </section>
 
         <p className="booking-terms">
-          By reserving, you agree that property rent and deposit are handled directly with the owner. StayVeo collects only the reservation and platform fee now.
+          By reserving, you agree that property rent and deposit are handled directly with the owner. StayVeo collects the owner-defined reservation fee now; the StayVeo commission is settled from the owner amount.
         </p>
       </main>
 

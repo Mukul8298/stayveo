@@ -472,6 +472,7 @@ export const providerRepository = {
         contactNumber: true,
         description: true,
         isVerified: true,
+        otpVerified: true,
         services: { select: { type: true } },
       },
     });

@@ -10,6 +10,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/start-auth', otpRateLimit, authController.startAuth);
   fastify.post('/verify-otp', otpRateLimit, authController.verifyOtp);
   fastify.post('/resend-otp', otpRateLimit, authController.resendOtp);
+  fastify.post('/forgot-password', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, authController.forgotPassword);
+  fastify.post('/verify-password-reset', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, authController.verifyPasswordReset);
+  fastify.post('/reset-password', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, authController.resetPassword);
   fastify.get('/me', { preHandler: optionalAuthenticate }, authController.me);
   fastify.post('/logout', authController.logout);
 }

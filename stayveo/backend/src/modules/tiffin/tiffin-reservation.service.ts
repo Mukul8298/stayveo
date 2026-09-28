@@ -6,6 +6,7 @@ import { tiffinRepository } from './tiffin.repository.js';
 import { createTiffinReservationSchema } from './tiffin-reservation.schema.js';
 import { getTiffinPaymentConfig, tiffinPaymentService } from './tiffin-payment.service.js';
 import { tiffinPaymentActionSchema } from './tiffin-payment.schema.js';
+import { razorpayClient } from '../payments/razorpay.client.js';
 
 type AnyRecord = Record<string, any>;
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -144,7 +145,6 @@ function serializeReservation(subscription: AnyRecord, kitchen: AnyRecord, payme
     subscriptionStatus: String(subscription.status || '').toLowerCase(),
     paymentStatus: String(payment?.status || subscription.paymentStatus || 'pending').toLowerCase(),
     paymentGateway: payment?.paymentGateway || null,
-    testPayment: ['mock', 'test'].includes(String(payment?.paymentGateway || '').toLowerCase()),
     payment: payment ? {
       id: payment.id,
       status: String(payment.status || '').toLowerCase(),
@@ -156,6 +156,12 @@ function serializeReservation(subscription: AnyRecord, kitchen: AnyRecord, payme
       providerPaymentId: payment.providerPaymentId || null,
       transactionId: payment.transactionId || null,
       paidAt: payment.paidAt || null,
+      razorpay: payment.providerOrderId ? {
+        keyId: String(process.env.key_id || '').trim().replace(/,+$/, ''),
+        orderId: payment.providerOrderId,
+        amount: Math.round(Number(payment.totalAmount || 0) * 100),
+        currency: payment.currency || 'INR',
+      } : null,
     } : null,
     amount: Number(subscription.amount ?? payment?.totalAmount ?? 0),
     currency: subscription.currency || payment?.currency || 'INR',
@@ -191,6 +197,10 @@ function perMealPriceForPlan(kitchen: AnyRecord, plan: AnyRecord) {
 }
 
 function calculateReservationAmount(kitchen: AnyRecord, plan: AnyRecord, selectedMealCount: number) {
+  if (normalizedPlanType(plan) === 'monthly') {
+    const configuredMonthlyPrice = selectedMealCount === 1 ? Number(kitchen.monthlyOneMealPrice) : Number(kitchen.monthlyTwoMealPrice);
+    if (Number.isFinite(configuredMonthlyPrice) && configuredMonthlyPrice > 0) return Number(configuredMonthlyPrice.toFixed(2));
+  }
   const perMealPrice = perMealPriceForPlan(kitchen, plan);
   if (!perMealPrice) throw { statusCode: 400, message: 'This Tiffin provider has not configured a valid per-meal price' };
   const amount = perMealPrice * selectedMealCount * durationForPlan(plan);
@@ -229,13 +239,15 @@ export async function ensureTodayMealLogs(client: DbClient, kitchenId: string, d
       customerId: true,
       optedLunch: true,
       optedDinner: true,
+      lunchEndDate: true,
+      dinnerEndDate: true,
     },
   });
 
   const data = subscriptions.flatMap((subscription) => {
     const meals: MealCategory[] = [];
-    if (subscription.optedLunch && availableMeals.has(MealCategory.LUNCH)) meals.push(MealCategory.LUNCH);
-    if (subscription.optedDinner && availableMeals.has(MealCategory.DINNER)) meals.push(MealCategory.DINNER);
+    if (subscription.optedLunch && availableMeals.has(MealCategory.LUNCH) && (!subscription.lunchEndDate || subscription.lunchEndDate >= date)) meals.push(MealCategory.LUNCH);
+    if (subscription.optedDinner && availableMeals.has(MealCategory.DINNER) && (!subscription.dinnerEndDate || subscription.dinnerEndDate >= date)) meals.push(MealCategory.DINNER);
     return meals.map((mealCategory) => ({
       subscriptionId: subscription.id,
       kitchenId,
@@ -319,11 +331,6 @@ function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function sameAmount(left: unknown, right: number) {
-  const parsed = Number(left);
-  return Number.isFinite(parsed) && parsed.toFixed(2) === right.toFixed(2);
-}
-
 async function getReservationById(client: DbClient, reservationId: string, customerId: string) {
   if (!isUuid(reservationId)) throw { statusCode: 404, message: 'Reservation not found' };
   const subscription = await client.tiffinCustomerSubscription.findFirst({
@@ -346,62 +353,6 @@ async function findReservationWithPayment(client: DbClient, reservationId: strin
 async function assertServiceMatches(serviceId: string, kitchenId: string) {
   const kitchen = await tiffinRepository.findKitchenForService(serviceId);
   if (!kitchen || kitchen.id !== kitchenId) throw { statusCode: 404, message: 'Reservation is not part of this Tiffin service' };
-}
-
-function assertPaymentRequest(subscription: AnyRecord, payment: AnyRecord, input: AnyRecord) {
-  const expectedAmount = Number(subscription.amount);
-  const expectedCurrency = String(subscription.currency || 'INR').toUpperCase();
-  if (!Number.isFinite(expectedAmount) || expectedAmount < 0) {
-    throw { statusCode: 409, message: 'Reservation has an invalid payment amount' };
-  }
-  if (!sameAmount(payment.totalAmount, expectedAmount)) {
-    throw { statusCode: 400, message: 'Payment amount does not match the reservation amount' };
-  }
-  if (String(payment.currency || '').toUpperCase() !== expectedCurrency) {
-    throw { statusCode: 400, message: 'Payment currency does not match the reservation currency' };
-  }
-  if (input.amount !== undefined && !sameAmount(input.amount, expectedAmount)) {
-    throw { statusCode: 400, message: 'Payment amount does not match the reservation amount' };
-  }
-  if (input.currency !== undefined && String(input.currency).toUpperCase() !== expectedCurrency) {
-    throw { statusCode: 400, message: 'Payment currency does not match the reservation currency' };
-  }
-}
-
-async function activatePaidReservation(client: DbClient, subscription: AnyRecord, payment: AnyRecord, userId: string) {
-  const result = await client.tiffinCustomerSubscription.updateMany({
-    where: { id: subscription.id, status: TiffinSubscriptionStatus.PENDING, deletedAt: null },
-    data: {
-      status: TiffinSubscriptionStatus.ACTIVE,
-      paymentStatus: TiffinPaymentStatus.PAID,
-      confirmedAt: new Date(),
-    },
-  });
-
-  if (!result.count) {
-    const current = await getReservationById(client, subscription.id, userId);
-    const currentPayment = current.payments[0] || payment;
-    if (current.status === TiffinSubscriptionStatus.ACTIVE && currentPayment.status === TiffinPaymentStatus.PAID) {
-      return serializeReservation(current, current.kitchen, currentPayment);
-    }
-    throw { statusCode: 409, message: 'Reservation status changed before activation completed' };
-  }
-
-  const confirmed = await getReservationById(client, subscription.id, userId);
-  const today = getCurrentTiffinDate();
-  if (datePart(confirmed.startDate)! <= today && datePart(confirmed.endDate)! >= today) {
-    await ensureTodayMealLogs(client, confirmed.kitchenId, today);
-  }
-  await client.tiffinActivityLog.create({
-    data: {
-      kitchenId: confirmed.kitchenId,
-      userId,
-      action: 'subscription_confirmed',
-      description: `Tiffin reservation ${confirmed.subscriptionCode} confirmed`,
-      metadata: { subscriptionId: confirmed.id, paymentId: payment.id, paymentGateway: payment.paymentGateway || null },
-    },
-  });
-  return serializeReservation(confirmed, confirmed.kitchen, payment);
 }
 
 export const tiffinReservationService = {
@@ -444,6 +395,14 @@ export const tiffinReservationService = {
   async create(serviceId: string, userId: unknown, input: unknown) {
     const data = createTiffinReservationSchema.parse(input);
     const user = await getStudent(userId);
+    const resolvedPhone = text(data.phone) || text(user.phone_number);
+    if (!/^\+?[0-9]{10,15}$/.test(resolvedPhone)) {
+      throw { statusCode: 400, message: 'A valid student phone number is required' };
+    }
+    if (text(userId) && user.phone_number !== resolvedPhone) {
+      await prisma.user.update({ where: { id: user.id }, data: { phone_number: resolvedPhone } });
+      user.phone_number = resolvedPhone;
+    }
     const { kitchen, plan } = await getKitchenAndPlan(serviceId, data.planId);
     const today = getCurrentTiffinDate();
     const startDateKey = data.startDate || today;
@@ -504,6 +463,8 @@ export const tiffinReservationService = {
           currency: 'INR',
           startDate,
           endDate,
+          lunchEndDate: data.optedLunch ? endDate : null,
+          dinnerEndDate: data.optedDinner ? endDate : null,
           totalMealsAllocated: selectedMealCount * durationDays,
           mealsRemaining: selectedMealCount * durationDays,
           totalEntitledDays: durationDays,
@@ -520,19 +481,22 @@ export const tiffinReservationService = {
         customerId: user.id,
         amount,
         idempotencyKey,
+        planType: normalizedPlanType(plan),
+        mealsPerDay: selectedMealCount,
       });
       return created;
     });
-    const payment = await prisma.tiffinPayment.findFirst({ where: { subscriptionId: subscription.id }, orderBy: { createdAt: 'desc' } });
+    let payment = await prisma.tiffinPayment.findFirst({ where: { subscriptionId: subscription.id }, orderBy: { createdAt: 'desc' } });
+    if (payment && !payment.providerOrderId) payment = await tiffinPaymentService.createGatewayOrder(payment.id, subscription.subscriptionCode);
     return serializeReservation(subscription, kitchen, payment);
   },
 
   async createPayment(reservationId: string, userId: unknown, input: unknown = {}) {
     const data = tiffinPaymentActionSchema.parse(input);
     const user = await getStudent(userId);
-    if (!getTiffinPaymentConfig().enabled) throw { statusCode: 503, message: 'Development mock payment controls are disabled' };
+    if (!getTiffinPaymentConfig().enabled) throw { statusCode: 503, message: 'Razorpay payment integration is not enabled' };
 
-    return prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       const { subscription, payment } = await findReservationWithPayment(tx, reservationId, user.id);
       if (!payment) throw { statusCode: 409, message: 'Reservation payment record is missing' };
       if (payment.status === TiffinPaymentStatus.PAID && subscription.status === TiffinSubscriptionStatus.ACTIVE) {
@@ -554,6 +518,8 @@ export const tiffinReservationService = {
         customerId: subscription.customerId,
         amount,
         idempotencyKey,
+        planType: normalizedPlanType(subscription.plan),
+        mealsPerDay: Number(subscription.optedLunch) + Number(subscription.optedDinner),
       });
       if (nextPayment.status !== TiffinPaymentStatus.PENDING) {
         throw { statusCode: 409, message: 'This payment retry request has already been used' };
@@ -565,92 +531,26 @@ export const tiffinReservationService = {
       });
       return serializeReservation(reset, reset.kitchen, nextPayment);
     }, { timeout: 15000 });
-  },
-
-  async processPayment(reservationId: string, userId: unknown, input: unknown = {}) {
-    const data = tiffinPaymentActionSchema.parse(input);
-    const user = await getStudent(userId);
-    return prisma.$transaction(async (tx) => {
-      const { subscription, payment } = await findReservationWithPayment(tx, reservationId, user.id, data.paymentId);
-      if (!payment) throw { statusCode: 409, message: 'Reservation payment record is missing' };
-      assertPaymentRequest(subscription, payment, data);
-      if (subscription.status !== TiffinSubscriptionStatus.PENDING) {
-        if (payment.status === TiffinPaymentStatus.PAID) return serializeReservation(subscription, subscription.kitchen, payment);
-        throw { statusCode: 409, message: 'This reservation is no longer awaiting payment' };
-      }
-      const processing = await tiffinPaymentService.markProcessing(tx, payment);
-      const updated = await tx.tiffinCustomerSubscription.update({
-        where: { id: subscription.id },
-        data: { paymentStatus: TiffinPaymentStatus.PROCESSING },
-        include: { kitchen: true, plan: true },
-      });
-      return serializeReservation(updated, updated.kitchen, processing);
-    }, { timeout: 15000 });
+    const payment = await prisma.tiffinPayment.findFirst({ where: { subscriptionId: reservationId }, orderBy: { createdAt: 'desc' } });
+    if (payment && !payment.providerOrderId) await tiffinPaymentService.createGatewayOrder(payment.id, reservationId);
+    const current = await getReservationById(prisma, reservationId, user.id);
+    return serializeReservation(current, current.kitchen, current.payments[0] || null);
   },
 
   async completePayment(reservationId: string, userId: unknown, input: unknown = {}) {
     const data = tiffinPaymentActionSchema.parse(input);
     const user = await getStudent(userId);
-    return prisma.$transaction(async (tx) => {
-      const { subscription, payment } = await findReservationWithPayment(tx, reservationId, user.id, data.paymentId);
-      if (!payment) throw { statusCode: 409, message: 'Reservation payment record is missing' };
-      assertPaymentRequest(subscription, payment, data);
-
-      if (payment.status === TiffinPaymentStatus.PAID) {
-        if (subscription.status === TiffinSubscriptionStatus.ACTIVE) return serializeReservation(subscription, subscription.kitchen, payment);
-        if (subscription.status !== TiffinSubscriptionStatus.PENDING) throw { statusCode: 409, message: 'This reservation can no longer be activated' };
-        return activatePaidReservation(tx, subscription, payment, user.id);
-      }
-      if (subscription.status !== TiffinSubscriptionStatus.PENDING) throw { statusCode: 409, message: 'This reservation can no longer be confirmed' };
-      if (([TiffinPaymentStatus.FAILED, TiffinPaymentStatus.CANCELLED, TiffinPaymentStatus.REFUNDED] as TiffinPaymentStatus[]).includes(payment.status as TiffinPaymentStatus)) {
-        throw { statusCode: 409, message: 'This payment attempt is closed. Start a new payment attempt to retry.' };
-      }
-
-      const verifiedPayment = await tiffinPaymentService.verifyPayment(tx, payment, {
-        expectedAmount: Number(subscription.amount),
-        expectedCurrency: subscription.currency || 'INR',
-      });
-      return activatePaidReservation(tx, subscription, verifiedPayment, user.id);
-    }, { timeout: 15000 });
-  },
-
-  async failPayment(reservationId: string, userId: unknown, input: unknown = {}) {
-    const data = tiffinPaymentActionSchema.parse(input);
-    const user = await getStudent(userId);
-    return prisma.$transaction(async (tx) => {
-      const { subscription, payment } = await findReservationWithPayment(tx, reservationId, user.id, data.paymentId);
-      if (!payment) throw { statusCode: 409, message: 'Reservation payment record is missing' };
-      assertPaymentRequest(subscription, payment, data);
-      const failed = await tiffinPaymentService.markFailed(tx, payment);
-      await tx.tiffinCustomerSubscription.updateMany({
-        where: { id: subscription.id, status: TiffinSubscriptionStatus.PENDING },
-        data: { paymentStatus: TiffinPaymentStatus.FAILED },
-      });
-      const current = await getReservationById(tx, subscription.id, user.id);
-      return serializeReservation(current, current.kitchen, failed);
-    }, { timeout: 15000 });
-  },
-
-  async cancelPayment(reservationId: string, userId: unknown, input: unknown = {}) {
-    const data = tiffinPaymentActionSchema.parse(input);
-    const user = await getStudent(userId);
-    return prisma.$transaction(async (tx) => {
-      const { subscription, payment } = await findReservationWithPayment(tx, reservationId, user.id, data.paymentId);
-      if (!payment) throw { statusCode: 409, message: 'Reservation payment record is missing' };
-      assertPaymentRequest(subscription, payment, data);
-      const cancelled = await tiffinPaymentService.markCancelled(tx, payment);
-      await tx.tiffinCustomerSubscription.updateMany({
-        where: { id: subscription.id, status: TiffinSubscriptionStatus.PENDING },
-        data: { paymentStatus: TiffinPaymentStatus.CANCELLED },
-      });
-      const current = await getReservationById(tx, subscription.id, user.id);
-      return serializeReservation(current, current.kitchen, cancelled);
-    }, { timeout: 15000 });
-  },
-
-  /** Kept for clients from the previous development flow; it now uses the same verified path. */
-  async confirm(reservationId: string, userId: unknown) {
-    return this.completePayment(reservationId, userId);
+    const { payment } = await findReservationWithPayment(prisma, reservationId, user.id, data.paymentId);
+    if (!payment || !data.razorpayOrderId || !data.razorpayPaymentId || !data.razorpaySignature) {
+      throw { statusCode: 400, message: 'Razorpay payment details are required' };
+    }
+    await tiffinPaymentService.verifyGatewayPayment(payment.id, {
+      orderId: data.razorpayOrderId,
+      paymentId: data.razorpayPaymentId,
+      signature: data.razorpaySignature,
+    });
+    const current = await getReservationById(prisma, reservationId, user.id);
+    return serializeReservation(current, current.kitchen, current.payments[0] || null);
   },
 
   async get(reservationId: string, userId: unknown, serviceId?: string) {

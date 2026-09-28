@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -14,6 +15,7 @@ import { useProvider } from '../../context/ProviderContext';
 import { providerLogout } from '../../api/provider';
 import './TiffinProvider.css';
 import ProviderAuthGate from '../provider/ProviderAuthGate';
+import { setLastActivePortal, LAST_ACTIVE_PORTALS } from '../../lib/lastActivePortal';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/provider/tiffin/dashboard', icon: LayoutDashboard },
@@ -32,14 +34,23 @@ function isActive(pathname, itemPath) {
 export default function TiffinProviderLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { provider, clearProvider, updateProvider } = useProvider();
+  const { provider, clearProvider, updateProvider, providerAuthenticated, providerLoading } = useProvider();
   const displayName = provider.name || 'Tiffin Provider';
   const initial = displayName.charAt(0).toUpperCase();
 
+  useEffect(() => {
+    const services = Array.isArray(provider.services) ? provider.services : [];
+    const providerType = provider.providerType || provider.activeServiceType;
+    const supportsTiffin = services.includes('TIFFIN') || providerType === 'TIFFIN';
+    if (!providerLoading && providerAuthenticated && supportsTiffin) {
+      setLastActivePortal(LAST_ACTIVE_PORTALS.PROVIDER_TIFFIN);
+    }
+  }, [provider, providerAuthenticated, providerLoading]);
+
   async function logout() {
     try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
       clearProvider();
-      navigate('/provider/login', { replace: true });
     }
   }
 

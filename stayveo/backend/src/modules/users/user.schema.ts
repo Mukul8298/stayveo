@@ -62,7 +62,7 @@ function normalizeProfileAliases(value: unknown) {
 }
 
 export const createUserSchema = z.object({
-  phone_number: z.string().min(10).max(15),
+  phone_number: z.string().trim().regex(/^\+?[0-9]{10,15}$/, 'Enter a valid phone number'),
   role: z.enum(['STUDENT', 'PROVIDER']),
 });
 

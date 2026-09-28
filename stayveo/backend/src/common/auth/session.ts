@@ -47,6 +47,15 @@ function userSessionKey(userId: string) {
   return `user_session:${userId}`;
 }
 
+const invalidateUserSessionScript = `
+  local sessionId = redis.call('GET', KEYS[1])
+  if sessionId then
+    redis.call('DEL', 'session:' .. sessionId)
+  end
+  redis.call('DEL', KEYS[1])
+  return 1
+`;
+
 function isSessionData(value: unknown): value is SessionData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
@@ -192,6 +201,11 @@ export async function deleteSession(redis: Redis, sessionId: string, userId?: st
     sessionKey(sessionId),
     sessionId
   );
+}
+
+/** Invalidate the user's current single-session mapping after a password reset. */
+export async function invalidateUserSession(redis: Redis, userId: string) {
+  await redis.eval(invalidateUserSessionScript, 1, userSessionKey(userId));
 }
 
 async function readSessionUserId(redis: Redis, sessionId: string) {

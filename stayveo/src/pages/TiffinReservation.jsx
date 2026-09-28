@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
@@ -13,17 +13,16 @@ import {
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { fetchTiffinProvider } from '../api/tiffin';
 import {
-  cancelTiffinMockPayment,
-  completeTiffinMockPayment,
   createTiffinPayment,
   createTiffinReservation,
-  failTiffinMockPayment,
   getTiffinPayment,
   getTiffinReservation,
   getTiffinReservationContext,
-  processTiffinMockPayment,
+  verifyTiffinPayment,
 } from '../api/tiffinReservation';
+import { updateUser } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { openRazorpayCheckout } from '../lib/razorpay';
 import TiffinTopbar from '../components/tiffin/TiffinTopbar';
 import './Tiffin.css';
 import './TiffinReservation.css';
@@ -110,6 +109,7 @@ export default function TiffinReservation() {
   const [provider, setProvider] = useState(null);
   const [form, setForm] = useState({
     planId: searchParams.get('planId') || '',
+    phone: '',
     deliveryAddress: '',
     deliveryLatitude: null,
     deliveryLongitude: null,
@@ -125,7 +125,6 @@ export default function TiffinReservation() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const processingRequests = useRef(new Set());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -156,6 +155,7 @@ export default function TiffinReservation() {
           setForm((current) => ({
             ...current,
             planId: selected?.id || current.planId,
+            phone: student.phone || current.phone,
             deliveryAddress: student.address || '',
             deliveryLatitude: student.latitude ?? null,
             deliveryLongitude: student.longitude ?? null,
@@ -181,27 +181,6 @@ export default function TiffinReservation() {
     return () => { cancelled = true; controller.abort(); };
   }, [id, location.pathname, location.search, navigate, paymentId, reservationId, searchParams, userId]);
 
-  useEffect(() => {
-    if (reservation?.status !== 'payment_processing' || !reservation.payment?.id) return undefined;
-    const key = `${reservation.id}:${reservation.payment.id}`;
-    if (processingRequests.current.has(key)) return undefined;
-    processingRequests.current.add(key);
-
-    const timer = setTimeout(async () => {
-      try {
-        const response = await completeTiffinMockPayment(reservation.id, userId, { paymentId: reservation.payment.id });
-        const updated = response?.data;
-        setReservation(updated);
-        navigate(successUrl(id, reservation.id), { replace: true });
-      } catch (completeError) {
-        processingRequests.current.delete(key);
-        setError(completeError.message || 'The simulated payment could not be verified.');
-      }
-    }, 900);
-
-    return () => clearTimeout(timer);
-  }, [id, navigate, reservation?.id, reservation?.payment?.id, reservation?.status, userId]);
-
   const selectedPlan = useMemo(() => {
     if (!context) return null;
     return context.plans?.find((plan) => plan.id === form.planId) || context.selectedPlan || context.plans?.[0] || null;
@@ -215,7 +194,7 @@ export default function TiffinReservation() {
   const perMealPrice = Number(context?.service?.perMealPrice);
   const reservationAmount = calculatedPlanAmount(selectedPlan, perMealPrice, selectedMealCount);
 
-  const paymentEnabled = Boolean(context?.payment?.enabled || reservation?.testPayment || reservation?.payment?.gateway === 'mock');
+  const paymentEnabled = Boolean(context?.payment?.enabled || reservation?.payment?.razorpay);
 
   function updateField(name, value) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -239,24 +218,34 @@ export default function TiffinReservation() {
     setError('');
   }
 
-  async function handlePaymentAction(action) {
+  async function handlePaymentAction() {
     if (!reservation?.id || !reservation.payment?.id) {
       setError('The payment attempt could not be found. Refresh the page and try again.');
       return;
     }
     setSubmitting(true);
     setError('');
-    const input = { paymentId: reservation.payment.id };
     try {
-      let response;
-      if (action === 'success') response = await completeTiffinMockPayment(reservation.id, userId, input);
-      if (action === 'processing') response = await processTiffinMockPayment(reservation.id, userId, input);
-      if (action === 'failure') response = await failTiffinMockPayment(reservation.id, userId, input);
-      if (action === 'cancel') response = await cancelTiffinMockPayment(reservation.id, userId, input);
+      const checkout = reservation.payment?.razorpay;
+      if (!checkout) throw new Error('Payment checkout could not be created. Please try again.');
+      const checkoutResult = await openRazorpayCheckout({
+        key: checkout.keyId,
+        orderId: checkout.orderId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        description: `${reservation.plan?.name || 'Tiffin plan'} · ${reservation.serviceName || 'StayVeo'}`,
+        prefill: { name: context?.student?.name || 'Student', contact: context?.student?.phone || '' },
+        notes: { paymentId: reservation.payment.id, subscriptionId: reservation.id },
+      });
+      const response = await verifyTiffinPayment(reservation.id, userId, {
+        paymentId: reservation.payment.id,
+        razorpayOrderId: checkoutResult.razorpay_order_id,
+        razorpayPaymentId: checkoutResult.razorpay_payment_id,
+        razorpaySignature: checkoutResult.razorpay_signature,
+      });
       const updated = response?.data;
       setReservation(updated);
-      if (action === 'success') navigate(successUrl(id, reservation.id), { replace: true });
-      if (action === 'failure' || action === 'cancel') navigate(reservationUrl(id, reservation.id), { replace: true });
+      navigate(successUrl(id, reservation.id), { replace: true });
     } catch (actionError) {
       setError(actionError.message || 'The payment action could not be completed.');
     } finally {
@@ -284,13 +273,17 @@ export default function TiffinReservation() {
     event.preventDefault();
     if (!selectedPlan?.id) return setError('Choose an available meal plan.');
     if (!form.deliveryAddress.trim()) return setError('Enter a delivery address.');
+    const phone = String(form.phone || '').trim().replace(/[\s().-]/g, '');
+    if (!/^\+?[0-9]{10,15}$/.test(phone)) return setError('Enter a valid phone number (10–15 digits).');
     if (!form.optedLunch && !form.optedDinner) return setError('Select at least one meal.');
     if (!form.dietPreferences?.length) return setError('Select at least one food preference.');
     setSubmitting(true);
     setError('');
     try {
+      if (userId) await updateUser({ phone_number: phone });
       const response = await createTiffinReservation(id, userId, {
         ...form,
+        phone,
         planId: selectedPlan.id,
         dietPreference: form.dietPreferences[0],
         dietPreferences: form.dietPreferences,
@@ -325,7 +318,7 @@ export default function TiffinReservation() {
   }
 
   if (reservation?.status === 'payment_pending') {
-    return <ResultShell serviceId={id} onBack={() => navigate(`/tiffin/${id}`)}><MockPaymentCheckout reservation={reservation} enabled={paymentEnabled} submitting={submitting} error={error} onAction={handlePaymentAction} onBack={() => navigate(`/tiffin/${id}`)} /></ResultShell>;
+    return <ResultShell serviceId={id} onBack={() => navigate(`/tiffin/${id}`)}><RazorpayPaymentCheckout reservation={reservation} enabled={paymentEnabled} submitting={submitting} error={error} onPay={handlePaymentAction} onBack={() => navigate(`/tiffin/${id}`)} /></ResultShell>;
   }
 
   const service = context?.service || {};
@@ -334,7 +327,7 @@ export default function TiffinReservation() {
     <main className="tiffin-page tiffin-reservation-page">
       <div className="tiffin-content">
         <TiffinTopbar backTo={`/tiffin/${id}`} />
-        <div className="tiffin-page-heading tiffin-reservation-heading"><h1>Reservation</h1><p>Review your Tiffin plan and delivery details before starting the development payment.</p></div>
+      <div className="tiffin-page-heading tiffin-reservation-heading"><h1>Reservation</h1><p>Review your Tiffin plan and delivery details before starting secure Razorpay checkout.</p></div>
         {error && <div className="tiffin-reservation-alert"><AlertCircle size={17} /><span>{error}</span></div>}
         <form className="tiffin-reservation-layout" onSubmit={handleSubmit}>
           <div className="tiffin-reservation-main">
@@ -350,7 +343,7 @@ export default function TiffinReservation() {
               <div className="tiffin-reservation-card-heading"><span className="tiffin-reservation-step">2</span><div><h2>Student & delivery details</h2><p>Your saved profile information is prefilled where available.</p></div></div>
               <div className="tiffin-reservation-fields">
                 <label><span>Student name</span><input value={context?.student?.name || ''} readOnly /></label>
-                <label><span>Phone number</span><input value={context?.student?.phone || ''} readOnly /></label>
+                <label><span>Phone number</span><input type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={(event) => updateField('phone', event.target.value)} placeholder="+91 9876543210" required /></label>
                 <label className="is-wide"><span>Delivery address</span><textarea value={form.deliveryAddress} onChange={(event) => updateField('deliveryAddress', event.target.value)} placeholder="Enter the address where your meals should be delivered" rows={3} maxLength={500} required /></label>
                 <div className="tiffin-reservation-meals"><span>Food preference</span><div>{supportedFoodCategories.map((category) => <label key={category}><input type="checkbox" checked={form.dietPreferences?.includes(category) || false} onChange={(event) => updateDietPreferences(category, event.target.checked)} /> {FOOD_LABELS[category]}</label>)}</div></div>
                 <label><span>Additional instructions <em>Optional</em></span><input value={form.customInstructions} onChange={(event) => updateField('customInstructions', event.target.value)} placeholder="Gate, floor, or delivery notes" maxLength={1000} /></label>
@@ -368,10 +361,10 @@ export default function TiffinReservation() {
             <SummaryRow label="Tiffin service" value={service.name || provider?.name || 'Tiffin Service'} />
             <SummaryRow label="Selected plan" value={selectedPlan?.name || titleCase(selectedPlan?.type)} />
             <SummaryRow label="Start date" value={form.startDate || '—'} />
-            <SummaryRow label="Payment status" value={context?.payment?.enabled ? 'Development test mode' : 'Payment pending'} />
+            <SummaryRow label="Payment status" value={context?.payment?.enabled ? 'Razorpay test mode' : 'Payment pending'} />
             <div className="tiffin-reservation-total"><span>Total</span><strong>{money(reservationAmount)}</strong></div>
             <button type="submit" className="tiffin-subscribe-button tiffin-reservation-submit" disabled={submitting || !selectedPlan?.id}>{submitting ? <><Loader2 size={16} className="spinning" /> Saving...</> : 'Save reservation & pay'}</button>
-            <p className="tiffin-reservation-payment-note">{context?.payment?.label || 'Development payment mode — no real payment will be charged.'}</p>
+            <p className="tiffin-reservation-payment-note">{context?.payment?.label || 'Secure Razorpay checkout will open after this reservation is saved.'}</p>
           </aside>
         </form>
       </div>
@@ -400,15 +393,15 @@ function ResultDetails({ reservation, paymentLabel }) {
 }
 
 function SuccessState({ reservation, serviceName, onBack }) {
-  return <section className="tiffin-reservation-result"><span className="tiffin-reservation-result-icon"><CheckCircle2 size={32} /></span><p className="tiffin-reservation-result-kicker">Reservation confirmed</p><h1>Payment successful</h1><p>Your payment was verified and your {reservation.plan?.name || 'meal plan'} is active from {reservation.startDate}. Your provider can now prepare eligible meals for your subscription.</p><ResultDetails reservation={reservation} paymentLabel="Paid" /><div className="tiffin-reservation-debug"><span><strong>Development payment</strong> · Mock provider</span><span>{serviceName || reservation.serviceName}</span></div><button type="button" className="tiffin-subscribe-button" onClick={onBack}>View reservation <span>→</span></button><small>No real payment was charged. Razorpay can be connected later through the provider adapter.</small></section>;
+  return <section className="tiffin-reservation-result"><span className="tiffin-reservation-result-icon"><CheckCircle2 size={32} /></span><p className="tiffin-reservation-result-kicker">Reservation confirmed</p><h1>Payment successful</h1><p>Your payment was verified and your {reservation.plan?.name || 'meal plan'} is active from {reservation.startDate}. Your provider can now prepare eligible meals for your subscription.</p><ResultDetails reservation={reservation} paymentLabel="Paid" /><div className="tiffin-reservation-debug"><span><strong>Razorpay test mode</strong> · Backend verified</span><span>{serviceName || reservation.serviceName}</span></div><button type="button" className="tiffin-subscribe-button" onClick={onBack}>View reservation <span>→</span></button><small>This payment was processed in Razorpay test mode and verified by StayVeo.</small></section>;
 }
 
-function MockPaymentCheckout({ reservation, enabled, submitting, error, onAction, onBack }) {
-  return <section className="tiffin-reservation-result tiffin-mock-payment-card"><span className="tiffin-mock-payment-icon"><CreditCard size={30} /></span><p className="tiffin-reservation-result-kicker">Test payment</p><span className="tiffin-mock-payment-badge">Development mode</span><h1>{reservation.plan?.name || 'Tiffin plan'}</h1><strong className="tiffin-mock-payment-amount">{money(reservation.amount, reservation.currency)}</strong><div className="tiffin-mock-payment-reference"><span>Reservation reference</span><strong>{reservation.reference}</strong></div><div className="tiffin-mock-payment-notice"><ShieldCheck size={16} /><span>This is a simulated payment. No real money will be charged and no Razorpay checkout is being opened.</span></div>{error && <div className="tiffin-reservation-alert"><AlertCircle size={17} /><span>{error}</span></div>}{enabled ? <div className="tiffin-mock-payment-actions"><button type="button" className="tiffin-subscribe-button" onClick={() => onAction('success')} disabled={submitting}>Pay successfully</button><button type="button" className="tiffin-mock-outline-button" onClick={() => onAction('failure')} disabled={submitting}><XCircle size={16} /> Payment failed</button><button type="button" className="tiffin-mock-secondary-button" onClick={() => onAction('cancel')} disabled={submitting}><CircleX size={15} /> Cancel payment</button><button type="button" className="tiffin-mock-processing-button" onClick={() => onAction('processing')} disabled={submitting}><Loader2 size={15} /> Simulate processing</button></div> : <p className="tiffin-reservation-payment-note">Mock payment mode is not enabled on the server. The reservation is safely pending.</p>}<button type="button" className="tiffin-reservation-secondary-button" onClick={onBack}>Back to service</button></section>;
+function RazorpayPaymentCheckout({ reservation, enabled, submitting, error, onPay, onBack }) {
+  return <section className="tiffin-reservation-result tiffin-mock-payment-card"><span className="tiffin-mock-payment-icon"><CreditCard size={30} /></span><p className="tiffin-reservation-result-kicker">Secure test checkout</p><span className="tiffin-mock-payment-badge">Razorpay test mode</span><h1>{reservation.plan?.name || 'Tiffin plan'}</h1><strong className="tiffin-mock-payment-amount">{money(reservation.amount, reservation.currency)}</strong><div className="tiffin-mock-payment-reference"><span>Reservation reference</span><strong>{reservation.reference}</strong></div><div className="tiffin-mock-payment-notice"><ShieldCheck size={16} /><span>Payment is processed through Razorpay test mode. Your subscription activates only after backend verification.</span></div>{error && <div className="tiffin-reservation-alert"><AlertCircle size={17} /><span>{error}</span></div>}{enabled ? <button type="button" className="tiffin-subscribe-button" onClick={onPay} disabled={submitting}>{submitting ? 'Opening secure checkout...' : 'Pay securely with Razorpay'}</button> : <p className="tiffin-reservation-payment-note">Razorpay is not enabled on the server. The reservation is safely pending.</p>}<button type="button" className="tiffin-reservation-secondary-button" onClick={onBack}>Back to service</button></section>;
 }
 
 function ProcessingState({ reservation, error }) {
-  return <section className="tiffin-reservation-result is-processing"><span className="tiffin-reservation-result-icon"><Loader2 size={32} className="spinning" /></span><p className="tiffin-reservation-result-kicker">Development mode</p><h1>Processing payment...</h1><p>Your simulated payment is being verified by the backend. This screen will update automatically.</p><ResultDetails reservation={reservation} paymentLabel="Processing" />{error && <div className="tiffin-reservation-alert"><AlertCircle size={17} /><span>{error}</span></div>}</section>;
+  return <section className="tiffin-reservation-result is-processing"><span className="tiffin-reservation-result-icon"><Loader2 size={32} className="spinning" /></span><p className="tiffin-reservation-result-kicker">Razorpay checkout</p><h1>Processing payment...</h1><p>Your payment is being verified by the backend. This screen will update when verification completes.</p><ResultDetails reservation={reservation} paymentLabel="Processing" />{error && <div className="tiffin-reservation-alert"><AlertCircle size={17} /><span>{error}</span></div>}</section>;
 }
 
 function PaymentResultState({ type, reservation, submitting, error, onRetry, onBack }) {

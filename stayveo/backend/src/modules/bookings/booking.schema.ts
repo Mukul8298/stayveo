@@ -11,8 +11,11 @@ const visitDateSchema = z.string()
   .refine((value) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    return new Date(`${value}T00:00:00.000Z`) >= today;
-  }, 'Visit date cannot be in the past.');
+    const selected = new Date(`${value}T00:00:00.000Z`);
+    const maxDate = new Date(today);
+    maxDate.setUTCMonth(maxDate.getUTCMonth() + 2);
+    return selected >= today && selected <= maxDate;
+  }, 'Visit date must be today or within the next 2 months.');
 
 export const createBookingSchema = z.object({
   provider_id: z.string().uuid(),

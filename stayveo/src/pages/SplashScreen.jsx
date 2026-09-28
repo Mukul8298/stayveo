@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useProvider } from '../context/ProviderContext';
+import { getLastActivePortal, setLastActivePortal, LAST_ACTIVE_PORTALS } from '../lib/lastActivePortal';
 import './SplashScreen.css';
 
 export default function SplashScreen() {
@@ -8,15 +10,62 @@ export default function SplashScreen() {
   const { authState } = useAuth();
   const [progress, setProgress] = useState(0);
 
+  const { providerAuthenticated, providerLoading, provider } = useProvider();
+
+
   useEffect(() => {
-    const interval = setInterval(() => setProgress(p => Math.min(p + 2, 100)), 40);
-    if (authState.isLoading) return () => clearInterval(interval);
-    const timer = setTimeout(
-      () => navigate(authState.isAuthenticated ? '/home' : '/role-select'),
-      2200
+    const interval = setInterval(
+      () => setProgress((p) => Math.min(p + 2, 100)),
+      40
     );
-    return () => { clearInterval(interval); clearTimeout(timer); };
-  }, [authState.isLoading, authState.isAuthenticated, navigate]);
+
+    // Wait for both auth systems to finish hydration.
+    if (authState.isLoading || providerLoading) {
+      return () => clearInterval(interval);
+    }
+
+    const timer = setTimeout(() => {
+      if (authState.isAuthenticated) {
+        setLastActivePortal(LAST_ACTIVE_PORTALS.STUDENT);
+        navigate('/home', { replace: true });
+        return;
+      }
+
+      if (providerAuthenticated) {
+        const lastActivePortal = getLastActivePortal();
+        const services = Array.isArray(provider?.services) ? provider.services : [];
+        const providerType = provider?.providerType || provider?.activeServiceType;
+        const supportsPg = services.includes('PG') || providerType === 'PG';
+        const supportsTiffin = services.includes('TIFFIN') || providerType === 'TIFFIN';
+
+        if (lastActivePortal === LAST_ACTIVE_PORTALS.PROVIDER_TIFFIN && supportsTiffin) {
+          setLastActivePortal(LAST_ACTIVE_PORTALS.PROVIDER_TIFFIN);
+          navigate('/provider/tiffin/dashboard', { replace: true });
+          return;
+        }
+
+        if (lastActivePortal === LAST_ACTIVE_PORTALS.PROVIDER_PG && supportsPg) {
+          setLastActivePortal(LAST_ACTIVE_PORTALS.PROVIDER_PG);
+          navigate('/provider/dashboard', { replace: true });
+          return;
+        }
+      }
+
+      navigate('/role-select', { replace: true });
+    }, 2200);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timer);
+    };
+  }, [
+    authState.isLoading,
+    authState.isAuthenticated,
+    providerLoading,
+    providerAuthenticated,
+    provider,
+    navigate,
+  ]);
 
   return (
     <div className="splash" id="splash-screen">

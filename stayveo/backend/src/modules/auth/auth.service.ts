@@ -11,21 +11,41 @@
 // ────────────────────────────────────────────────────────────────────────
 
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { authRepository } from './auth.repository.js';
-import { startAuthSchema, verifyOtpSchema, resendOtpSchema } from './auth.schema.js';
-import type { StartAuthInput, VerifyOtpInput, ResendOtpInput } from './auth.schema.js';
+import { startAuthSchema, verifyOtpSchema, resendOtpSchema, forgotPasswordSchema, verifyPasswordResetSchema, resetPasswordSchema } from './auth.schema.js';
+import type { StartAuthInput, VerifyOtpInput, ResendOtpInput, ForgotPasswordInput, VerifyPasswordResetInput, ResetPasswordInput } from './auth.schema.js';
 import { generateOtp, hashOtp, verifyOtp as verifyOtpHash } from '../../common/utils/otp.utils.js';
 import { sendOtpEmail } from '../../common/utils/email.service.js';
 import { yearToDisplay } from '../../common/utils/year.js';
 import { UserRole } from '@prisma/client';
 import Redis from 'ioredis';
-import { createProfileSetupToken, createSession } from '../../common/auth/session.js';
+import { createProfileSetupToken, createSession, invalidateUserSession } from '../../common/auth/session.js';
+import { invalidateAllProviderSessions } from '../../common/auth/provider-session.js';
 
 const BCRYPT_ROUNDS = 10;
 const OTP_EXPIRY_MINUTES = 5;
 
 function otpExpiry(): Date {
   return new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+}
+
+const PASSWORD_RESET_MESSAGE = 'If an account exists with this email, you will receive instructions to reset your password.';
+const PASSWORD_RESET_PURPOSE = 'password_reset';
+const PASSWORD_RESET_TTL_SECONDS = 10 * 60;
+
+function passwordResetExpiry(): Date {
+  return new Date(Date.now() + PASSWORD_RESET_TTL_SECONDS * 1000);
+}
+
+function hashResetToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function incrementResetCounter(redis: Redis, key: string, limit: number) {
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, PASSWORD_RESET_TTL_SECONDS);
+  if (count > limit) throw { statusCode: 429, message: 'Too many password reset attempts. Please try again later.' };
 }
 
 export const authService = {
@@ -232,6 +252,69 @@ export const authService = {
         profile,
       },
     };
+  },
+
+  async forgotPassword(input: ForgotPasswordInput) {
+    const { email } = forgotPasswordSchema.parse(input);
+    const user = await authRepository.findByEmail(email);
+    if (!user || !user.role || ![UserRole.STUDENT, UserRole.PROVIDER].includes(user.role)) {
+      return { message: PASSWORD_RESET_MESSAGE };
+    }
+
+    await authRepository.deleteChallengesByEmail(email, user.role);
+    const otp = generateOtp();
+    await authRepository.createChallenge({
+      email,
+      role: user.role,
+      purpose: PASSWORD_RESET_PURPOSE,
+      otpHash: hashOtp(otp),
+      userId: user.id,
+      expiresAt: passwordResetExpiry(),
+    });
+    await sendOtpEmail(email, otp, undefined, 'password-reset');
+    return { message: PASSWORD_RESET_MESSAGE };
+  },
+
+  async verifyPasswordReset(input: VerifyPasswordResetInput, redis: Redis) {
+    const { email, otp } = verifyPasswordResetSchema.parse(input);
+    const attemptKey = `password-reset:verify:${email}`;
+    await incrementResetCounter(redis, attemptKey, 5);
+
+    const user = await authRepository.findByEmail(email);
+    const challenge = user
+      ? await authRepository.findActiveChallenge(email, user.role, PASSWORD_RESET_PURPOSE)
+      : null;
+    if (!challenge || !challenge.userId || !verifyOtpHash(otp, challenge.otpHash)) {
+      throw { statusCode: 400, message: 'Invalid or expired reset code' };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('base64url');
+    const publicResetToken = `${challenge.id}.${resetToken}`;
+    const marked = await authRepository.markPasswordResetVerified(challenge.id, hashResetToken(publicResetToken));
+    if (marked.count !== 1) throw { statusCode: 400, message: 'Invalid or expired reset code' };
+    await redis.del(attemptKey);
+    return { resetToken: publicResetToken, expiresInSeconds: PASSWORD_RESET_TTL_SECONDS };
+  },
+
+  async resetPassword(input: ResetPasswordInput, redis: Redis) {
+    const data = resetPasswordSchema.parse(input);
+    const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
+    const [challengeId] = data.resetToken.split('.', 1);
+    if (!challengeId) throw { statusCode: 400, message: 'Reset link is invalid or expired' };
+    // The reset token itself is the secret; its hash is the only value stored
+    // in PostgreSQL. The challenge row is atomically consumed on success.
+    const result = await authRepository.consumePasswordReset(
+      challengeId,
+      hashResetToken(data.resetToken),
+      passwordHash,
+    );
+
+    if (result.role === UserRole.PROVIDER) {
+      await invalidateAllProviderSessions(redis, result.id);
+    } else {
+      await invalidateUserSession(redis, result.id);
+    }
+    return { message: 'Password updated successfully. Please log in again.' };
   },
 
   /**

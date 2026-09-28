@@ -41,6 +41,8 @@ const DEFAULT_FORM = {
   location: { address: '', latitude: null, longitude: null, pincode: '', city: '', state: '', deliveryRadiusKm: 5 },
   pricing: {
     perMeal: '',
+    monthlyOneMealPrice: '',
+    monthlyTwoMealPrice: '',
     plans: [
       { type: 'daily', price: '', discountPrice: '' },
       { type: 'weekly', price: '', discountPrice: '' },
@@ -76,7 +78,7 @@ function mergeSavedData(saved, provider) {
     ...DEFAULT_FORM,
     business: { ...DEFAULT_FORM.business, ...saved.business, phone: provider.phone || saved.business?.phone || '' },
     location: { ...DEFAULT_FORM.location, ...saved.location },
-    pricing: { ...DEFAULT_FORM.pricing, plans: saved.plans?.length ? saved.plans.map((plan) => ({ type: plan.type, price: plan.price, discountPrice: plan.discountPrice || '' })) : DEFAULT_FORM.pricing.plans, perMeal: saved.pricing?.perMeal || '' },
+    pricing: { ...DEFAULT_FORM.pricing, ...saved.pricingDetails, plans: saved.plans?.length ? saved.plans.map((plan) => ({ type: plan.type, price: plan.price, discountPrice: plan.discountPrice || '' })) : DEFAULT_FORM.pricing.plans, perMeal: saved.pricing?.perMeal || saved.pricingDetails?.perMeal || '' },
     food: { ...DEFAULT_FORM.food, ...saved.food },
     timing: { ...DEFAULT_FORM.timing, ...saved.timing },
     delivery: { ...DEFAULT_FORM.delivery, ...saved.delivery },
@@ -109,6 +111,10 @@ export default function TiffinOnboarding() {
     getTiffinOnboarding()
       .then((response) => {
         if (cancelled) return;
+        if (response.data?.completed) {
+          navigate('/provider/tiffin/dashboard', { replace: true });
+          return;
+        }
         const identity = response.data?.identity || response.data?.profile || {};
         const nextProvider = {
           ...provider,
@@ -136,7 +142,7 @@ export default function TiffinOnboarding() {
       .catch((err) => {
         if (cancelled) return;
         if (err?.details?.status === 401) {
-          navigate('/provider/login', { replace: true });
+          navigate('/role-select', { replace: true });
           return;
         }
         setError(err.message || 'Unable to load your Tiffin progress');
@@ -422,13 +428,14 @@ function LocationStep({ data, onChange }) {
   </section>;
 }
 
-function PricingStep({ data, onPlan }) {
+function PricingStep({ data, onChange, onPlan }) {
   return <div className="tpo-plan-grid">{data.plans.map((plan, index) => <section className={`tpo-card tpo-plan-card${plan.type === 'monthly' ? ' is-popular' : ''}`} key={plan.type}>
     {plan.type === 'monthly' && <span className="tpo-popular">Popular</span>}
     <div className="tpo-plan-title"><h2>{plan.type === 'daily' ? 'Per Meal' : `${plan.type[0].toUpperCase()}${plan.type.slice(1)} Plan`}</h2><span>{plan.type === 'daily' ? '▤' : '▣'}</span></div>
     <p>{plan.type === 'daily' ? 'Base price for a single tiffin meal.' : plan.type === 'monthly' ? 'Discounted rate for 30-day subscription.' : 'Short-term commitment pricing.'}</p>
     <div className="tpo-money-input"><span>₹</span><input type="number" min="0" value={inputValue(plan.price)} onChange={(e) => onPlan(index, { price: e.target.value })} placeholder={plan.type === 'weekly' ? 'e.g. 500' : ''} /></div>
     {plan.type !== 'daily' && <Field label="Discounted price (optional)"><input type="number" min="0" value={inputValue(plan.discountPrice)} onChange={(e) => onPlan(index, { discountPrice: e.target.value })} /></Field>}
+    {plan.type === 'monthly' && <div className="tpo-pricing-split"><Field label="1 meal / month"><input type="number" min="0" value={inputValue(data.monthlyOneMealPrice)} onChange={(e) => onChange({ monthlyOneMealPrice: e.target.value })} /></Field><Field label="2 meals / month"><input type="number" min="0" value={inputValue(data.monthlyTwoMealPrice)} onChange={(e) => onChange({ monthlyTwoMealPrice: e.target.value })} /></Field></div>}
   </section>)}</div>;
 }
 

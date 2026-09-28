@@ -55,8 +55,8 @@ export default function ProviderDashboard() {
 
   const handleLogout = async () => {
     try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
       clearProvider();
-      navigate('/role-select');
     }
   };
 

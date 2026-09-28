@@ -98,6 +98,21 @@ export function resendOtp(email, role = 'STUDENT') {
   return request('/auth/resend-otp', { method: 'POST', body: { email, role } });
 }
 
+export function forgotPassword(email) {
+  return request('/auth/forgot-password', { method: 'POST', body: { email } });
+}
+
+export function verifyPasswordReset(email, otp) {
+  return request('/auth/verify-password-reset', { method: 'POST', body: { email, otp } });
+}
+
+export function resetPassword(resetToken, password, confirmPassword) {
+  return request('/auth/reset-password', {
+    method: 'POST',
+    body: { resetToken, password, confirmPassword },
+  });
+}
+
 export function getAuthMe() {
   return request('/auth/me', { method: 'GET' });
 }
@@ -129,6 +144,10 @@ export function getCurrentUserProfile(userId) {
 
 export function updateUserProfile(profileData, userId) {
   return request('/user/update-profile', { method: 'PUT', body: profileData });
+}
+
+export function updateUser(data) {
+  return request('/users/me', { method: 'PUT', body: data });
 }
 
 // ── Saved Listings ─────────────────────────────────────────────────────

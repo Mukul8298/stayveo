@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useProvider } from '../../context/ProviderContext';
 import { useToast } from '../../context/ToastContext';
-import { createRoomListing } from '../../api/provider';
+import { createRoomListing, providerLogout } from '../../api/provider';
 import RoomListingForm from './RoomListingForm';
 import './ProviderCreateListing.css';
 
@@ -50,9 +50,11 @@ export default function ProviderCreateListing() {
     }
   }
 
-  function handleLogout() {
-    clearProvider();
-    navigate('/role-select');
+  async function handleLogout() {
+    try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
+      clearProvider();
+    }
   }
 
   return (

@@ -35,6 +35,8 @@
   font-size: var(--text-xs); font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--neutral-600);
 }
+#provider-login .pl-forgot-link { align-self: flex-end; }
+#provider-login .pl-forgot-link:hover { color: var(--accent-700); }
 #provider-login .pl-field-wrap {
   display: flex; align-items: center; border: 1.5px solid var(--neutral-200);
   border-radius: var(--radius-md); background: white; padding: 0 var(--space-4);

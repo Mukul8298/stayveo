@@ -16,6 +16,7 @@ const fallbackTemplates: Record<string, { title: string; body: string }> = {
   tiffin_subscription_created: { title: 'Tiffin subscription started', body: 'Your tiffin subscription with {{kitchenName}} starts on {{startDate}}. Enjoy your meals!' },
   tiffin_delivery_completed: { title: 'Meal delivered', body: 'Your {{mealCategory}} meal has been delivered. Bon appétit!' },
   tiffin_subscription_expiring: { title: 'Subscription expiring soon', body: 'Your tiffin subscription expires in {{daysRemaining}} days. Renew to continue uninterrupted meals.' },
+  tiffin_meal_skipped: { title: 'Meal skip requested', body: '{{studentName}} skipped {{mealCategory}} for {{skipDate}} on your Tiffin subscription.' },
   visit_approved: { title: 'Visit approved', body: 'Your visit to {{propertyName}} on {{visitDate}} has been approved. {{address}}' },
   visit_completed: { title: 'Visit completed', body: 'Your visit to {{propertyName}} is complete. Ready to book? Reserve your room now!' },
   system: { title: 'StayVeo update', body: '{{message}}' },

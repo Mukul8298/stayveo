@@ -11,19 +11,17 @@ export default async function tiffinRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/menu/today', tiffinController.todayMenu);
   fastify.get('/my-space', tiffinController.mySpace);
   fastify.get('/my-reservations', tiffinController.myReservations);
-  fastify.post('/my-subscriptions/:id/skip-meal', tiffinController.skipMeal);
+  fastify.post('/my-subscriptions/:id/skip-meal', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, tiffinController.skipMeal);
   fastify.post('/my-subscriptions/:id/pause', tiffinController.pauseSubscription);
   fastify.post('/my-subscriptions/:id/resume', tiffinController.resumeSubscription);
+  fastify.post('/my-subscriptions/:id/renewal', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, tiffinController.createRenewal);
+  fastify.post('/my-subscriptions/:id/renewal/verify', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, tiffinController.completeRenewal);
   fastify.get('/:id/reservation', tiffinController.reservationContext);
   fastify.post('/:id/reservation', tiffinController.createReservation);
   fastify.get('/reservations/:id', tiffinController.getReservation);
   fastify.get('/:id/payment/:paymentId', tiffinController.getPayment);
   fastify.post('/reservations/:id/payment', tiffinController.createPayment);
-  fastify.post('/reservations/:id/payment/mock/process', tiffinController.processMockPayment);
-  fastify.post('/reservations/:id/payment/mock/complete', tiffinController.completeMockPayment);
-  fastify.post('/reservations/:id/payment/mock/fail', tiffinController.failMockPayment);
-  fastify.post('/reservations/:id/payment/mock/cancel', tiffinController.cancelMockPayment);
-  fastify.post('/reservations/:id/payment/fail', tiffinController.failReservationPayment);
+  fastify.post('/reservations/:id/payment/verify', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, tiffinController.verifyPayment);
   fastify.post('/reservations/:id/confirm', tiffinController.confirmReservation);
 
   // Provider onboarding is authenticated with the email-login session. The

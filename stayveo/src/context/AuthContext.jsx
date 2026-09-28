@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { getAuthMe, logout } from '../api/client';
+import { clearLastActivePortal, setLastActivePortal, LAST_ACTIVE_PORTALS } from '../lib/lastActivePortal';
 
 const AuthContext = createContext(null);
 
@@ -92,6 +93,7 @@ export function AuthProvider({ children }) {
         setAuthState(data?.authenticated && data.user
           ? stateFromServerUser(data.user)
           : { ...INITIAL_STATE, isLoading: false });
+        if (data?.authenticated && data.user) setLastActivePortal(LAST_ACTIVE_PORTALS.STUDENT);
       })
       .catch(() => {
         if (!cancelled && requestVersion === authVersion.current) {
@@ -122,12 +124,14 @@ export function AuthProvider({ children }) {
     if (updates.isAuthenticated !== undefined) {
       safeSetItem('profileComplete', updates.exists ? 'true' : 'false');
     }
+    if (updates.isAuthenticated === true) setLastActivePortal(LAST_ACTIVE_PORTALS.STUDENT);
   }, []);
 
-  const clearAuth = useCallback(() => {
+  const clearAuth = useCallback(async () => {
     authVersion.current += 1;
-    void logout().catch(() => {});
+    await logout().catch(() => {});
     clearCachedProfile();
+    clearLastActivePortal();
     setAuthState({ ...INITIAL_STATE, isLoading: false });
   }, []);
 

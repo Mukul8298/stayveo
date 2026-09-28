@@ -297,6 +297,11 @@ function serializeKitchen(kitchen: AnyRecord | null, verifications: AnyRecord[] 
       deliveryRadiusKm: Number(kitchen.deliveryRadiusKm || 5),
     },
     pricing: (kitchen.subscriptionPlans || []).map(serializePlan),
+    pricingDetails: {
+      perMeal: Number(kitchen.extraMealPrice || 0),
+      monthlyOneMealPrice: kitchen.monthlyOneMealPrice === null ? '' : Number(kitchen.monthlyOneMealPrice || 0),
+      monthlyTwoMealPrice: kitchen.monthlyTwoMealPrice === null ? '' : Number(kitchen.monthlyTwoMealPrice || 0),
+    },
     food: {
       categories,
       mealItems: foodOptions.mealItems || { lunch: [], dinner: [] },
@@ -550,7 +555,13 @@ export const tiffinProviderService = {
             ? dailyPlanPrice ?? Number(kitchen.extraMealPrice)
             : requiredNumber(data.perMeal, 'Per meal price must be between 0 and 100000', 0, 100000);
           if (!Number.isFinite(perMeal) || perMeal <= 0) throw { statusCode: 400, message: 'Set a valid daily per-meal price' };
-          Object.assign(update, { extraMealPrice: perMeal });
+          const monthlyOneMealPrice = data.monthlyOneMealPrice === '' || data.monthlyOneMealPrice === undefined || data.monthlyOneMealPrice === null
+            ? kitchen.monthlyOneMealPrice
+            : requiredNumber(data.monthlyOneMealPrice, 'Monthly one-meal price must be between 0 and 100000', 0, 100000);
+          const monthlyTwoMealPrice = data.monthlyTwoMealPrice === '' || data.monthlyTwoMealPrice === undefined || data.monthlyTwoMealPrice === null
+            ? kitchen.monthlyTwoMealPrice
+            : requiredNumber(data.monthlyTwoMealPrice, 'Monthly two-meal price must be between 0 and 100000', 0, 100000);
+          Object.assign(update, { extraMealPrice: perMeal, monthlyOneMealPrice, monthlyTwoMealPrice });
           break;
         }
         case 'food': {
@@ -627,6 +638,7 @@ export const tiffinProviderService = {
       throw { statusCode: 400, message: 'Complete all required Tiffin onboarding sections before submitting' };
     }
     await prisma.tiffinKitchen.update({ where: { id: kitchen.id }, data: { verificationStatus: KitchenVerificationStatus.PENDING } });
+    await prisma.providerProfile.update({ where: { id: profile.id }, data: { onboardingStatus: 'COMPLETED' } });
     await prisma.tiffinActivityLog.create({ data: { kitchenId: kitchen.id, userId: profile.userId, action: 'onboarding_submitted', description: 'Tiffin service submitted for verification' } });
     return { submitted: true, verificationStatus: KitchenVerificationStatus.PENDING };
   },
@@ -646,7 +658,9 @@ export const tiffinProviderService = {
     const { start, end } = dayBounds();
     const businessDate = new Date(`${today}T00:00:00.000Z`);
     const mealWhere = { kitchenId: kitchen.id, mealDate: { gte: start, lte: end } };
-    const cacheKey = tiffinProviderDashboardKey(profile.id);
+    const providerId = profile.id;
+    const cacheKey = tiffinProviderDashboardKey(providerId);
+    logger?.debug?.({ providerId, cacheKey }, 'Reading TIFFIN provider dashboard cache');
     const cached = redis && logger
       ? await readProviderDashboardCache<{
           kitchen: { name: string | null; verificationStatus: string; status: string };
@@ -679,7 +693,7 @@ export const tiffinProviderService = {
         metrics: { activeStudents, todaysMeals, pendingDeliveries, deliveredMeals },
         kitchenSummary: { totalMeals: todaysMeals, lunch, dinner, skipped, pausedStudents },
         foodSummary: foodSummary.map((item) => ({ preference: String(item.dietPreference).toLowerCase(), count: item._count._all })),
-        providerId: profile.id,
+        providerId,
       };
       if (redis && logger) await writeProviderDashboardCache(redis, cacheKey, summary, logger);
     }

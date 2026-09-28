@@ -14,6 +14,7 @@
 // NO BUSINESS LOGIC CHANGES — this is purely a layout extraction.
 // ─────────────────────────────────────────────────────────────────────────
 
+import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -32,6 +33,7 @@ import {
 import { useProvider } from '../../context/ProviderContext';
 import { providerLogout } from '../../api/provider';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
+import { setLastActivePortal, LAST_ACTIVE_PORTALS } from '../../lib/lastActivePortal';
 import ProviderAuthGate from './ProviderAuthGate';
 import './ProviderLayout.css';
 
@@ -109,8 +111,17 @@ function getActiveNavKey(pathname) {
 export default function ProviderLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { provider, clearProvider } = useProvider();
+  const { provider, clearProvider, providerAuthenticated, providerLoading } = useProvider();
   const pathname = location.pathname;
+
+  useEffect(() => {
+    const services = Array.isArray(provider.services) ? provider.services : [];
+    const providerType = provider.providerType || provider.activeServiceType;
+    const supportsPg = services.includes('PG') || providerType === 'PG';
+    if (!providerLoading && providerAuthenticated && supportsPg) {
+      setLastActivePortal(LAST_ACTIVE_PORTALS.PROVIDER_PG);
+    }
+  }, [provider, providerAuthenticated, providerLoading]);
   const { unreadCount } = useRealtimeNotifications(provider.userId || provider.user_id);
 
   const providerName = provider.name || 'Provider';
@@ -137,8 +148,8 @@ export default function ProviderLayout() {
 
   async function handleLogout() {
     try { await providerLogout(); } finally {
+      navigate('/role-select', { replace: true });
       clearProvider();
-      navigate('/provider/login', { replace: true });
     }
   }
 

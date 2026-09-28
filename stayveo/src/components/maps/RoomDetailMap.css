@@ -54,6 +54,20 @@
   transform: translateY(-1px);
 }
 
+.rd-map-coordinates {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--neutral-700);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+}
+
 .rd-map-fallback {
   height: 200px;
   background: var(--neutral-50);

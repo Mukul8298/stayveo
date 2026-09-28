@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { getProviderCurrentProfile } from '../api/client';
+import { clearLastActivePortal } from '../lib/lastActivePortal';
 
 const ProviderContext = createContext(null);
 const STORAGE_KEY = 'providerOnboarding';
@@ -20,6 +21,7 @@ const INITIAL_STATE = {
   isVerified: false,
   services: [],
   activeServiceType: '',
+  providerType: '',
   completedSteps: [],
 };
 
@@ -59,6 +61,7 @@ function providerStateFromServer(raw, previous) {
     otpVerified: Boolean(profile.otpVerified ?? true),
     services: services.length ? services : previous.services,
     activeServiceType,
+    providerType: profile.providerType || previous.providerType,
     isExistingUser: true,
   };
 }
@@ -86,6 +89,7 @@ export function ProviderProvider({ children }) {
   const clearProvider = useCallback(() => {
     hydrationVersion.current += 1;
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore storage failures */ }
+    clearLastActivePortal();
     setState(INITIAL_STATE);
     setProviderAuthenticated(false);
     setProviderSessionState('unauthenticated');

@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
 
   const backendTarget =
     env.BACKEND_PROXY_URL ||
-    `http://localhost:${env.BACKEND_PORT || '3000'}`
+    'https://stayveo.onrender.com'
 
   const configuredHosts = (env.VITE_ALLOWED_HOSTS || '')
     .split(',')

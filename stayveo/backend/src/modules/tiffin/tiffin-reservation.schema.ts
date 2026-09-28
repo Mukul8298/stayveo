@@ -4,6 +4,10 @@ const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 
 export const createTiffinReservationSchema = z.object({
   planId: z.string().uuid('Choose a valid meal plan'),
+  // Optional for backward compatibility with clients that already have a
+  // canonical User.phone_number; the service still validates the resolved
+  // phone before creating a reservation.
+  phone: z.string().trim().regex(/^\+?[0-9]{10,15}$/, 'Enter a valid phone number').optional(),
   deliveryAddress: z.string().trim().min(5, 'Delivery address is required').max(500),
   deliveryLatitude: z.number().finite().min(-90).max(90).nullable().optional(),
   deliveryLongitude: z.number().finite().min(-180).max(180).nullable().optional(),

@@ -125,6 +125,7 @@ model User {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   emailAuthChallenges      EmailAuthChallenge[]
+  tiffinSubscriptionSkips TiffinSubscriptionSkip[]
 
   @@map("users")
 }
@@ -140,12 +141,15 @@ model EmailAuthChallenge {
   otpHash      String   @map("otp_hash") @db.VarChar(64)
   passwordHash String?  @map("password_hash") @db.VarChar(255)
   userId       String?  @map("user_id") @db.Uuid
+  verifiedAt   DateTime? @map("verified_at") @db.Timestamptz(6)
+  resetTokenHash String? @map("reset_token_hash") @db.VarChar(64)
   expiresAt    DateTime @map("expires_at") @db.Timestamptz(6)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email, role, purpose])
+  @@index([resetTokenHash])
   @@index([expiresAt])
   @@map("email_auth_challenges")
 }
@@ -452,6 +456,32 @@ enum PaymentStatus {
   @@map("payment_status")
 }
 
+enum PaymentLifecycleState {
+  INITIATED
+  ORDER_CREATED
+  PROCESSING
+  CAPTURED
+  VERIFIED
+  TRANSFER_PENDING
+  TRANSFERRED
+  COMPLETED
+  PAYMENT_FAILED
+  VERIFICATION_FAILED
+  TRANSFER_FAILED
+  REFUND_PENDING
+  REFUNDED
+  CANCELLED
+
+  @@map("payment_lifecycle_state")
+}
+
+enum SubscriptionSkipStatus {
+  ACTIVE
+  CANCELLED
+
+  @@map("subscription_skip_status")
+}
+
 // Lifecycle status for room inventory
 // ACTIVE  = visible to students, beds available
 // FULL    = auto-set when available_beds hits 0
@@ -548,21 +578,108 @@ model ProfileView {
 // ─── PAYMENTS ───────────────────────────────────────────────────────────
 
 model Payment {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId     String?       @map("booking_id") @db.Uuid
-  userId        String        @map("user_id") @db.Uuid
-  providerId    String        @map("provider_id") @db.Uuid
-  amount        Decimal       @db.Decimal(10, 2)
-  type          PaymentType
-  status        PaymentStatus @default(PENDING)
-  paymentMethod String?       @map("payment_method") @db.VarChar(60)
-  transactionId String?       @unique @map("transaction_id") @db.VarChar(128)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId          String?               @map("booking_id") @db.Uuid
+  userId             String                @map("user_id") @db.Uuid
+  providerId         String                @map("provider_id") @db.Uuid
+  amount             Decimal               @db.Decimal(10, 2)
+  type               PaymentType
+  status             PaymentStatus         @default(PENDING)
+  lifecycleState     PaymentLifecycleState @default(INITIATED) @map("lifecycle_state")
+  paymentMethod      String?               @map("payment_method") @db.VarChar(60)
+  transactionId      String?               @unique @map("transaction_id") @db.VarChar(128)
+  idempotencyKey     String?               @unique @map("idempotency_key") @db.VarChar(128)
+  paymentGateway     String?               @map("payment_gateway") @db.VarChar(50)
+  providerOrderId    String?               @unique @map("provider_order_id") @db.VarChar(128)
+  providerPaymentId  String?               @unique @map("provider_payment_id") @db.VarChar(128)
+  currency           String                @default("INR") @db.VarChar(3)
+  reservationFee     Decimal               @default(0.00) @map("reservation_fee_snapshot") @db.Decimal(10, 2)
+  platformFee        Decimal               @default(0.00) @map("platform_fee_snapshot") @db.Decimal(10, 2)
+  ownerAmount        Decimal               @default(0.00) @map("owner_amount") @db.Decimal(10, 2)
+  studentPayable     Decimal               @default(0.00) @map("student_payable") @db.Decimal(10, 2)
+  commissionBearer   String                @default("OWNER") @map("commission_bearer") @db.VarChar(20)
+  pricingSnapshot    Json?                 @map("pricing_snapshot")
+  transferStatus     String?               @map("transfer_status") @db.VarChar(30)
+  lastWebhookEventId String?               @map("last_webhook_event_id") @db.VarChar(128)
+  verifiedAt         DateTime?             @map("verified_at") @db.Timestamptz(6)
+  paidAt             DateTime?             @map("paid_at") @db.Timestamptz(6)
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  auditLogs PaymentAuditLog[]
+  transfers PaymentTransfer[]
 
+  @@index([bookingId, lifecycleState])
+  @@index([providerId, status, createdAt])
   @@map("payments")
+}
+
+model PaymentAuditLog {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType        String   @map("event_type") @db.VarChar(80)
+  actorUserId      String?  @map("actor_user_id") @db.Uuid
+  actorProviderId  String?  @map("actor_provider_id") @db.Uuid
+  paymentId        String?  @map("payment_id") @db.Uuid
+  tiffinPaymentId  String?  @map("tiffin_payment_id") @db.Uuid
+  bookingId        String?  @map("booking_id") @db.Uuid
+  subscriptionId   String?  @map("subscription_id") @db.Uuid
+  renewalId        String?  @map("renewal_id") @db.Uuid
+  requestId        String?  @map("request_id") @db.VarChar(128)
+  gatewayOrderId   String?  @map("gateway_order_id") @db.VarChar(128)
+  gatewayPaymentId String?  @map("gateway_payment_id") @db.VarChar(128)
+  baseAmount       Decimal? @map("base_amount") @db.Decimal(10, 2)
+  platformFee      Decimal? @map("platform_fee") @db.Decimal(10, 2)
+  ownerAmount      Decimal? @map("owner_amount") @db.Decimal(10, 2)
+  studentPayable   Decimal? @map("student_payable") @db.Decimal(10, 2)
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment       Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  tiffinPayment TiffinPayment? @relation(fields: [tiffinPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId, createdAt])
+  @@index([tiffinPaymentId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("payment_audit_logs")
+}
+
+model PaymentWebhookEvent {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider          String   @db.VarChar(40)
+  eventId           String   @unique @map("event_id") @db.VarChar(128)
+  eventType         String   @map("event_type") @db.VarChar(100)
+  signatureVerified Boolean  @default(false) @map("signature_verified")
+  status            String   @default("RECEIVED") @db.VarChar(30)
+  payload           Json
+  errorMessage      String?  @map("error_message")
+  receivedAt        DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt       DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  @@index([provider, eventType, receivedAt])
+  @@index([status, receivedAt])
+  @@map("payment_webhook_events")
+}
+
+model PaymentTransfer {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId         String?  @map("payment_id") @db.Uuid
+  tiffinPaymentId   String?  @map("tiffin_payment_id") @db.Uuid
+  providerId        String   @map("provider_id") @db.Uuid
+  idempotencyKey    String   @unique @map("idempotency_key") @db.VarChar(128)
+  gatewayTransferId String?  @unique @map("gateway_transfer_id") @db.VarChar(128)
+  amount            Decimal  @db.Decimal(10, 2)
+  status            String   @default("PENDING") @db.VarChar(30)
+  failureReason    String?  @map("failure_reason")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  payment       Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  tiffinPayment TiffinPayment? @relation(fields: [tiffinPaymentId], references: [id], onDelete: SetNull)
+
+  @@index([providerId, status, createdAt])
+  @@map("payment_transfers")
 }
 
 model Receipt {
@@ -946,6 +1063,8 @@ model TiffinKitchen {
   deliveryCharges          Decimal                   @default(0.00) @map("delivery_charges") @db.Decimal(10, 2)
   packingCharges           Decimal                   @default(0.00) @map("packing_charges") @db.Decimal(10, 2)
   extraMealPrice           Decimal                   @default(80.00) @map("extra_meal_price") @db.Decimal(10, 2)
+  monthlyOneMealPrice      Decimal?                  @map("monthly_one_meal_price") @db.Decimal(10, 2)
+  monthlyTwoMealPrice      Decimal?                  @map("monthly_two_meal_price") @db.Decimal(10, 2)
 
   // Weekly Off
   isSundayClosed           Boolean                   @default(false) @map("is_sunday_closed")
@@ -1104,6 +1223,8 @@ model TiffinCustomerSubscription {
   // Lifecycle
   startDate           DateTime                 @map("start_date") @db.Date
   endDate             DateTime                 @map("end_date") @db.Date
+  lunchEndDate        DateTime?                @map("lunch_end_date") @db.Date
+  dinnerEndDate       DateTime?                @map("dinner_end_date") @db.Date
   totalMealsAllocated Int                      @map("total_meals_allocated")
   mealsRemaining      Int                      @map("meals_remaining")
   mealsConsumed       Int                      @default(0) @map("meals_consumed")
@@ -1131,6 +1252,7 @@ model TiffinCustomerSubscription {
   pauseLogs   TiffinSubscriptionPauseLog[]
   renewalLogs TiffinSubscriptionRenewalLog[]
   payments    TiffinPayment[]
+  skips       TiffinSubscriptionSkip[]
   subscriptionDays TiffinSubscriptionDay[]
   mealLogs    TiffinMealLog[]
   reviews     TiffinReview[]
@@ -1174,12 +1296,35 @@ model TiffinSubscriptionPauseLog {
   @@map("tiffin_subscription_pause_logs")
 }
 
+model TiffinSubscriptionSkip {
+  id             String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscriptionId String                 @map("subscription_id") @db.Uuid
+  studentId      String                 @map("student_id") @db.Uuid
+  skipDate       DateTime               @map("skip_date") @db.Date
+  mealCategory   MealCategory           @map("meal_category")
+  mealCount      Int                    @default(1) @map("meal_count")
+  status         SubscriptionSkipStatus @default(ACTIVE)
+  renewalApplied Boolean                @default(false) @map("renewal_applied")
+  ownerNotifiedAt DateTime?             @map("owner_notified_at") @db.Timestamptz(6)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  student      User                       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, skipDate, mealCategory])
+  @@index([studentId, status, skipDate])
+  @@index([subscriptionId, status, renewalApplied])
+  @@map("tiffin_subscription_skips")
+}
+
 model TiffinSubscriptionRenewalLog {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   subscriptionId String   @map("subscription_id") @db.Uuid
   oldEndDate     DateTime @map("old_end_date") @db.Date
   newEndDate     DateTime @map("new_end_date") @db.Date
   addedMeals     Int      @map("added_meals")
+  mealCategory   MealCategory? @map("meal_category")
   paymentId      String?  @map("payment_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -1251,6 +1396,16 @@ model TiffinPayment {
   currency       String              @default("INR") @db.VarChar(3)
   paymentMethod  TiffinPaymentMethod @default(UPI) @map("payment_method")
   status         TiffinPaymentStatus @default(PENDING)
+  lifecycleState PaymentLifecycleState @default(INITIATED) @map("lifecycle_state")
+  planType       String?             @map("plan_type") @db.VarChar(30)
+  mealsPerDay    Int                 @default(0) @map("meals_per_day")
+  isRenewal      Boolean             @default(false) @map("is_renewal")
+  commissionBearer String?           @map("commission_bearer") @db.VarChar(20)
+  ownerAmount    Decimal             @default(0.00) @map("owner_amount") @db.Decimal(10, 2)
+  pricingSnapshot Json?              @map("pricing_snapshot")
+  transferStatus String?             @map("transfer_status") @db.VarChar(30)
+  lastWebhookEventId String?         @map("last_webhook_event_id") @db.VarChar(128)
+  verifiedAt     DateTime?           @map("verified_at") @db.Timestamptz(6)
 
   // Breakdown
   baseAmount     Decimal             @map("base_amount") @db.Decimal(10, 2)
@@ -1270,6 +1425,8 @@ model TiffinPayment {
   subscription TiffinCustomerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   invoice      TiffinInvoice?
   refunds      TiffinRefund[]
+  auditLogs    PaymentAuditLog[]
+  transfers    PaymentTransfer[]
 
   @@index([subscriptionId, status])
   @@index([kitchenId, status, paidAt])
