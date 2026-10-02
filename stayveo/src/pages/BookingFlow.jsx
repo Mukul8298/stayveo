@@ -119,7 +119,7 @@ export default function BookingFlow() {
     const otherCharges = firstNumber(room?.otherCharges) ?? 0;
     const reservationFee = firstNumber(room?.reservationFee) ?? 0;
     const platformFee = DEFAULT_PLATFORM_FEE;
-    const totalPayableNow = reservationFee;
+    const totalPayableNow = reservationFee + platformFee;
     const totalMonthlyCost = monthlyRent + foodCharges + electricityCharges + waterCharges + maintenanceCharges + parkingCharges + otherCharges;
 
     return {
@@ -468,7 +468,7 @@ export default function BookingFlow() {
           </div>
           <div className="booking-price-list">
             <PricingRow label="Reservation Fee" value={pricing.reservationFee} />
-            <PricingRow label="StayVeo commission (included)" value={pricing.platformFee} muted />
+            <PricingRow label="StayVeo Commission (added)" value={pricing.platformFee} muted />
             <div className="booking-divider" />
             <PricingRow label="Total Payable" value={pricing.totalPayableNow} strong />
           </div>
@@ -488,7 +488,7 @@ export default function BookingFlow() {
         </section>
 
         <p className="booking-terms">
-          By reserving, you agree that property rent and deposit are handled directly with the owner. StayVeo collects the owner-defined reservation fee now; the StayVeo commission is settled from the owner amount.
+          By reserving, you agree that property rent and deposit are handled directly with the owner. StayVeo adds a ₹99 platform commission to the owner-defined reservation fee.
         </p>
       </main>
 

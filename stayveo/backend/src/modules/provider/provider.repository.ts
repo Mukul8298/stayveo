@@ -1,6 +1,7 @@
 // ─── Provider Repository ────────────────────────────────────────────────
 
 import prisma from '../../common/db/prisma.js';
+import { Prisma } from '@prisma/client';
 import { UserRole } from '../../common/enums.js';
 import type {
   BasicInfoInput,
@@ -427,14 +428,14 @@ export const providerRepository = {
       // Total PAID earnings — aggregate._sum gives us the SUM of amount column
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID' },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
       }),
     ]);
 
     return {
       activeListings: serviceCount,
       totalBookings:  bookingCount,
-      totalEarnings:  Number(earningsResult._sum.amount ?? 0),
+      totalEarnings:  Number(earningsResult._sum.ownerAmount ?? 0),
     };
   },
 
@@ -539,39 +540,55 @@ export const providerRepository = {
   },
 
   async savePgOnboarding(userId: string, data: PgOnboardingInput) {
-    const profile = await prisma.providerProfile.findUnique({ where: { userId } });
-    if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
+    const phone = data.phone?.trim();
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const profile = await tx.providerProfile.findUnique({ where: { userId } });
+        if (!profile) throw { statusCode: 404, message: 'Provider profile not found' };
 
-    const updated = await prisma.providerProfile.update({
-      where: { userId },
-      data: {
-        name: data.name,
-        ...(data.phone && { phone: data.phone }),
-        ...(data.email !== undefined && { email: data.email }),
-        ...(data.businessName !== undefined && { businessName: data.businessName }),
-        ...(data.address !== undefined && { address: data.address }),
-        ...(data.contactNumber !== undefined && { contactNumber: data.contactNumber }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.latitude !== undefined && { latitude: data.latitude }),
-        ...(data.longitude !== undefined && { longitude: data.longitude }),
-        providerType: 'PG',
-        onboardingStatus: 'COMPLETED',
-      },
-    });
+        if (phone) {
+          const [duplicateUser, duplicateProfile] = await Promise.all([
+            tx.user.findFirst({ where: { phone_number: phone, id: { not: userId } }, select: { id: true } }),
+            tx.providerProfile.findFirst({ where: { phone, id: { not: profile.id } }, select: { id: true } }),
+          ]);
+          if (duplicateUser || duplicateProfile) {
+            throw { statusCode: 409, message: 'Phone number is already registered' };
+          }
+          await tx.user.update({ where: { id: userId }, data: { phone_number: phone } });
+        }
 
-    const existingService = await prisma.providerService.findFirst({
-      where: { providerId: profile.id, type: 'PG' },
-    });
-    if (!existingService) {
-      await prisma.providerService.create({
-        data: {
-          providerId: profile.id,
-          type: 'PG',
-        },
+        const updated = await tx.providerProfile.update({
+          where: { userId },
+          data: {
+            name: data.name,
+            ...(phone && { phone }),
+            ...(data.email !== undefined && { email: data.email }),
+            ...(data.businessName !== undefined && { businessName: data.businessName }),
+            ...(data.address !== undefined && { address: data.address }),
+            ...(data.contactNumber !== undefined && { contactNumber: data.contactNumber }),
+            ...(data.description !== undefined && { description: data.description }),
+            ...(data.latitude !== undefined && { latitude: data.latitude }),
+            ...(data.longitude !== undefined && { longitude: data.longitude }),
+            providerType: 'PG',
+            onboardingStatus: 'COMPLETED',
+          },
+        });
+
+        const existingService = await tx.providerService.findFirst({
+          where: { providerId: profile.id, type: 'PG' },
+        });
+        if (!existingService) {
+          await tx.providerService.create({ data: { providerId: profile.id, type: 'PG' } });
+        }
+
+        return updated;
       });
+    } catch (error) {
+      if (phone && error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw { statusCode: 409, message: 'Phone number is already registered' };
+      }
+      throw error;
     }
-
-    return updated;
   },
 
   async completeOnboarding(userId: string) {

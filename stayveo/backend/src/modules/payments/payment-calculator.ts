@@ -22,9 +22,9 @@ export function calculatePgPayment(reservationFee: number): PaymentCalculation {
     productType: 'PG',
     baseAmount,
     platformFee,
-    commissionBearer: 'OWNER',
-    ownerAmount: money(baseAmount - platformFee),
-    studentPayable: baseAmount,
+    commissionBearer: 'STUDENT',
+    ownerAmount: baseAmount,
+    studentPayable: money(baseAmount + platformFee),
   };
 }
 
@@ -35,15 +35,12 @@ export function calculateTiffinPayment(input: {
   isRenewal: boolean;
 }): PaymentCalculation {
   const normalizedPlan = input.planType.toLowerCase();
-  const monthly = normalizedPlan === 'monthly';
-  const platformFee = !monthly
-    ? 0
-    : input.isRenewal
-      ? input.mealsPerDay === 1 ? 49 : 99
-      : input.mealsPerDay === 1 ? 99 : 199;
-  const commissionBearer: CommissionBearer = monthly && input.isRenewal ? 'STUDENT' : 'OWNER';
+  if (!['daily_1_meal', 'weekly_1_meal', 'monthly_1_meal', 'monthly_2_meals'].includes(normalizedPlan)) {
+    throw { statusCode: 400, message: 'Choose a valid Tiffin meal plan' };
+  }
+  const platformFee = 0;
+  const commissionBearer: CommissionBearer = 'OWNER';
   const baseAmount = money(input.baseAmount);
-  const studentPayable = money(baseAmount + (commissionBearer === 'STUDENT' ? platformFee : 0));
   return {
     productType: 'TIFFIN',
     planType: normalizedPlan,
@@ -51,8 +48,8 @@ export function calculateTiffinPayment(input: {
     baseAmount,
     platformFee,
     commissionBearer,
-    ownerAmount: money(baseAmount - (commissionBearer === 'OWNER' ? platformFee : 0)),
-    studentPayable,
+    ownerAmount: baseAmount,
+    studentPayable: baseAmount,
     mealsPerDay: input.mealsPerDay,
     isRenewal: input.isRenewal,
   };

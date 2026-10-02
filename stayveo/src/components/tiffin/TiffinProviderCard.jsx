@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 
 export default function TiffinProviderCard({ provider }) {
   const navigate = useNavigate();
-  const distance = Number(provider.distanceKm);
 
   return (
     <article className="tiffin-provider-card">
@@ -14,7 +13,7 @@ export default function TiffinProviderCard({ provider }) {
       <div className="tiffin-provider-body">
         <div className="tiffin-provider-name-row">
           <h2>{provider.name}</h2>
-          <span className="tiffin-card-distance"><MapPin size={13} /> {distance.toFixed(1)} km away</span>
+          <span className="tiffin-card-distance"><MapPin size={13} /> {provider.distanceLabel || 'Distance unavailable'}</span>
         </div>
         <p className="tiffin-provider-style">{provider.cuisine}</p>
         <div className="tiffin-provider-divider" />

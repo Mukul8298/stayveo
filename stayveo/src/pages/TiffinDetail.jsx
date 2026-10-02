@@ -6,6 +6,8 @@ import ExactLocation from '../components/tiffin/ExactLocation';
 import MealMenuCard from '../components/tiffin/MealMenuCard';
 import MealPlanSelector from '../components/tiffin/MealPlanSelector';
 import TiffinTopbar from '../components/tiffin/TiffinTopbar';
+import { useTiffinStudentLocation } from '../hooks/useTiffinStudentLocation';
+import { tiffinDistanceLabel } from '../utils/tiffinDistance';
 import { useToast } from '../context/ToastContext';
 import './Tiffin.css';
 
@@ -29,7 +31,8 @@ export default function TiffinDetail() {
   const navigate = useNavigate();
   const toast = useToast();
   const [provider, setProvider] = useState(null);
-  const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [selectedPlan, setSelectedPlan] = useState('daily_1_meal');
+  const studentLocation = useTiffinStudentLocation();
   const [loading, setLoading] = useState(true);
   const [menuState, setMenuState] = useState({ loading: true, error: '' });
 
@@ -45,7 +48,7 @@ export default function TiffinDetail() {
           return;
         }
         const availablePlans = Object.keys(result.data.plans || {});
-        if (availablePlans.length && !availablePlans.includes('monthly')) setSelectedPlan(availablePlans[0]);
+        if (availablePlans.length && !availablePlans.includes('daily_1_meal')) setSelectedPlan(availablePlans[0]);
         try {
           const today = await fetchTodaysTiffinMenu(result.data.id, { signal: controller.signal });
           if (!cancelled) {
@@ -94,7 +97,7 @@ export default function TiffinDetail() {
                   <img src={provider.image} alt={`${provider.name} home-cooked meals`} />
                   <div className="tiffin-detail-provider-copy">
                     <div className="tiffin-detail-title-row"><h1>{provider.name}</h1><span className="tiffin-detail-rating"><Star size={12} fill="currentColor" /> {provider.rating.toFixed(1)}</span></div>
-                    <p className="tiffin-detail-meta"><MapPin size={12} /> {provider.distanceKm.toFixed(1)} km away <span>•</span> {provider.deliveryTiming}</p>
+                    <p className="tiffin-detail-meta"><MapPin size={12} /> {tiffinDistanceLabel(studentLocation, provider)} <span>•</span> {provider.deliveryTiming}</p>
                     <p>{provider.description}</p>
                   </div>
                 </article>

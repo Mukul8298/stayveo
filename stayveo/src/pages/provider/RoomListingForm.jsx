@@ -71,6 +71,7 @@ const EMPTY_EXTRA = {
   propertyType: 'Hostel',
   propertyCategory: 'PG / Hostel',
   address: '',
+  contactNumber: '',
   city: '',
   state: '',
   pincode: '',
@@ -120,6 +121,7 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
         propertyType: initialValues.propertyType ?? 'Hostel',
         propertyCategory: initialValues.propertyCategory ?? 'PG / Hostel',
         address: initialValues.address ?? '',
+        contactNumber: initialValues.contactNumber ?? '',
         city: initialValues.city ?? '',
         state: initialValues.state ?? '',
         pincode: initialValues.pincode ?? '',
@@ -128,7 +130,7 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
         electricityIncluded: initialValues.electricityIncluded ?? 'Included',
         latitude: initialValues.latitude ?? null,
         longitude: initialValues.longitude ?? null,
-        mapPinned: !!(initialValues.latitude && initialValues.longitude),
+        mapPinned: initialValues.latitude != null && initialValues.longitude != null,
       };
     }
     return EMPTY_EXTRA;
@@ -200,6 +202,9 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
       title: form.title.trim(),
       description: form.description.trim() || null,
       address: [extra.address, extra.city, extra.state, extra.pincode].filter(Boolean).join(', ') || null,
+      contactNumber: extra.contactNumber.trim() || null,
+      latitude: extra.latitude != null && Number.isFinite(Number(extra.latitude)) ? Number(extra.latitude) : null,
+      longitude: extra.longitude != null && Number.isFinite(Number(extra.longitude)) ? Number(extra.longitude) : null,
       roomType: form.roomType,
       genderPreference: form.genderPreference,
       price: parseFloat(form.price) || 0,
@@ -234,7 +239,7 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
     }
   }
 
-  const isValid = form.title.trim() && form.roomType && form.price !== '' && form.securityDeposit !== '' && form.reservationFee !== '' && form.minimumStayMonths && form.numberOfBeds;
+  const isValid = form.title.trim() && form.roomType && form.price !== '' && form.securityDeposit !== '' && form.reservationFee !== '' && form.minimumStayMonths && form.numberOfBeds && (initialValues || extra.mapPinned);
   return (
     <form className="rlf-form" onSubmit={handleSubmit} id="room-listing-form">
       <section className="rlf-section" aria-labelledby="rlf-basics-title">
@@ -346,6 +351,18 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
             />
           </div>
           <div className="rlf-field">
+            <label className="rlf-label" htmlFor="rlf-contact-number">Property Contact Number</label>
+            <input
+              id="rlf-contact-number"
+              className="rlf-input"
+              type="tel"
+              value={extra.contactNumber}
+              onChange={e => setExtraField('contactNumber', e.target.value)}
+              placeholder="+91 9876543210"
+              maxLength={20}
+            />
+          </div>
+          <div className="rlf-field">
             <label className="rlf-label" htmlFor="rlf-city">City</label>
             <input
               id="rlf-city"
@@ -394,9 +411,9 @@ export default function RoomListingForm({ initialValues = null, onSubmit, loadin
 
         <div className="rlf-map-container" style={{ marginTop: '16px' }}>
           <LocationPicker
-            key={`${extra.latitude || 'no-lat'}-${extra.longitude || 'no-lng'}`}
-            latitude={Number.isFinite(Number(extra.latitude)) ? Number(extra.latitude) : undefined}
-            longitude={Number.isFinite(Number(extra.longitude)) ? Number(extra.longitude) : undefined}
+            key={`${extra.latitude ?? 'no-lat'}-${extra.longitude ?? 'no-lng'}`}
+            latitude={extra.latitude != null && Number.isFinite(Number(extra.latitude)) ? Number(extra.latitude) : undefined}
+            longitude={extra.longitude != null && Number.isFinite(Number(extra.longitude)) ? Number(extra.longitude) : undefined}
             address={extra.address}
             onChange={(location) => {
               setExtraField('latitude', location.latitude);

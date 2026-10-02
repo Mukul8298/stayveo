@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, KeyRound, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, KeyRound, Loader2, Mail, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Button from '../components/Button';
 import { forgotPassword, resetPassword, verifyPasswordReset } from '../api/client';
@@ -18,6 +18,8 @@ export default function ForgotPassword() {
   const [resetToken, setResetToken] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -101,9 +103,9 @@ export default function ForgotPassword() {
         {step === 'password' && (
           <form onSubmit={submitPassword} className="forgot-password-form">
             <label htmlFor="new-password">New password</label>
-            <input id="new-password" type="password" minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus autoComplete="new-password" />
+            <div className="forgot-password-password-field"><input id="new-password" type={showPassword ? 'text' : 'password'} minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} required autoFocus autoComplete="new-password" /><button type="button" className="forgot-password-password-toggle" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide new password' : 'Show new password'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
             <label htmlFor="confirm-password">Confirm password</label>
-            <input id="confirm-password" type="password" minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required autoComplete="new-password" />
+            <div className="forgot-password-password-field"><input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required autoComplete="new-password" /><button type="button" className="forgot-password-password-toggle" onClick={() => setShowConfirmPassword((current) => !current)} aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}>{showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
             <Button variant="primary" fullWidth size="lg" type="submit" disabled={loading}>{loading ? <><Loader2 size={18} className="spin" /> Updating...</> : <><CheckCircle2 size={18} /> Update password</>}</Button>
           </form>
         )}

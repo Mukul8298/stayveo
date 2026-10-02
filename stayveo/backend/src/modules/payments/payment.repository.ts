@@ -58,25 +58,25 @@ export const paymentRepository = {
       // Total paid earnings
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID' },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
       // Today's earnings
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID', createdAt: { gte: startOfDay } },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
       // This week
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID', createdAt: { gte: startOfWeek } },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
       // This month
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID', createdAt: { gte: startOfMonth } },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
       // Last month
@@ -85,14 +85,14 @@ export const paymentRepository = {
           providerId, status: 'PAID',
           createdAt: { gte: startOfLastMonth, lt: startOfMonth },
         },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
       // Breakdown by type
       prisma.payment.groupBy({
         by: ['type'],
         where: { providerId, status: 'PAID' },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
         _count: true,
       }),
     ]);
@@ -105,19 +105,19 @@ export const paymentRepository = {
     });
 
     return {
-      total: Number(allPaid._sum.amount || 0),
+      total: Number(allPaid._sum.ownerAmount || 0),
       totalOrders: allPaid._count,
-      today: Number(today._sum.amount || 0),
+      today: Number(today._sum.ownerAmount || 0),
       todayOrders: today._count,
-      thisWeek: Number(thisWeek._sum.amount || 0),
+      thisWeek: Number(thisWeek._sum.ownerAmount || 0),
       thisWeekOrders: thisWeek._count,
-      thisMonth: Number(thisMonth._sum.amount || 0),
+      thisMonth: Number(thisMonth._sum.ownerAmount || 0),
       thisMonthOrders: thisMonth._count,
-      lastMonth: Number(lastMonth._sum.amount || 0),
+      lastMonth: Number(lastMonth._sum.ownerAmount || 0),
       lastMonthOrders: lastMonth._count,
       byType: byType.map(t => ({
         type: t.type,
-        total: Number(t._sum.amount || 0),
+        total: Number(t._sum.ownerAmount || 0),
         count: t._count,
       })),
       recentPayments,

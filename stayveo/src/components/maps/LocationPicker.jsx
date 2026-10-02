@@ -8,9 +8,9 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const MAP_STYLE = 'mapbox://styles/mapbox/light-v11';
 
 const DEFAULT_VIEW_STATE = {
-  longitude: 77.5946,
-  latitude: 12.9716,
-  zoom: 12,
+  longitude: 0,
+  latitude: 0,
+  zoom: 1,
   pitch: 0,
   bearing: 0,
 };
@@ -46,6 +46,7 @@ export default function LocationPicker({
   const [selectedLocation, setSelectedLocation] = useState(initialSelectedLocation);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
+  const [hasNavigatedMap, setHasNavigatedMap] = useState(false);
 
   const commitLocation = ({ latitude: nextLatitude, longitude: nextLongitude, source }) => {
     const nextLocation = {
@@ -135,7 +136,10 @@ export default function LocationPicker({
         {...viewState}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle={MAP_STYLE}
-        onMove={(event) => setViewState(event.viewState)}
+        onMove={(event) => {
+          setViewState(event.viewState);
+          setHasNavigatedMap(true);
+        }}
         onClick={handleMapClick}
         attributionControl={false}
         reuseMaps
@@ -173,6 +177,7 @@ export default function LocationPicker({
           type="button"
           className="location-picker-current location-picker-pin"
           onClick={handlePinMapCenter}
+          disabled={!hasNavigatedMap}
         >
           <MapPin size={16} />
           <span>Pin Location</span>

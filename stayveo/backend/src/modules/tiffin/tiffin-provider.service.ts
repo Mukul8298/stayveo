@@ -226,9 +226,11 @@ function mealEnum(value: string) {
 }
 
 function planEnum(value: string) {
-  if (value === 'weekly') return TiffinPlanType.WEEKLY;
-  if (value === 'monthly') return TiffinPlanType.MONTHLY;
-  return TiffinPlanType.CUSTOM;
+  if (value === 'daily_1_meal') return TiffinPlanType.DAILY_1_MEAL;
+  if (value === 'weekly_1_meal') return TiffinPlanType.WEEKLY_1_MEAL;
+  if (value === 'monthly_1_meal') return TiffinPlanType.MONTHLY_1_MEAL;
+  if (value === 'monthly_2_meals') return TiffinPlanType.MONTHLY_2_MEALS;
+  throw { statusCode: 400, message: 'Choose one of the four supported Tiffin prices' };
 }
 
 function compareTimes(start: unknown, end: unknown) {
@@ -255,12 +257,10 @@ function mask(value: unknown) {
 }
 
 function serializePlan(plan: AnyRecord) {
-  const planType = String(plan.planType || '').toLowerCase();
   return {
     id: plan.id,
-    type: planType === 'custom' ? 'daily' : planType,
+    type: String(plan.planType || '').toLowerCase(),
     price: Number(plan.price || 0),
-    discountPrice: plan.discountPrice === null ? null : Number(plan.discountPrice || 0),
     durationDays: plan.durationDays,
     totalMeals: plan.totalMeals,
     name: plan.planName,
@@ -297,11 +297,7 @@ function serializeKitchen(kitchen: AnyRecord | null, verifications: AnyRecord[] 
       deliveryRadiusKm: Number(kitchen.deliveryRadiusKm || 5),
     },
     pricing: (kitchen.subscriptionPlans || []).map(serializePlan),
-    pricingDetails: {
-      perMeal: Number(kitchen.extraMealPrice || 0),
-      monthlyOneMealPrice: kitchen.monthlyOneMealPrice === null ? '' : Number(kitchen.monthlyOneMealPrice || 0),
-      monthlyTwoMealPrice: kitchen.monthlyTwoMealPrice === null ? '' : Number(kitchen.monthlyTwoMealPrice || 0),
-    },
+    pricingDetails: { plans: (kitchen.subscriptionPlans || []).map(serializePlan) },
     food: {
       categories,
       mealItems: foodOptions.mealItems || { lunch: [], dinner: [] },
@@ -398,25 +394,41 @@ async function ensureKitchen(db: PrismaExecutor, profile: AnyRecord, data: AnyRe
 }
 
 async function updatePlans(db: PrismaExecutor, kitchenId: string, plans: unknown) {
-  if (!Array.isArray(plans)) return;
+  if (!Array.isArray(plans)) throw { statusCode: 400, message: 'Enter all four Tiffin prices' };
+  const requiredTypes = ['daily_1_meal', 'weekly_1_meal', 'monthly_1_meal', 'monthly_2_meals'];
+  const suppliedPlans = new Map<string, { price: number }>();
   for (const rawPlan of plans) {
     const plan = jsonObject(rawPlan);
     const type = text(plan.type).toLowerCase();
-    const price = numberOrNull(plan.price);
-    if (!price || price < 0 || !['daily', 'weekly', 'monthly'].includes(type)) continue;
+    const price = requiredNumber(plan.price, 'Each Tiffin price must be between 1 and 100000', 1, 100000);
+    if (!requiredTypes.includes(type) || suppliedPlans.has(type)) {
+      throw { statusCode: 400, message: 'Enter each of the four Tiffin prices exactly once' };
+    }
+    suppliedPlans.set(type, { price });
+  }
+  if (requiredTypes.some((type) => !suppliedPlans.has(type)) || suppliedPlans.size !== requiredTypes.length) {
+    throw { statusCode: 400, message: 'Enter each of the four Tiffin prices exactly once' };
+  }
+
+  for (const type of requiredTypes) {
+    const { price } = suppliedPlans.get(type)!;
     const planType = planEnum(type);
-    const existing = await db.tiffinSubscriptionPlan.findFirst({ where: { kitchenId, planType } });
+    const durationDays = type.startsWith('daily') ? 1 : type.startsWith('weekly') ? 7 : 30;
+    const mealsPerDay = type === 'monthly_2_meals' ? 2 : 1;
+    const existing = await db.tiffinSubscriptionPlan.findFirst({ where: { kitchenId, planType }, orderBy: { createdAt: 'asc' } });
     const values = {
-      planName: type === 'daily' ? 'Per Meal' : `${type[0].toUpperCase()}${type.slice(1)} Plan`,
+      planName: type === 'daily_1_meal' ? 'Daily 1 Meal' : type === 'weekly_1_meal' ? 'Weekly 1 Meal' : type === 'monthly_1_meal' ? 'Monthly 1 Meal' : 'Monthly 2 Meals',
       planType,
-      durationDays: type === 'daily' ? 1 : type === 'weekly' ? 7 : 30,
-      totalMeals: type === 'daily' ? 2 : type === 'weekly' ? 14 : 60,
+      durationDays,
+      totalMeals: durationDays * mealsPerDay,
       price,
-      discountPrice: numberOrNull(plan.discountPrice),
-      description: text(plan.description) || null,
+      description: null,
       isActive: true,
     };
-    if (existing) await db.tiffinSubscriptionPlan.update({ where: { id: existing.id }, data: values });
+    if (existing) {
+      await db.tiffinSubscriptionPlan.update({ where: { id: existing.id }, data: values });
+      await db.tiffinSubscriptionPlan.updateMany({ where: { kitchenId, planType, id: { not: existing.id } }, data: { isActive: false } });
+    }
     else await db.tiffinSubscriptionPlan.create({ data: { kitchenId, ...values } });
   }
 }
@@ -547,21 +559,7 @@ export const tiffinProviderService = {
           break;
         }
         case 'pricing': {
-          const dailyPlan = Array.isArray(data.plans)
-            ? data.plans.find((item: AnyRecord) => ['daily', 'custom'].includes(text(item?.type).toLowerCase()))
-            : null;
-          const dailyPlanPrice = numberOrNull(dailyPlan?.price);
-          const perMeal = data.perMeal === '' || data.perMeal === undefined || data.perMeal === null
-            ? dailyPlanPrice ?? Number(kitchen.extraMealPrice)
-            : requiredNumber(data.perMeal, 'Per meal price must be between 0 and 100000', 0, 100000);
-          if (!Number.isFinite(perMeal) || perMeal <= 0) throw { statusCode: 400, message: 'Set a valid daily per-meal price' };
-          const monthlyOneMealPrice = data.monthlyOneMealPrice === '' || data.monthlyOneMealPrice === undefined || data.monthlyOneMealPrice === null
-            ? kitchen.monthlyOneMealPrice
-            : requiredNumber(data.monthlyOneMealPrice, 'Monthly one-meal price must be between 0 and 100000', 0, 100000);
-          const monthlyTwoMealPrice = data.monthlyTwoMealPrice === '' || data.monthlyTwoMealPrice === undefined || data.monthlyTwoMealPrice === null
-            ? kitchen.monthlyTwoMealPrice
-            : requiredNumber(data.monthlyTwoMealPrice, 'Monthly two-meal price must be between 0 and 100000', 0, 100000);
-          Object.assign(update, { extraMealPrice: perMeal, monthlyOneMealPrice, monthlyTwoMealPrice });
+          if (!Array.isArray(data.plans)) throw { statusCode: 400, message: 'Enter all four Tiffin prices' };
           break;
         }
         case 'food': {
@@ -633,7 +631,14 @@ export const tiffinProviderService = {
     const { profile, kitchen } = await resolveOwner(phone, userId, { requireOtpVerified });
     if (!kitchen) throw { statusCode: 400, message: 'Complete business details before submitting' };
     const verifications = await prisma.providerVerification.findMany({ where: { providerId: profile.id, idType: { in: ['AADHAR', 'PAN'] } } });
-    const hasPlans = kitchen.subscriptionPlans.some((plan: AnyRecord) => plan.isActive);
+    const requiredPlanTypes = [
+      TiffinPlanType.DAILY_1_MEAL,
+      TiffinPlanType.WEEKLY_1_MEAL,
+      TiffinPlanType.MONTHLY_1_MEAL,
+      TiffinPlanType.MONTHLY_2_MEALS,
+    ];
+    const activePlanTypes = new Set(kitchen.subscriptionPlans.filter((plan: AnyRecord) => plan.isActive).map((plan: AnyRecord) => plan.planType));
+    const hasPlans = requiredPlanTypes.every((planType) => activePlanTypes.has(planType));
     if (!kitchen.kitchenName || !kitchen.ownerName || !kitchen.address || kitchen.latitude === null || kitchen.longitude === null || !hasPlans || kitchen.mealTimings.length < 1 || verifications.length < 2 || !kitchen.coverImage) {
       throw { statusCode: 400, message: 'Complete all required Tiffin onboarding sections before submitting' };
     }

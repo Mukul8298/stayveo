@@ -7,9 +7,7 @@ function kycResponse(verifications: Array<{ idType: string; idNumber: string; is
   const aadhaar = verifications.find((item) => item.idType === 'AADHAR');
   const pan = verifications.find((item) => item.idType === 'PAN');
   return {
-    aadhaarNumber: aadhaar?.idNumber || '',
     aadhaarMasked: aadhaar?.idNumber ? `********${aadhaar.idNumber.slice(-4)}` : '',
-    panNumber: pan?.idNumber || '',
     panMasked: pan?.idNumber ? `*****${pan.idNumber.slice(-4)}` : '',
     isVerified: Boolean(aadhaar?.isVerified && pan?.isVerified),
   };

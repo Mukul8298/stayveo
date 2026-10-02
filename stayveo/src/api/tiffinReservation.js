@@ -1,9 +1,11 @@
 import { request } from './client';
 
-export function getTiffinReservationContext(serviceId, userId, { planId, plan, signal } = {}) {
+export function getTiffinReservationContext(serviceId, userId, { planId, plan, optedLunch, optedDinner, signal } = {}) {
   const params = new URLSearchParams();
   if (planId) params.set('planId', planId);
   if (plan) params.set('plan', plan);
+  if (optedLunch !== undefined) params.set('optedLunch', String(optedLunch));
+  if (optedDinner !== undefined) params.set('optedDinner', String(optedDinner));
   return request(`/tiffin/${encodeURIComponent(serviceId)}/reservation${params.toString() ? `?${params}` : ''}`, { userId, signal });
 }
 

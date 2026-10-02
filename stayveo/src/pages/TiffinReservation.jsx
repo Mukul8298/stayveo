@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CalendarDays,
@@ -71,24 +71,6 @@ function normalizeFoodCategories(value) {
   return [...new Set(categories.filter(Boolean))];
 }
 
-function planDurationDays(plan) {
-  const type = String(plan?.type || '').toLowerCase();
-  if (type === 'daily' || type === 'custom') return 1;
-  if (type === 'weekly') return 7;
-  if (type === 'monthly') return 30;
-  return Number(plan?.durationDays) || 1;
-}
-
-function calculatedPlanAmount(plan, perMealPrice, mealCount) {
-  const selectedMeals = Math.max(0, Number(mealCount) || 0);
-  if (!selectedMeals) return 0;
-  const price = Number(perMealPrice);
-  if (Number.isFinite(price) && price > 0) {
-    return Number((price * selectedMeals * planDurationDays(plan)).toFixed(2));
-  }
-  return Number(plan?.price || 0);
-}
-
 function reservationUrl(serviceId, reservationId) {
   return `/tiffin/${encodeURIComponent(serviceId)}/reservation?reservationId=${encodeURIComponent(reservationId)}`;
 }
@@ -124,7 +106,10 @@ export default function TiffinReservation() {
   const [reservation, setReservation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [quoteLoading, setQuoteLoading] = useState(false);
   const [error, setError] = useState('');
+  const contextServiceId = context?.service?.id;
+  const quoteController = useRef(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -138,6 +123,8 @@ export default function TiffinReservation() {
         : getTiffinReservationContext(id, userId, {
           planId: searchParams.get('planId'),
           plan: searchParams.get('plan'),
+          optedLunch: true,
+          optedDinner: true,
           signal: controller.signal,
         });
 
@@ -181,24 +168,54 @@ export default function TiffinReservation() {
     return () => { cancelled = true; controller.abort(); };
   }, [id, location.pathname, location.search, navigate, paymentId, reservationId, searchParams, userId]);
 
+  useEffect(() => () => quoteController.current?.abort(), []);
+
   const selectedPlan = useMemo(() => {
     if (!context) return null;
-    return context.plans?.find((plan) => plan.id === form.planId) || context.selectedPlan || context.plans?.[0] || null;
-  }, [context, form.planId]);
+    return context.plans?.find((plan) => plan.id === context.quote?.planId) || context.selectedPlan || context.plans?.[0] || null;
+  }, [context]);
 
   const supportedFoodCategories = useMemo(() => {
     const categories = normalizeFoodCategories(context?.service?.foodCategories || context?.service?.foodType);
     return categories.length ? categories : ['veg'];
   }, [context]);
-  const selectedMealCount = Number(form.optedLunch) + Number(form.optedDinner);
-  const perMealPrice = Number(context?.service?.perMealPrice);
-  const reservationAmount = calculatedPlanAmount(selectedPlan, perMealPrice, selectedMealCount);
+  const reservationAmount = context?.quote?.amount;
 
   const paymentEnabled = Boolean(context?.payment?.enabled || reservation?.payment?.razorpay);
 
   function updateField(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
+    const nextForm = { ...form, [name]: value };
+    setForm(nextForm);
     setError('');
+    if (!['planId', 'optedLunch', 'optedDinner'].includes(name) || !contextServiceId || reservation || paymentId) return;
+    quoteController.current?.abort();
+    if (!nextForm.optedLunch && !nextForm.optedDinner) {
+      setContext((current) => ({ ...current, quote: null }));
+      setQuoteLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    quoteController.current = controller;
+    setQuoteLoading(true);
+    getTiffinReservationContext(id, userId, {
+      planId: nextForm.planId,
+      optedLunch: nextForm.optedLunch,
+      optedDinner: nextForm.optedDinner,
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!controller.signal.aborted && response?.data) setContext(response.data);
+      })
+      .catch((quoteError) => {
+        if (!controller.signal.aborted) {
+          setContext((current) => ({ ...current, quote: null }));
+          setError(quoteError.message || 'The selected price is unavailable.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setQuoteLoading(false);
+      });
   }
 
   function updateDietPreferences(category, checked) {
@@ -335,7 +352,7 @@ export default function TiffinReservation() {
               <div className="tiffin-reservation-card-heading"><span className="tiffin-reservation-step">1</span><div><h2>Service summary</h2><p>The selected service and current plan pricing.</p></div></div>
               <div className="tiffin-reservation-service"><img src={image} alt="" /><div><h3>{service.name || provider?.name || 'Tiffin Service'}</h3><p><MapPin size={13} /> {service.address || provider?.address || 'Delivery address will be used for your order'}</p><span>{service.deliveryRadiusKm || provider?.deliveryRadiusKm || 0} km delivery coverage</span></div></div>
               <div className="tiffin-reservation-plans">
-                {(context?.plans || []).map((plan) => <button type="button" key={plan.id} className={`tiffin-reservation-plan ${form.planId === plan.id ? 'is-selected' : ''}`} onClick={() => updateField('planId', plan.id)}><span><strong>{plan.name || titleCase(plan.type)}</strong><small>{plan.description || `${plan.durationDays} day meal plan`}</small></span><strong>{money(calculatedPlanAmount(plan, perMealPrice, selectedMealCount))}</strong></button>)}
+                {(context?.plans || []).map((plan) => <button type="button" key={plan.id} className={`tiffin-reservation-plan ${selectedPlan?.id === plan.id ? 'is-selected' : ''}`} onClick={() => updateField('planId', plan.id)}><span><strong>{plan.name || titleCase(plan.type)}</strong><small>{plan.description || `${plan.durationDays} day meal plan`}</small></span><strong>{money(plan.price)}</strong></button>)}
               </div>
             </section>
 
@@ -362,8 +379,9 @@ export default function TiffinReservation() {
             <SummaryRow label="Selected plan" value={selectedPlan?.name || titleCase(selectedPlan?.type)} />
             <SummaryRow label="Start date" value={form.startDate || '—'} />
             <SummaryRow label="Payment status" value={context?.payment?.enabled ? 'Razorpay test mode' : 'Payment pending'} />
-            <div className="tiffin-reservation-total"><span>Total</span><strong>{money(reservationAmount)}</strong></div>
-            <button type="submit" className="tiffin-subscribe-button tiffin-reservation-submit" disabled={submitting || !selectedPlan?.id}>{submitting ? <><Loader2 size={16} className="spinning" /> Saving...</> : 'Save reservation & pay'}</button>
+            <div className="tiffin-reservation-total"><span>Total</span><strong>{!form.optedLunch && !form.optedDinner || reservationAmount === undefined || reservationAmount === null ? '—' : money(reservationAmount)}</strong></div>
+            {!form.optedLunch && !form.optedDinner && <p className="tiffin-reservation-payment-note">Select at least one meal to see the total.</p>}
+            <button type="submit" className="tiffin-subscribe-button tiffin-reservation-submit" disabled={submitting || quoteLoading || !selectedPlan?.id || !form.optedLunch && !form.optedDinner || reservationAmount === null || reservationAmount === undefined}>{submitting ? <><Loader2 size={16} className="spinning" /> Saving...</> : 'Save reservation & pay'}</button>
             <p className="tiffin-reservation-payment-note">{context?.payment?.label || 'Secure Razorpay checkout will open after this reservation is saved.'}</p>
           </aside>
         </form>

@@ -6,7 +6,14 @@ import { razorpayClient } from '../payments/razorpay.client.js';
 type DbClient = typeof prisma | Prisma.TransactionClient;
 
 function configuredMode() {
-  return String(process.env.PAYMENT_MODE || '').trim().toLowerCase() === 'razorpay' ? 'razorpay' : 'none';
+  const mode = String(process.env.PAYMENT_MODE || '').trim().toLowerCase();
+  if (mode === 'razorpay') return 'razorpay';
+
+  // Razorpay is the only supported Tiffin gateway. When the deployment has
+  // the configured test credentials but omits the legacy feature flag, use
+  // those credentials instead of incorrectly reporting a disabled gateway.
+  const hasCredentials = Boolean(String(process.env.key_id || '').trim() && String(process.env.key_secret || '').trim());
+  return hasCredentials ? 'razorpay' : 'none';
 }
 
 function sameAmount(left: unknown, right: number) {
@@ -37,7 +44,7 @@ export const tiffinPaymentService = {
     customerId: string;
     amount: number;
     idempotencyKey: string;
-    planType?: string;
+    planType: string;
     mealsPerDay?: number;
     isRenewal?: boolean;
   }) {
@@ -52,7 +59,7 @@ export const tiffinPaymentService = {
 
     const calculation = calculateTiffinPayment({
       baseAmount: Number(input.amount),
-      planType: input.planType || 'daily',
+      planType: input.planType,
       mealsPerDay: input.mealsPerDay || 1,
       isRenewal: Boolean(input.isRenewal),
     });

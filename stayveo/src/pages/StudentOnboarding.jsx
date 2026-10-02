@@ -13,11 +13,16 @@ const GENDER_MAP = { 'Male': 'MALE', 'Female': 'FEMALE', 'Other': 'OTHER' };
 const FOOD_MAP = { '🥬 Vegetarian': 'VEG', '🍗 Non-Veg': 'NONVEG', '🌱 Vegan': 'VEGAN', '🍽️ No Preference': 'NO_PREFERENCE' };
 const LIFESTYLE_MAP = { '🌅 Early Bird': 'EARLY_BIRD', '🌙 Night Owl': 'NIGHT_OWL', '⚡ Flexible': 'FLEXIBLE' };
 
+function normalizePhone(value) {
+  return String(value || '').trim().replace(/[\s().-]/g, '');
+}
+
 // ── Validation helpers ──────────────────────────────────────────────────
 function getStepErrors(step, data) {
   const errors = {};
   if (step === 0) {
     if (!data.name.trim()) errors.name = 'Name is required';
+    if (!/^\+?[0-9]{10,15}$/.test(normalizePhone(data.phone))) errors.phone = 'Enter a valid phone number';
     if (!data.year) errors.year = 'Please select your year';
     if (!data.gender) errors.gender = 'Please select your gender';
   }
@@ -34,7 +39,7 @@ function getStepErrors(step, data) {
 
 export default function StudentOnboarding() {
   const navigate = useNavigate();
-  const { setAuth } = useAuth();
+  const { authState, setAuth } = useAuth();
   const toast = useToast();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -42,6 +47,7 @@ export default function StudentOnboarding() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [data, setData] = useState({
     name: '',
+    phone: authState.phone || '',
     year: '',
     gender: '',
     food: '',
@@ -91,6 +97,7 @@ export default function StudentOnboarding() {
     try {
       const profilePayload = {
         fullName: data.name.trim(),
+        ...(normalizePhone(data.phone) ? { phone: normalizePhone(data.phone) } : {}),
         college,
         collegeName: college,
         year: YEAR_MAP[data.year] || undefined,
@@ -119,6 +126,7 @@ export default function StudentOnboarding() {
       // Update global auth state
       setAuth({
         name: data.name.trim(),
+        phone: normalizePhone(data.phone),
         college,
         collegeId,
         exists: true,
@@ -144,7 +152,7 @@ export default function StudentOnboarding() {
   const steps = [
     {
       title: 'About you', content: (
-        <div className="onb-fields">
+      <div className="onb-fields">
           <div className="onb-field">
             <label>Name</label>
             <input
@@ -154,6 +162,19 @@ export default function StudentOnboarding() {
               onChange={e => { setData({...data, name: e.target.value}); setFieldErrors(p => ({...p, name: undefined})); }}
             />
             {fieldErrors.name && <span className="onb-field-error">{fieldErrors.name}</span>}
+          </div>
+          <div className="onb-field">
+            <label>Phone Number</label>
+            <input
+              className={`input-field ${fieldErrors.phone ? 'input-error' : ''}`}
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="Enter your phone number"
+              value={data.phone}
+              onChange={e => { setData({...data, phone: e.target.value}); setFieldErrors(p => ({...p, phone: undefined})); }}
+            />
+            {fieldErrors.phone && <span className="onb-field-error">{fieldErrors.phone}</span>}
           </div>
           <div className="onb-field">
             <label>Year</label>

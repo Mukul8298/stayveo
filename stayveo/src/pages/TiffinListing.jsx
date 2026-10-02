@@ -4,11 +4,14 @@ import { fetchTiffinProviders } from '../api/tiffin';
 import TiffinFilters from '../components/tiffin/TiffinFilters';
 import TiffinProviderCard from '../components/tiffin/TiffinProviderCard';
 import TiffinTopbar from '../components/tiffin/TiffinTopbar';
+import { useTiffinStudentLocation } from '../hooks/useTiffinStudentLocation';
+import { tiffinDistanceLabel } from '../utils/tiffinDistance';
 import './Tiffin.css';
 
 const initialFilters = { vegOnly: false, mealOnly: false, maxPrice: null, search: '' };
 
 export default function TiffinListing() {
+  const studentLocation = useTiffinStudentLocation();
   const [providers, setProviders] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
   const [loading, setLoading] = useState(true);
@@ -57,7 +60,7 @@ export default function TiffinListing() {
           <div className="tiffin-state"><span>{error}</span></div>
         ) : visibleProviders.length ? (
           <section className="tiffin-provider-grid" aria-label="Tiffin providers">
-            {visibleProviders.map((provider) => <TiffinProviderCard key={provider.id} provider={provider} />)}
+            {visibleProviders.map((provider) => <TiffinProviderCard key={provider.id} provider={{ ...provider, distanceLabel: tiffinDistanceLabel(studentLocation, provider) }} />)}
           </section>
         ) : (
           <div className="tiffin-state"><span>No providers match these filters.</span><button type="button" onClick={() => setFilters(initialFilters)}>Clear filters</button></div>

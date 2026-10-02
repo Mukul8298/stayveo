@@ -70,9 +70,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       if (origin === 'https://stayveo.com' || origin === 'https://www.stayveo.com' || origin.endsWith('.stayveo.pages.dev')) {
         return cb(null, true);
       }
-      // Non-production origins (local development / tunnels)
+      // Local development / tunnels origins
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
+
       if (!isProd) {
-        if (origin.includes('localhost') || origin.includes('127.0.0.1')) return cb(null, true);
         if (origin.endsWith('.trycloudflare.com')) return cb(null, true);
         if (origin.endsWith('.devtunnels.ms')) return cb(null, true);
         if (origin.endsWith('.ngrok-free.dev') || origin.endsWith('.ngrok.io')) return cb(null, true);

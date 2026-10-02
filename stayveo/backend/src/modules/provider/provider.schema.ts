@@ -136,7 +136,8 @@ export type SelectTypeInput = z.infer<typeof selectTypeSchema>;
 
 export const pgOnboardingSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
-  phone: z.string().min(10, 'Valid phone is required').max(15).optional(),
+  phone: z.string().trim().transform((value) => value.replace(/[\s().-]/g, ''))
+    .pipe(z.string().regex(/^\+?[0-9]{10,15}$/, 'Enter a valid phone number')).optional(),
   email: z.string().email().optional().nullable(),
   businessName: z.string().min(1).max(200).optional().nullable(),
   address: z.string().min(1).max(500).optional().nullable(),
@@ -147,4 +148,3 @@ export const pgOnboardingSchema = z.object({
 });
 
 export type PgOnboardingInput = z.infer<typeof pgOnboardingSchema>;
-

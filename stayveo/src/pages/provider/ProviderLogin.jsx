@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Loader2, CheckCircle2, Mail, Lock, KeyRound } from 'lucide-react';
+import { ArrowLeft, Building2, Loader2, CheckCircle2, Mail, Lock, KeyRound, Eye, EyeOff } from 'lucide-react';
 import Button from '../../components/Button';
 import { providerSendOtp, providerVerifyOtp, providerResendOtp } from '../../api/provider';
 import { useProvider } from '../../context/ProviderContext';
@@ -14,6 +14,7 @@ export default function ProviderLogin() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '']);
   const [step, setStep] = useState('credentials'); // 'credentials' | 'otp'
   const [loading, setLoading] = useState(false);
@@ -163,7 +164,7 @@ export default function ProviderLogin() {
               <div className="pl-field-wrap">
                 <Lock size={18} className="pl-icon" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   className="pl-input-field"
                   placeholder="At least 6 characters"
                   value={password}
@@ -172,6 +173,9 @@ export default function ProviderLogin() {
                   minLength={6}
                   required
                 />
+                <button type="button" className="pl-password-toggle" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
               <button type="button" className="pl-forgot-link" onClick={() => navigate('/forgot-password?role=PROVIDER', { replace: true })}>Forgot password?</button>
             </div>

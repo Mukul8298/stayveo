@@ -40,13 +40,11 @@ const DEFAULT_FORM = {
   business: { name: '', ownerName: '', phone: '', email: '', address: '', description: '', profilePhoto: '' },
   location: { address: '', latitude: null, longitude: null, pincode: '', city: '', state: '', deliveryRadiusKm: 5 },
   pricing: {
-    perMeal: '',
-    monthlyOneMealPrice: '',
-    monthlyTwoMealPrice: '',
     plans: [
-      { type: 'daily', price: '', discountPrice: '' },
-      { type: 'weekly', price: '', discountPrice: '' },
-      { type: 'monthly', price: '', discountPrice: '' },
+      { type: 'daily_1_meal', price: '' },
+      { type: 'weekly_1_meal', price: '' },
+      { type: 'monthly_1_meal', price: '' },
+      { type: 'monthly_2_meals', price: '' },
     ],
   },
   food: { categories: [], mealItems: { lunch: [], dinner: [] } },
@@ -78,7 +76,10 @@ function mergeSavedData(saved, provider) {
     ...DEFAULT_FORM,
     business: { ...DEFAULT_FORM.business, ...saved.business, phone: provider.phone || saved.business?.phone || '' },
     location: { ...DEFAULT_FORM.location, ...saved.location },
-    pricing: { ...DEFAULT_FORM.pricing, ...saved.pricingDetails, plans: saved.plans?.length ? saved.plans.map((plan) => ({ type: plan.type, price: plan.price, discountPrice: plan.discountPrice || '' })) : DEFAULT_FORM.pricing.plans, perMeal: saved.pricing?.perMeal || saved.pricingDetails?.perMeal || '' },
+    pricing: { plans: DEFAULT_FORM.pricing.plans.map((defaultPlan) => {
+      const savedPlan = (saved.plans || saved.pricingDetails?.plans || []).find((plan) => plan.type === defaultPlan.type);
+      return { ...defaultPlan, price: savedPlan?.price ?? '' };
+    }) },
     food: { ...DEFAULT_FORM.food, ...saved.food },
     timing: { ...DEFAULT_FORM.timing, ...saved.timing },
     delivery: { ...DEFAULT_FORM.delivery, ...saved.delivery },
@@ -364,7 +365,7 @@ function subtitleFor(key) {
 function validateStep(key, data) {
   if (key === 'business') return Boolean(data.name?.trim() && data.ownerName?.trim());
   if (key === 'location') return Boolean(data.address?.trim() && Number.isFinite(Number(data.latitude)) && Number.isFinite(Number(data.longitude)));
-  if (key === 'pricing') return data.plans?.some((plan) => Number(plan.price) > 0);
+  if (key === 'pricing') return data.plans?.length === 4 && data.plans.every((plan) => Number.isFinite(Number(plan.price)) && Number(plan.price) > 0);
   if (key === 'food') return data.categories?.length > 0;
   if (key === 'timing') return ['lunch', 'dinner'].some((meal) => !data[meal]?.enabled || data[meal]?.start < data[meal]?.end);
   if (key === 'delivery') return Boolean(data.type);
@@ -377,7 +378,7 @@ function validateStep(key, data) {
   return true;
 }
 
-function validationMessage(key) { return { business: 'Add the service name and owner name.', location: 'Confirm the address and pin the kitchen location on the map.', pricing: 'Add at least one valid meal price.', food: 'Select at least one food category.', timing: 'Check that each enabled meal starts before it ends.', delivery: 'Choose a delivery option.', displayImage: 'Please upload a display image for your tiffin service.', kyc: 'Enter a valid 12-digit Aadhaar number and a valid PAN (e.g. ABCDE1234F).' }[key] || 'Complete the required fields.'; }
+function validationMessage(key) { return { business: 'Add the service name and owner name.', location: 'Confirm the address and pin the kitchen location on the map.', pricing: 'Enter a valid price for all four meal plans.', food: 'Select at least one food category.', timing: 'Check that each enabled meal starts before it ends.', delivery: 'Choose a delivery option.', displayImage: 'Please upload a display image for your tiffin service.', kyc: 'Enter a valid 12-digit Aadhaar number and a valid PAN (e.g. ABCDE1234F).' }[key] || 'Complete the required fields.'; }
 
 function Field({ label, children, hint }) { return <label className="tpo-field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>; }
 
@@ -428,15 +429,18 @@ function LocationStep({ data, onChange }) {
   </section>;
 }
 
-function PricingStep({ data, onChange, onPlan }) {
-  return <div className="tpo-plan-grid">{data.plans.map((plan, index) => <section className={`tpo-card tpo-plan-card${plan.type === 'monthly' ? ' is-popular' : ''}`} key={plan.type}>
-    {plan.type === 'monthly' && <span className="tpo-popular">Popular</span>}
-    <div className="tpo-plan-title"><h2>{plan.type === 'daily' ? 'Per Meal' : `${plan.type[0].toUpperCase()}${plan.type.slice(1)} Plan`}</h2><span>{plan.type === 'daily' ? '▤' : '▣'}</span></div>
-    <p>{plan.type === 'daily' ? 'Base price for a single tiffin meal.' : plan.type === 'monthly' ? 'Discounted rate for 30-day subscription.' : 'Short-term commitment pricing.'}</p>
-    <div className="tpo-money-input"><span>₹</span><input type="number" min="0" value={inputValue(plan.price)} onChange={(e) => onPlan(index, { price: e.target.value })} placeholder={plan.type === 'weekly' ? 'e.g. 500' : ''} /></div>
-    {plan.type !== 'daily' && <Field label="Discounted price (optional)"><input type="number" min="0" value={inputValue(plan.discountPrice)} onChange={(e) => onPlan(index, { discountPrice: e.target.value })} /></Field>}
-    {plan.type === 'monthly' && <div className="tpo-pricing-split"><Field label="1 meal / month"><input type="number" min="0" value={inputValue(data.monthlyOneMealPrice)} onChange={(e) => onChange({ monthlyOneMealPrice: e.target.value })} /></Field><Field label="2 meals / month"><input type="number" min="0" value={inputValue(data.monthlyTwoMealPrice)} onChange={(e) => onChange({ monthlyTwoMealPrice: e.target.value })} /></Field></div>}
-  </section>)}</div>;
+function PricingStep({ data, onPlan }) {
+  const fields = [
+    ['daily_1_meal', 'Daily 1 Meal', 'Price for one meal per day.'],
+    ['weekly_1_meal', 'Weekly 1 Meal', 'Price for one meal per week.'],
+    ['monthly_1_meal', 'Monthly 1 Meal', 'Price for one meal per day for a 30-day monthly plan.'],
+    ['monthly_2_meals', 'Monthly 2 Meals', 'Price for two meals per day for a 30-day monthly plan.'],
+  ];
+  return <section className="tpo-card tpo-pricing-fields">{fields.map(([type, title, description]) => {
+    const index = data.plans.findIndex((plan) => plan.type === type);
+    const plan = data.plans[index];
+    return <Field key={type} label={title} hint={description}><div className="tpo-money-input"><span>₹</span><input type="number" min="1" max="100000" step="0.01" value={inputValue(plan?.price)} onChange={(event) => onPlan(index, { price: event.target.value })} /></div></Field>;
+  })}</section>;
 }
 
 function FoodStep({ data, onChange }) {

@@ -41,6 +41,7 @@
 .tpo-location-picker { margin-top: 22px; min-height: 340px; }
 .tpo-location-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 20px; }
 .tpo-plan-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+.tpo-pricing-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
 .tpo-plan-card { position: relative; min-height: 225px; }
 .tpo-plan-card.is-popular { grid-column: span 2; }
 .tpo-popular { position: absolute; top: 0; right: 0; padding: 6px 14px; border-radius: 0 13px 0 10px; background: #062b1e; color: #fff; font-size: 11px; }
@@ -125,6 +126,7 @@
   .tpo-heading p { font-size: 14px; }
   .tpo-card { padding: 22px 18px; border-radius: 0; }
   .tpo-plan-grid { display: grid; grid-template-columns: 1fr; }
+  .tpo-pricing-fields { grid-template-columns: 1fr; }
   .tpo-plan-card.is-popular { grid-column: auto; }
   .tpo-location-fields, .tpo-choice-grid, .tpo-delivery-options { grid-template-columns: 1fr; }
   .tpo-time-fields, .tpo-upload-grid { grid-template-columns: 1fr; gap: 18px; }

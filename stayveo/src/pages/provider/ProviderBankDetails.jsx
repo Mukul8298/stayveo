@@ -175,7 +175,7 @@ export default function ProviderBankDetails() {
               <Field label="Bank Account Number" htmlFor="account-number" hint={linked ? `Saved account: ${savedDetails.bankDetails.accountNumberMasked}. Leave blank to keep it.` : '9 to 18 digits'}>
                 <div className="payout-input-wrap">
                   <Banknote size={17} />
-                  <input id="account-number" type="password" inputMode="numeric" value={form.accountNumber} onChange={(event) => updateField('accountNumber', event.target.value.replace(/\D/g, ''))} autoComplete="off" placeholder={linked ? savedDetails.bankDetails.accountNumberMasked : 'Enter account number'} />
+                  <input id="account-number" type="text" inputMode="numeric" value={form.accountNumber} onChange={(event) => updateField('accountNumber', event.target.value.replace(/\D/g, ''))} autoComplete="off" placeholder={linked ? savedDetails.bankDetails.accountNumberMasked : 'Enter account number'} />
                   {linked && <span className="payout-input-badge"><Eye size={14} /> masked</span>}
                 </div>
               </Field>

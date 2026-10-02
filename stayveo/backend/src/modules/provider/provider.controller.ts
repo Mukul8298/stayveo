@@ -1,6 +1,7 @@
 // ─── Provider Controller ────────────────────────────────────────────────
 
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { providerService } from './provider.service.js';
 import { providerRepository } from './provider.repository.js';
 import { providerDashboardService } from './provider-dashboard.service.js';
@@ -261,7 +262,15 @@ export const providerController = {
   ) {
     const userId = request.providerAuth?.userId;
     if (!userId) throw { statusCode: 401, message: 'Provider authentication required' };
-    const profile = await providerService.savePgOnboarding(userId, request.body);
+    let profile;
+    try {
+      profile = await providerService.savePgOnboarding(userId, request.body);
+    } catch (error) {
+      if (!request.body.phone || !(error instanceof Prisma.PrismaClientKnownRequestError)) throw error;
+      request.log.error({ err: error, userId }, 'Unable to save PG owner phone number');
+      if (error.code === 'P2002') return reply.status(409).send({ success: false, data: null, message: 'Phone number is already registered' });
+      return reply.status(500).send({ success: false, data: null, message: 'Unable to save phone number. Please try again.' });
+    }
     await invalidatePgDashboard(request);
     return sendSuccess(reply, profile, 'PG Onboarding saved successfully');
   },

@@ -53,6 +53,18 @@
   border: none; background: transparent; outline: none; color: var(--neutral-900);
 }
 
+#provider-login .pl-password-toggle { margin-left: var(--space-2); }
+#provider-login .pl-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--neutral-400);
+  cursor: pointer;
+  padding: 4px;
+}
+
 #provider-login .pl-otp-section { animation: fadeInUp 0.3s var(--ease-out); }
 #provider-login .pl-otp-sent {
   display: flex; align-items: center; gap: var(--space-2); justify-content: center;

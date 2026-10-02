@@ -121,7 +121,7 @@ export default function ProviderEarnings() {
               {earnings.recentPayments.map(payment => (
                 <div key={payment.id} className="pe-payment">
                   <div className="pe-payment-info">
-                    <h3>₹{Number(payment.amount).toLocaleString()}</h3>
+                    <h3>₹{Number(payment.ownerAmount ?? payment.amount).toLocaleString()}</h3>
                     <p>
                       {new Date(payment.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                       {' • '}{TYPE_LABELS[payment.type] || payment.type}

@@ -21,20 +21,25 @@ function asObject(value) {
 
 function normalizePlans(value) {
   return Object.fromEntries(asArray(value).map((plan) => {
-    const type = String(plan?.type || '').toLowerCase() === 'custom' ? 'daily' : String(plan?.type || '').toLowerCase();
-    const label = type ? `${type[0].toUpperCase()}${type.slice(1)}` : '';
+    const type = String(plan?.type || '').toLowerCase();
+    const labels = {
+      daily_1_meal: 'Daily 1 Meal',
+      weekly_1_meal: 'Weekly 1 Meal',
+      monthly_1_meal: 'Monthly 1 Meal',
+      monthly_2_meals: 'Monthly 2 Meals',
+    };
+    const label = labels[type] || '';
     return [type, {
       id: plan?.id || '',
       type,
       label,
-      detail: plan?.description || (type === 'monthly' ? 'Monthly meal plan' : `${label} meal plan`),
-      price: Number(plan?.discountPrice ?? plan?.price ?? 0),
-      listPrice: Number(plan?.price || 0),
+      detail: plan?.description || label,
+      price: Number(plan?.price || 0),
       durationDays: Number(plan?.durationDays || 0),
       totalMeals: Number(plan?.totalMeals || 0),
-      unit: type === 'daily' ? '/day' : type === 'weekly' ? '/week' : '/month',
+      unit: type === 'daily_1_meal' ? '/day' : type === 'weekly_1_meal' ? '/week' : '/month',
     }];
-  }).filter(([key]) => key));
+  }).filter(([key]) => Object.hasOwn({ daily_1_meal: true, weekly_1_meal: true, monthly_1_meal: true, monthly_2_meals: true }, key)));
 }
 
 function normalizeFoodCategories(record, foodType) {
@@ -65,7 +70,7 @@ export function normalizeTiffinProvider(record = {}) {
   const foodType = String(firstValue(record.kitchen_food_type, record.food_type, record.foodType, 'VEG') || 'VEG').toUpperCase();
   const foodCategories = normalizeFoodCategories(record, foodType);
   const planRecords = asArray(record.kitchen_plans);
-  const planPrice = planRecords.map((plan) => Number(plan?.discountPrice ?? plan?.price)).find((value) => Number.isFinite(value) && value > 0);
+  const planPrice = planRecords.map((plan) => Number(plan?.price)).find((value) => Number.isFinite(value) && value > 0);
   const monthlyPrice = Number(firstValue(record.monthly_price, record.monthlyPrice, 0)) || 0;
   const price = Number(firstValue(record.price, planPrice, 0)) || 0;
   const photos = asArray(firstValue(record.photos, record.images));
@@ -84,17 +89,17 @@ export function normalizeTiffinProvider(record = {}) {
     providerPhoto: firstValue(record.provider_photo, record.providerPhoto, record.owner_photo, record.profile_image, imageUrl),
     providerSince: firstValue(record.provider_since, record.providerSince, record.kitchen_created_at),
     rating: Number(firstValue(record.rating, 0)) || 0,
-    distanceKm: Number(firstValue(record.distance_km, record.distanceKm, record.delivery_range_km, 0)) || 0,
+    distanceKm: null,
+    distanceLabel: null,
     address: firstValue(record.live_address, record.address, record.service_address, record.kitchen_address),
     latitude: latitudeValue !== null && Number.isFinite(Number(latitudeValue)) ? Number(latitudeValue) : null,
     longitude: longitudeValue !== null && Number.isFinite(Number(longitudeValue)) ? Number(longitudeValue) : null,
     foodType,
     foodCategories,
-    perMealPrice: Number(firstValue(record.per_meal_price, record.perMealPrice, 0)) || 0,
     cuisine: firstValue(record.cuisine, record.style, foodCategories.includes('nonveg') ? 'Homestyle · Multi-Cuisine' : 'Homestyle · Vegetarian'),
     serviceOptions: normalizeServiceOptions(record),
     deliveryRadiusKm: Number(firstValue(record.delivery_radius_km, record.deliveryRadiusKm, record.delivery_range_km, 0)) || 0,
-    price,
+    price: planPrice ?? price,
     monthlyPrice,
     deliveryTiming: firstValue(record.delivery_timing, record.deliveryTiming, ''),
     deliveryAvailable: record.deliveryAvailable ?? true,

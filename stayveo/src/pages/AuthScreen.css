@@ -133,6 +133,23 @@
   color: var(--neutral-900);
 }
 
+.auth-password-toggle,
+.pl-password-toggle,
+.forgot-password-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--neutral-400);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.auth-password-toggle:hover,
+.pl-password-toggle:hover,
+.forgot-password-password-toggle:hover { color: var(--accent-600); }
+
 /* ── OTP Inputs ───────────────────────────────────────────────────────── */
 
 .otp-inputs {

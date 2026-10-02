@@ -13,10 +13,11 @@ const ROOM_TYPES  = ['Single', 'Double', 'Triple', '4-Bed Dorm', 'AC Room', 'Non
 const GENDER_PREFS = ['boys', 'girls', 'unisex'] as const;
 const AMENITY_LIST = ['WiFi', 'AC', 'Food', 'Geyser', 'Parking', 'CCTV', 'Study Table', 'Power Backup'] as const;
 
-export const createRoomListingSchema = z.object({
+const roomListingFields = z.object({
   title:           z.string().min(1).max(200),
   description:     z.string().max(2000).optional().nullable(),
   address:         z.string().max(500).optional().nullable(),
+  contactNumber:   z.string().max(20).optional().nullable(),
   latitude:        z.number().min(-90).max(90).optional().nullable(),
   longitude:       z.number().min(-180).max(180).optional().nullable(),
   roomType:        z.string().min(1).max(100),           // free-text or from ROOM_TYPES
@@ -45,8 +46,29 @@ export const createRoomListingSchema = z.object({
   isActive:        z.boolean().default(true),
 });
 
-// Update allows any subset of fields — nothing is required.
-export const updateRoomListingSchema = createRoomListingSchema.partial();
+export const createRoomListingSchema = roomListingFields.superRefine((data, context) => {
+  if (data.latitude == null || data.longitude == null) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Pin the property location before saving',
+      path: ['latitude'],
+    });
+  }
+});
+
+// Update allows any subset of fields — nothing is required. Existing listings
+// may still have no coordinates, but partial coordinate updates must be paired.
+export const updateRoomListingSchema = roomListingFields.partial().superRefine((data, context) => {
+  const latitudeProvided = data.latitude !== undefined;
+  const longitudeProvided = data.longitude !== undefined;
+  if (latitudeProvided !== longitudeProvided) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Latitude and longitude must be updated together',
+      path: ['latitude'],
+    });
+  }
+});
 
 // Toggle just flips isActive.
 // The service layer then derives the correct status.

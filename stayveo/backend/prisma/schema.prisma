@@ -833,6 +833,7 @@ model RoomListing {
   title            String  @db.VarChar(200) // "Single AC Room"
   description      String? // long-form details
   address          String? @db.VarChar(500)
+  contactNumber    String? @map("contact_number") @db.VarChar(20)
   latitude         Float?
   longitude        Float?
   roomType         String  @map("room_type") @db.VarChar(100) // "Single", "Double", "Triple"
@@ -932,9 +933,10 @@ enum MealCategory {
 }
 
 enum TiffinPlanType {
-  WEEKLY  @map("weekly")
-  MONTHLY @map("monthly")
-  CUSTOM  @map("custom")
+  DAILY_1_MEAL    @map("daily_1_meal")
+  WEEKLY_1_MEAL   @map("weekly_1_meal")
+  MONTHLY_1_MEAL  @map("monthly_1_meal")
+  MONTHLY_2_MEALS @map("monthly_2_meals")
 
   @@map("tiffin_plan_type")
 }
@@ -1062,9 +1064,6 @@ model TiffinKitchen {
   securityDeposit          Decimal                   @default(0.00) @map("security_deposit") @db.Decimal(10, 2)
   deliveryCharges          Decimal                   @default(0.00) @map("delivery_charges") @db.Decimal(10, 2)
   packingCharges           Decimal                   @default(0.00) @map("packing_charges") @db.Decimal(10, 2)
-  extraMealPrice           Decimal                   @default(80.00) @map("extra_meal_price") @db.Decimal(10, 2)
-  monthlyOneMealPrice      Decimal?                  @map("monthly_one_meal_price") @db.Decimal(10, 2)
-  monthlyTwoMealPrice      Decimal?                  @map("monthly_two_meal_price") @db.Decimal(10, 2)
 
   // Weekly Off
   isSundayClosed           Boolean                   @default(false) @map("is_sunday_closed")
@@ -1181,7 +1180,6 @@ model TiffinSubscriptionPlan {
   durationDays  Int            @map("duration_days")
   totalMeals    Int            @map("total_meals")
   price         Decimal        @db.Decimal(10, 2)
-  discountPrice Decimal?       @map("discount_price") @db.Decimal(10, 2)
   description   String?
   isActive      Boolean        @default(true) @map("is_active")
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1345,7 +1343,6 @@ model TiffinMealLog {
   subscriptionDayId String?     @map("subscription_day_id") @db.Uuid
   status         MealLogStatus @default(SCHEDULED)
   isExtraMeal    Boolean       @default(false) @map("is_extra_meal")
-  extraMealPrice Decimal       @default(0.00) @map("extra_meal_price") @db.Decimal(10, 2)
   deliveryOtp    String?       @map("delivery_otp") @db.VarChar(6)
   deliveredAt    DateTime?     @map("delivered_at") @db.Timestamptz(6)
   deliveredByProviderId String? @map("delivered_by_provider_id") @db.Uuid

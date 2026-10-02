@@ -63,7 +63,7 @@ export const tiffinRepository = {
           t."kitchen_name",
           t."food_type"::text AS "food_type",
           t."meal_options",
-          t."monthly_price",
+          CASE WHEN kitchen."id" IS NULL THEN t."monthly_price" ELSE (SELECT plan."price" FROM "tiffin_subscription_plans" plan WHERE plan."kitchen_id" = kitchen."id" AND plan."plan_type"::text = 'monthly_1_meal' AND plan."is_active" = true ORDER BY plan."created_at" ASC LIMIT 1) END AS "monthly_price",
           t."delivery_range_km",
           t."delivery_timing",
           t."created_at",
@@ -71,14 +71,13 @@ export const tiffinRepository = {
           COALESCE(kitchen."owner_name", prov."business_name") AS "provider_name",
           COALESCE(kitchen."phone", prov."phone_number") AS "provider_phone",
           COALESCE(kitchen."address", prov."location") AS "address",
-          COALESCE(kitchen."latitude", prov."latitude") AS "latitude",
-          COALESCE(kitchen."longitude", prov."longitude") AS "longitude",
+          kitchen."latitude" AS "latitude",
+          kitchen."longitude" AS "longitude",
           kitchen."kitchen_logo",
           kitchen."description" AS "kitchen_description",
           kitchen."owner_name" AS "kitchen_owner_name",
           kitchen."food_options",
           kitchen."food_type"::text AS "kitchen_food_type",
-          COALESCE(kitchen."extra_meal_price", 0) AS "per_meal_price",
           kitchen."delivery_type"::text AS "kitchen_delivery_type",
           kitchen."pickup_available",
           COALESCE(kitchen."delivery_radius_km", t."delivery_range_km") AS "delivery_radius_km",
@@ -87,11 +86,10 @@ export const tiffinRepository = {
             'id', plan."id",
             'type', lower(plan."plan_type"::text),
             'price', plan."price",
-            'discountPrice', plan."discount_price",
             'durationDays', plan."duration_days",
             'totalMeals', plan."total_meals",
             'name', plan."plan_name"
-          ) ORDER BY plan."duration_days")
+          ) ORDER BY plan."plan_type"::text)
           FROM "tiffin_subscription_plans" plan
           WHERE plan."kitchen_id" = kitchen."id" AND plan."is_active" = true), '[]'::json) AS "kitchen_plans"
         FROM "tiffin_services" t
@@ -107,7 +105,7 @@ export const tiffinRepository = {
           kitchen."kitchen_name",
           NULL::text AS "food_type",
           COALESCE(kitchen."food_options"->'mealItems', '{}'::jsonb) AS "meal_options",
-          (SELECT plan."price" FROM "tiffin_subscription_plans" plan WHERE plan."kitchen_id" = kitchen."id" AND plan."plan_type"::text = 'monthly' AND plan."is_active" = true ORDER BY plan."duration_days" DESC LIMIT 1) AS "monthly_price",
+          (SELECT plan."price" FROM "tiffin_subscription_plans" plan WHERE plan."kitchen_id" = kitchen."id" AND plan."plan_type"::text = 'monthly_1_meal' AND plan."is_active" = true ORDER BY plan."created_at" ASC LIMIT 1) AS "monthly_price",
           kitchen."delivery_radius_km" AS "delivery_range_km",
           NULL::text AS "delivery_timing",
           kitchen."created_at",
@@ -122,7 +120,6 @@ export const tiffinRepository = {
           kitchen."owner_name" AS "kitchen_owner_name",
           kitchen."food_options",
           kitchen."food_type"::text AS "kitchen_food_type",
-          COALESCE(kitchen."extra_meal_price", 0) AS "per_meal_price",
           kitchen."delivery_type"::text AS "kitchen_delivery_type",
           kitchen."pickup_available",
           kitchen."delivery_radius_km",
@@ -131,11 +128,10 @@ export const tiffinRepository = {
             'id', plan."id",
             'type', lower(plan."plan_type"::text),
             'price', plan."price",
-            'discountPrice', plan."discount_price",
             'durationDays', plan."duration_days",
             'totalMeals', plan."total_meals",
             'name', plan."plan_name"
-          ) ORDER BY plan."duration_days")
+          ) ORDER BY plan."plan_type"::text)
           FROM "tiffin_subscription_plans" plan
           WHERE plan."kitchen_id" = kitchen."id" AND plan."is_active" = true), '[]'::json) AS "kitchen_plans"
         FROM "tiffin_kitchens" kitchen

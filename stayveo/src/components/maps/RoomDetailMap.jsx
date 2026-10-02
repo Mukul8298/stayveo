@@ -19,13 +19,13 @@ export default function RoomDetailMap({ latitude, longitude, address }) {
 
   const initialViewState = useMemo(() => {
     return {
-      longitude: hasCoordinates ? normalizedLongitude : 77.5946,
-      latitude: hasCoordinates ? normalizedLatitude : 12.9716,
+      longitude: normalizedLongitude,
+      latitude: normalizedLatitude,
       zoom: 15,
       pitch: 0,
       bearing: 0,
     };
-  }, [hasCoordinates, normalizedLatitude, normalizedLongitude]);
+  }, [normalizedLatitude, normalizedLongitude]);
 
   const [viewState, setViewState] = useState(initialViewState);
 

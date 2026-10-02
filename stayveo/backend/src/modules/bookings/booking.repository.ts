@@ -144,6 +144,8 @@ export const bookingRepository = {
         payment: paidPayment || latestPayment,
         paymentStatus: paidPayment?.status || latestPayment?.status || 'PENDING',
         amountPaid: paidPayment?.amount || 0,
+        ownerAmount: paidPayment?.ownerAmount || booking.reservationFee || 0,
+        platformFee: paidPayment?.platformFee ?? booking.platformFee,
         transactionId: paidPayment?.transactionId || latestPayment?.transactionId || null,
         paymentDate: paidPayment?.createdAt || latestPayment?.createdAt || null,
       };
@@ -445,32 +447,14 @@ export const bookingRepository = {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const result = await prisma.booking.aggregate({
+    const payments = await prisma.payment.findMany({
       where: {
         providerId: Array.isArray(providerId) ? { in: providerId } : providerId,
-        status: { in: ['ACCEPTED', 'IN_PROGRESS', 'COMPLETED'] },
+        status: 'PAID',
         createdAt: { gte: startOfMonth, lt: startOfNextMonth },
       },
-      _sum: {
-        reservationFee: true,
-        platformFee: true,
-        foodCharges: true,
-        electricityCharges: true,
-        waterCharges: true,
-        maintenanceCharges: true,
-        parkingCharges: true,
-        otherCharges: true,
-      },
+      select: { ownerAmount: true },
     });
-    return [
-      result._sum.reservationFee,
-      result._sum.platformFee,
-      result._sum.foodCharges,
-      result._sum.electricityCharges,
-      result._sum.waterCharges,
-      result._sum.maintenanceCharges,
-      result._sum.parkingCharges,
-      result._sum.otherCharges,
-    ].reduce((sum, amount) => sum + Number(amount || 0), 0);
+    return payments.reduce((sum, payment) => sum + Number(payment.ownerAmount || 0), 0);
   },
 };

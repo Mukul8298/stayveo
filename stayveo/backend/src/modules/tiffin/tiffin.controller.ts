@@ -64,10 +64,12 @@ export const tiffinController = {
 
   /** GET /tiffin/:id/reservation — reservation context */
   async reservationContext(
-    request: FastifyRequest<{ Params: { id: string }; Querystring: { planId?: string; plan?: string } }>,
+    request: FastifyRequest<{ Params: { id: string }; Querystring: { planId?: string; plan?: string; optedLunch?: string; optedDinner?: string } }>,
     reply: FastifyReply
   ) {
-    return sendSuccess(reply, await tiffinReservationService.getContext(request.params.id, userId(request), request.query?.planId, request.query?.plan));
+    const optedLunch = request.query?.optedLunch === undefined ? true : request.query.optedLunch === 'true';
+    const optedDinner = request.query?.optedDinner === undefined ? true : request.query.optedDinner === 'true';
+    return sendSuccess(reply, await tiffinReservationService.getContext(request.params.id, userId(request), request.query?.planId, request.query?.plan, optedLunch, optedDinner));
   },
 
   /** POST /tiffin/:id/reservation — create a pending reservation */

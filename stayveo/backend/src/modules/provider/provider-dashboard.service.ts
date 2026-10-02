@@ -72,7 +72,7 @@ export const providerDashboardService = {
       bookingRepository.monthlyRevenueByProvider(providerIds),
       prisma.payment.aggregate({
         where: { providerId, status: 'PAID' },
-        _sum: { amount: true },
+        _sum: { ownerAmount: true },
       }),
     ]);
     return {
@@ -82,7 +82,7 @@ export const providerDashboardService = {
       // Kept in the response shape expected by the existing frontend. The
       // value is intentionally live, never read from the Redis cache.
       earnings: { thisMonth: thisMonthRevenue },
-      totalEarnings: Number(totalEarningsResult._sum.amount || 0),
+      totalEarnings: Number(totalEarningsResult._sum.ownerAmount || 0),
       providerId,
     };
   },

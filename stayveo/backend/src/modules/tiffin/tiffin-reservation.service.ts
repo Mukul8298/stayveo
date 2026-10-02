@@ -7,6 +7,7 @@ import { createTiffinReservationSchema } from './tiffin-reservation.schema.js';
 import { getTiffinPaymentConfig, tiffinPaymentService } from './tiffin-payment.service.js';
 import { tiffinPaymentActionSchema } from './tiffin-payment.schema.js';
 import { razorpayClient } from '../payments/razorpay.client.js';
+import { calculateTiffinPrice, serializeTiffinPrices, tiffinPlanDurationDays } from './tiffin-pricing.js';
 
 type AnyRecord = Record<string, any>;
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -23,23 +24,6 @@ function dateOnly(value: string) {
 function datePart(value: Date | string | null | undefined) {
   if (!value) return null;
   return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
-}
-
-function amountForPlan(plan: AnyRecord) {
-  return Number(plan.discountPrice ?? plan.price ?? 0);
-}
-
-function normalizedPlanType(plan: AnyRecord) {
-  const type = String(plan.planType || '').toLowerCase();
-  return type === 'custom' ? 'daily' : type;
-}
-
-function durationForPlan(plan: AnyRecord) {
-  const type = normalizedPlanType(plan);
-  if (type === 'daily') return 1;
-  if (type === 'monthly') return 30;
-  if (type === 'weekly') return 7;
-  return Number(plan.durationDays) || 1;
 }
 
 function jsonObject(value: unknown): AnyRecord {
@@ -100,9 +84,7 @@ function serializePlan(plan: AnyRecord) {
     id: plan.id,
     type: String(plan.planType || '').toLowerCase(),
     name: plan.planName,
-    price: amountForPlan(plan),
-    listPrice: Number(plan.price || 0),
-    discountPrice: plan.discountPrice === null ? null : Number(plan.discountPrice || 0),
+    price: Number(plan.price),
     durationDays: plan.durationDays,
     totalMeals: plan.totalMeals,
     description: plan.description || '',
@@ -184,27 +166,6 @@ function dietEnum(value: string) {
 function dietEnumForPreferences(preferences: string[]) {
   if (preferences.includes('veg') && preferences.includes('nonveg')) return TiffinFoodType.BOTH;
   return dietEnum(preferences[0] || 'veg');
-}
-
-function perMealPriceForPlan(kitchen: AnyRecord, plan: AnyRecord) {
-  const dailyPlan = (kitchen.subscriptionPlans || []).find((item: AnyRecord) => normalizedPlanType(item) === 'daily');
-  const dailyPrice = Number(dailyPlan?.price);
-  if (Number.isFinite(dailyPrice) && dailyPrice > 0) return dailyPrice;
-  const configuredPrice = Number(kitchen.extraMealPrice);
-  if (Number.isFinite(configuredPrice) && configuredPrice > 0) return configuredPrice;
-  const planPrice = Number(plan.price);
-  return Number.isFinite(planPrice) && planPrice > 0 ? planPrice : 0;
-}
-
-function calculateReservationAmount(kitchen: AnyRecord, plan: AnyRecord, selectedMealCount: number) {
-  if (normalizedPlanType(plan) === 'monthly') {
-    const configuredMonthlyPrice = selectedMealCount === 1 ? Number(kitchen.monthlyOneMealPrice) : Number(kitchen.monthlyTwoMealPrice);
-    if (Number.isFinite(configuredMonthlyPrice) && configuredMonthlyPrice > 0) return Number(configuredMonthlyPrice.toFixed(2));
-  }
-  const perMealPrice = perMealPriceForPlan(kitchen, plan);
-  if (!perMealPrice) throw { statusCode: 400, message: 'This Tiffin provider has not configured a valid per-meal price' };
-  const amount = perMealPrice * selectedMealCount * durationForPlan(plan);
-  return Number(amount.toFixed(2));
 }
 
 function hasMenuItems(value: unknown): boolean {
@@ -356,10 +317,13 @@ async function assertServiceMatches(serviceId: string, kitchenId: string) {
 }
 
 export const tiffinReservationService = {
-  async getContext(serviceId: string, userId: unknown, planId?: string, planType?: string) {
+  async getContext(serviceId: string, userId: unknown, planId?: string, planType?: string, optedLunch = true, optedDinner = true) {
     const user = await getStudent(userId);
     await reconcilePaidTiffinReservations(undefined, user.id);
-    const { kitchen, plan } = await getKitchenAndPlan(serviceId, planId, planType);
+    const { kitchen, plan: requestedPlan } = await getKitchenAndPlan(serviceId, planId, planType);
+    const selectedMealCount = Number(optedLunch) + Number(optedDinner);
+    const quote = calculateTiffinPrice(requestedPlan.planType, selectedMealCount, kitchen.subscriptionPlans);
+    const plan = quote.plan;
     const existing = await prisma.tiffinCustomerSubscription.findFirst({
       where: {
         kitchenId: kitchen.id,
@@ -380,11 +344,12 @@ export const tiffinReservationService = {
         deliveryRadiusKm: Number(kitchen.deliveryRadiusKm || 0),
         foodType: String(kitchen.foodType || '').toLowerCase(),
         foodCategories: providerFoodCategories(kitchen),
-        perMealPrice: perMealPriceForPlan(kitchen, plan),
+        prices: serializeTiffinPrices(kitchen.subscriptionPlans),
         deliveryType: String(kitchen.deliveryType || '').toLowerCase(),
       },
       plans: kitchen.subscriptionPlans.map(serializePlan),
       selectedPlan: serializePlan(plan),
+      quote: { amount: quote.amount, planId: plan.id, planType: String(plan.planType).toLowerCase() },
       student: serializeStudent(user),
       existingReservation: existing ? serializeReservation(existing, kitchen, existing.payments[0] || null) : null,
       payment: getTiffinPaymentConfig(),
@@ -403,7 +368,7 @@ export const tiffinReservationService = {
       await prisma.user.update({ where: { id: user.id }, data: { phone_number: resolvedPhone } });
       user.phone_number = resolvedPhone;
     }
-    const { kitchen, plan } = await getKitchenAndPlan(serviceId, data.planId);
+    const { kitchen, plan: requestedPlan } = await getKitchenAndPlan(serviceId, data.planId);
     const today = getCurrentTiffinDate();
     const startDateKey = data.startDate || today;
     if (startDateKey < today) throw { statusCode: 400, message: 'Start date cannot be in the past' };
@@ -412,8 +377,10 @@ export const tiffinReservationService = {
     const preferences = selectedDietPreferences(data);
     assertSupportedDietPreferences(kitchen, preferences);
     const selectedMealCount = Number(data.optedLunch) + Number(data.optedDinner);
-    const durationDays = durationForPlan(plan);
-    const amount = calculateReservationAmount(kitchen, plan, selectedMealCount);
+    const quote = calculateTiffinPrice(requestedPlan.planType, selectedMealCount, kitchen.subscriptionPlans);
+    const plan = quote.plan;
+    const durationDays = tiffinPlanDurationDays(plan.planType);
+    const amount = quote.amount;
     const idempotencyKey = data.idempotencyKey || crypto.randomUUID();
 
     const existingPayment = await prisma.tiffinPayment.findUnique({ where: { idempotencyKey } });
@@ -481,7 +448,7 @@ export const tiffinReservationService = {
         customerId: user.id,
         amount,
         idempotencyKey,
-        planType: normalizedPlanType(plan),
+        planType: String(plan.planType).toLowerCase(),
         mealsPerDay: selectedMealCount,
       });
       return created;
@@ -518,7 +485,7 @@ export const tiffinReservationService = {
         customerId: subscription.customerId,
         amount,
         idempotencyKey,
-        planType: normalizedPlanType(subscription.plan),
+        planType: String(subscription.plan.planType).toLowerCase(),
         mealsPerDay: Number(subscription.optedLunch) + Number(subscription.optedDinner),
       });
       if (nextPayment.status !== TiffinPaymentStatus.PENDING) {

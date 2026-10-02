@@ -1,1575 +1,1113 @@
-// ─── StayVeo System & Security Architecture — PDF Generator ─────────────
-// Generates a professional architecture document based on actual codebase
-// analysis. Run: node generate-pdf.js
-// ────────────────────────────────────────────────────────────────────────
+// StayVeo current-codebase architecture and developer handover PDF.
+// Run from any directory with: node /path/to/docs/architecture/generate-pdf.js
+// This generator reads the checked-in Prisma schema and route declarations;
+// it writes only the user-designated reference PDF in the docs folder.
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-const OUTPUT = path.join(__dirname, 'StayVeo_System_Security_Architecture.pdf');
-const VERSION = '1.0.0';
-const DATE = new Date().toISOString().split('T')[0];
-
-// ─── Colors ─────────────────────────────────────────────────────────────
+const ROOT = path.resolve(__dirname, '../..');
+const OUTPUT = path.join(__dirname, 'StayVeo_Current_Engineering_Architecture.pdf');
+const VERSION = '3.0.0';
+const AUDIT_DATE = '2026-10-01';
+const COMMIT = '346beb8';
+const SCHEMA = path.join(ROOT, 'backend/prisma/schema.prisma');
 const C = {
-  black: '#0F172A',
-  dark: '#1E293B',
-  mid: '#475569',
-  light: '#94A3B8',
-  faint: '#CBD5E1',
-  bg: '#F8FAFC',
-  white: '#FFFFFF',
-  accent: '#2563EB',    // Blue-600
-  accentDark: '#1D4ED8',
-  green: '#16A34A',
-  greenBg: '#F0FDF4',
-  greenBorder: '#BBF7D0',
-  red: '#DC2626',
-  redBg: '#FEF2F2',
-  redBorder: '#FECACA',
-  amber: '#D97706',
-  amberBg: '#FFFBEB',
-  amberBorder: '#FDE68A',
-  purple: '#7C3AED',
-  teal: '#0D9488',
-  indigo: '#4F46E5',
-  slate100: '#F1F5F9',
-  slate200: '#E2E8F0',
-  slate300: '#CBD5E1',
+  ink: '#102033', navy: '#10243A', blue: '#2457A7', blue2: '#3B82F6',
+  teal: '#0F766E', green: '#16834A', amber: '#B56A08', red: '#B42318',
+  paper: '#FFFFFF', wash: '#F3F6FA', line: '#D7E0EA', muted: '#65758B',
+  paleBlue: '#EFF6FF', paleGreen: '#ECFDF3', paleAmber: '#FFFAEB', paleRed: '#FEF3F2',
 };
-
-// ─── Document Setup ─────────────────────────────────────────────────────
+const PW = 595.28, PH = 841.89, ML = 54, MR = 54, MT = 63, MB = 54;
+const CW = PW - ML - MR;
 const doc = new PDFDocument({
-  size: 'A4',
-  margins: { top: 72, bottom: 72, left: 64, right: 64 },
-  bufferPages: true,
+  size: 'A4', margins: { top: MT, bottom: MB, left: ML, right: MR },
+  bufferPages: true, compress: true,
   info: {
-    Title: 'StayVeo — System & Security Architecture',
-    Author: 'StayVeo Engineering',
-    Subject: 'Production Architecture, Security Model, Scalability Strategy & Migration Plan',
-    Keywords: 'architecture security prisma fastify react supabase',
+    Title: 'STAYVEO — Current Engineering Architecture',
+    Author: 'StayVeo Engineering — Codebase Audit',
+    Subject: 'Source-verified architecture, security, database, operations and developer handover',
+    Keywords: 'StayVeo, architecture, Fastify, React, Prisma, Redis, Razorpay, handover',
   },
 });
 const stream = fs.createWriteStream(OUTPUT);
 doc.pipe(stream);
+let sectionPage = [];
+let pageCount = 0;
+let currentChapter = '';
 
-const PW = 595.28; // A4 width points
-const PH = 841.89; // A4 height points
-const ML = 64;
-const MR = 64;
-const MT = 72;
-const MB = 72;
-const CW = PW - ML - MR; // content width
-let pageNum = 0;
-let tocEntries = [];
-let currentSection = 0;
-
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-function ensureSpace(needed) {
-  if (doc.y + needed > PH - MB - 30) {
-    doc.addPage();
-    addHeader();
-    addFooter();
-  }
+function pageNumber() { return doc.bufferedPageRange().count; }
+function header() {
+  const y = 27;
+  doc.save().font('Helvetica-Bold').fontSize(7).fillColor(C.muted)
+    .text('STAYVEO  /  CURRENT ENGINEERING ARCHITECTURE', ML, y, { width: CW - 45 });
+  doc.font('Helvetica').text(`AUDIT ${AUDIT_DATE}  ·  v${VERSION}`, ML + CW - 160, y, { width: 160, align: 'right' });
+  doc.moveTo(ML, y + 13).lineTo(PW - MR, y + 13).strokeColor(C.line).lineWidth(.6).stroke().restore();
 }
-
-function addHeader() {
-  const y = 28;
-  doc.save();
-  doc.fontSize(7).fillColor(C.light)
-    .text('STAYVEO — SYSTEM & SECURITY ARCHITECTURE', ML, y, { width: CW / 2, align: 'left' });
-  doc.text(`v${VERSION}`, ML + CW / 2, y, { width: CW / 2, align: 'right' });
-  doc.moveTo(ML, y + 14).lineTo(PW - MR, y + 14).strokeColor(C.slate200).lineWidth(0.5).stroke();
+function footer() {
+  const y = PH - 31;
+  doc.save().moveTo(ML, y - 7).lineTo(PW - MR, y - 7).strokeColor(C.line).lineWidth(.5).stroke();
+  doc.font('Helvetica').fontSize(7).fillColor(C.muted)
+    .text('CONFIDENTIAL  ·  INTERNAL ENGINEERING HANDOVER', ML, y, { width: CW - 90 })
+    .text(`Page ${pageNumber()}`, ML + CW - 90, y, { width: 90, align: 'right' }).restore();
+}
+function addPage() { doc.addPage(); pageCount += 1; header(); footer(); }
+function ensure(h = 28) { if (doc.y + h > PH - MB - 18) addPage(); }
+function cover() {
+  doc.rect(0, 0, PW, PH).fill(C.navy);
+  doc.rect(0, 0, PW, 8).fill(C.blue2);
+  doc.rect(0, PH - 8, PW, 8).fill(C.blue2);
+  doc.save().fillColor('#AFC7ED').font('Helvetica-Bold').fontSize(9)
+    .text('STAYVEO  /  ENGINEERING', ML + 18, 126, { characterSpacing: 2 });
+  doc.fillColor(C.paper).font('Helvetica-Bold').fontSize(32)
+    .text('CURRENT SYSTEM', ML + 18, 176, { width: CW - 36 });
+  doc.fillColor('#76A7FF').fontSize(32).text('ARCHITECTURE', ML + 18, 216, { width: CW - 36 });
+  doc.moveTo(ML + 18, 278).lineTo(ML + 190, 278).strokeColor(C.blue2).lineWidth(3).stroke();
+  doc.fillColor('#E2EAF5').font('Helvetica').fontSize(13)
+    .text('Codebase reverse engineering · security and data audit\nDeveloper handover · change-impact and operations guide', ML + 18, 306, { width: CW - 36, lineGap: 5 });
+  const facts = [
+    ['DOCUMENT STATUS', 'CURRENT CODEBASE AUDIT'],
+    ['AUDIT DATE', AUDIT_DATE],
+    ['REPOSITORY COMMIT', COMMIT + ' (worktree contains pre-existing modifications)'],
+    ['PRIMARY SOURCE', 'Current repository files and configuration'],
+    ['SECONDARY SOURCE', 'Supplied StayVeo technical architecture PDF'],
+    ['SCOPE', 'Engineering documentation only; no application source modified'],
+  ];
+  facts.forEach((r, i) => {
+    const y = 512 + i * 34;
+    doc.fillColor('#95A9C3').font('Helvetica-Bold').fontSize(7.5).text(r[0], ML + 18, y, { width: 130 });
+    doc.fillColor(C.paper).font('Helvetica').fontSize(8.5).text(r[1], ML + 154, y, { width: CW - 190 });
+  });
+  doc.fillColor('#95A9C3').fontSize(8).text('CURRENT CODEBASE IS THE SOURCE OF TRUTH', ML + 18, PH - 102, { characterSpacing: 1.3 });
   doc.restore();
 }
-
-function addFooter() {
-  pageNum++;
-  const y = PH - 40;
-  doc.save();
-  doc.moveTo(ML, y - 6).lineTo(PW - MR, y - 6).strokeColor(C.slate200).lineWidth(0.5).stroke();
-  doc.fontSize(7).fillColor(C.light)
-    .text('CONFIDENTIAL — StayVeo Internal', ML, y, { width: CW / 2, align: 'left' })
-    .text(`Page ${pageNum}`, ML + CW / 2, y, { width: CW / 2, align: 'right' });
-  doc.restore();
-}
-
-function newPage() {
-  doc.addPage();
-  addHeader();
-  addFooter();
-}
-
-function sectionTitle(num, title) {
-  currentSection = num;
-  ensureSpace(80);
+function chapterTitle(number, title, subtitle = '') {
+  currentChapter = title;
+  ensure(86);
   const y = doc.y;
-  // Section bar
-  doc.save();
-  doc.rect(ML, y, CW, 36).fill(C.accent);
-  doc.fontSize(11).fillColor(C.white).font('Helvetica-Bold')
-    .text(`SECTION ${num}`, ML + 14, y + 6, { width: CW - 28 });
-  doc.fontSize(13).fillColor(C.white).font('Helvetica-Bold')
-    .text(title.toUpperCase(), ML + 14, y + 19, { width: CW - 28 });
+  doc.save().rect(ML, y, CW, 40).fill(C.blue);
+  doc.fillColor('#D9E8FF').font('Helvetica-Bold').fontSize(8).text(`PHASE ${String(number).padStart(2, '0')}`, ML + 13, y + 6);
+  doc.fillColor(C.paper).fontSize(12.5).text(title.toUpperCase(), ML + 13, y + 20, { width: CW - 26 });
   doc.restore();
-  doc.y = y + 48;
-  tocEntries.push({ num, title, page: pageNum });
+  doc.y = y + 49;
+  if (subtitle) paragraph(subtitle, { color: C.muted, size: 8.4, italic: true });
+  sectionPage.push({ number, title, page: pageNumber() });
 }
-
-function subsection(title) {
-  ensureSpace(40);
-  doc.moveDown(0.5);
+function subhead(text) {
+  ensure(28);
+  doc.moveDown(.35);
   const y = doc.y;
-  doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(C.accent).lineWidth(1.5).stroke();
-  doc.moveDown(0.3);
-  doc.fontSize(11).fillColor(C.accent).font('Helvetica-Bold').text(title, ML, doc.y, { width: CW });
-  doc.moveDown(0.5);
-  doc.font('Helvetica').fillColor(C.dark);
+  doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(C.blue2).lineWidth(1.25).stroke();
+  doc.moveDown(.35);
+  doc.font('Helvetica-Bold').fontSize(10.2).fillColor(C.blue).text(text, ML, doc.y, { width: CW });
+  doc.moveDown(.4);
+  doc.font('Helvetica').fontSize(8.5).fillColor(C.ink);
 }
-
-function subsubsection(title) {
-  ensureSpace(30);
-  doc.moveDown(0.3);
-  doc.fontSize(9.5).fillColor(C.dark).font('Helvetica-Bold').text(title, ML, doc.y, { width: CW });
-  doc.moveDown(0.3);
-  doc.font('Helvetica').fillColor(C.dark);
+function paragraph(text, options = {}) {
+  ensure(30);
+  doc.font(options.bold ? 'Helvetica-Bold' : options.italic ? 'Helvetica-Oblique' : 'Helvetica')
+    .fontSize(options.size || 8.5).fillColor(options.color || C.ink)
+    .text(String(text), ML, doc.y, { width: CW, lineGap: options.lineGap ?? 2.2, align: options.align || 'left' });
+  doc.moveDown(options.after ?? .35);
 }
-
-function para(text, opts = {}) {
-  ensureSpace(30);
-  doc.fontSize(opts.size || 9).fillColor(opts.color || C.dark).font(opts.font || 'Helvetica')
-    .text(text, ML, doc.y, { width: CW, align: opts.align || 'left', lineGap: 3 });
-  doc.moveDown(0.4);
-}
-
 function bullet(text, indent = 0) {
-  ensureSpace(18);
+  ensure(20);
   const y = doc.y;
-  doc.fontSize(9).fillColor(C.dark).font('Helvetica')
-    .text('•', ML + indent, y, { width: 12 });
-  doc.fontSize(9).fillColor(C.dark).font('Helvetica')
-    .text(text, ML + 12 + indent, y, { width: CW - 14 - indent, lineGap: 2 });
-  doc.moveDown(0.15);
+  doc.font('Helvetica-Bold').fontSize(8.3).fillColor(C.blue).text('•', ML + indent, y, { width: 12 });
+  doc.font('Helvetica').fontSize(8.3).fillColor(C.ink).text(String(text), ML + 12 + indent, y, { width: CW - indent - 15, lineGap: 1.7 });
+  doc.moveDown(.14);
 }
-
-function numberedItem(num, text) {
-  ensureSpace(18);
-  const y = doc.y;
-  doc.fontSize(9).fillColor(C.accent).font('Helvetica-Bold')
-    .text(`${num}.`, ML, y, { width: 20 });
-  doc.fontSize(9).fillColor(C.dark).font('Helvetica')
-    .text(text, ML + 20, y, { width: CW - 22, lineGap: 2 });
-  doc.moveDown(0.15);
-}
-
-function callout(type, text) {
-  const colors = {
-    info: { bg: '#EFF6FF', border: C.accent, icon: 'i', label: 'NOTE' },
-    warn: { bg: C.amberBg, border: C.amber, icon: '!', label: 'WARNING' },
-    danger: { bg: C.redBg, border: C.red, icon: 'X', label: 'CRITICAL' },
-    success: { bg: C.greenBg, border: C.green, icon: '*', label: 'CURRENT' },
-    tip: { bg: '#F0F9FF', border: C.teal, icon: '>', label: 'RECOMMENDED' },
-  };
-  const c = colors[type] || colors.info;
-  const textH = doc.fontSize(8.5).font('Helvetica').heightOfString(text, { width: CW - 40 });
-  const boxH = Math.max(textH + 28, 38);
-  ensureSpace(boxH + 12);
-  const y = doc.y;
-  doc.save();
-  doc.rect(ML, y, CW, boxH).fill(c.bg);
-  doc.rect(ML, y, 3, boxH).fill(c.border);
-  doc.fontSize(7).fillColor(c.border).font('Helvetica-Bold')
-    .text(`[${c.label}]`, ML + 12, y + 6, { width: CW - 24 });
-  doc.fontSize(8.5).fillColor(C.dark).font('Helvetica')
-    .text(text, ML + 12, y + 20, { width: CW - 40, lineGap: 2 });
-  doc.restore();
-  doc.y = y + boxH + 10;
-  doc.font('Helvetica').fontSize(9).fillColor(C.dark);
-}
-
-function statusBadge(label, status) {
-  const statusColors = {
-    'CURRENT': C.green,
-    'IMPLEMENTED': C.green,
-    'PARTIAL': C.amber,
-    'PLANNED': C.accent,
-    'RECOMMENDED': C.purple,
-    'NOT IMPLEMENTED': C.red,
-    'NOT REQUIRED YET': C.light,
-  };
-  ensureSpace(16);
-  const y = doc.y;
-  const color = statusColors[status] || C.light;
-  doc.fontSize(8).fillColor(C.dark).font('Helvetica-Bold')
-    .text(label, ML + 4, y, { width: 200 });
-  doc.fontSize(7).fillColor(color).font('Helvetica-Bold')
-    .text(`[${status}]`, ML + 210, y, { width: CW - 210, lineGap: 2 });
-  doc.y = y + 14;
-}
-
-function tableHeader(cols) {
-  ensureSpace(20);
-  const y = doc.y;
-  const totalW = cols.reduce((s, c) => s + c.width, 0);
-  doc.rect(ML, y, totalW, 18).fill(C.accent);
-  let x = ML;
-  cols.forEach(col => {
-    doc.fontSize(7).fillColor(C.white).font('Helvetica-Bold')
-      .text(col.label, x + 4, y + 4, { width: col.width - 8 });
-    x += col.width;
+function code(text) {
+  const lines = String(text).split('\n');
+  const h = lines.length * 11 + 15;
+  ensure(Math.min(h, PH - MT - MB));
+  let y = doc.y;
+  lines.forEach((line) => {
+    if (y + 15 > PH - MB - 18) { addPage(); y = doc.y; }
+    doc.rect(ML, y, CW, 13).fill(C.wash);
+    doc.font('Courier').fontSize(7.4).fillColor(C.navy).text(line, ML + 8, y + 3, { width: CW - 16, lineBreak: false });
+    y += 13;
   });
-  doc.y = y + 18;
-  return cols;
+  doc.y = y + 5;
 }
-
-function tableRow(cols, values, alt = false) {
-  ensureSpace(24);
+function callout(label, text, type = 'info') {
+  const color = type === 'warning' ? C.amber : type === 'danger' ? C.red : type === 'success' ? C.green : C.blue;
+  const bg = type === 'warning' ? C.paleAmber : type === 'danger' ? C.paleRed : type === 'success' ? C.paleGreen : C.paleBlue;
+  const hText = doc.font('Helvetica').fontSize(8).heightOfString(String(text), { width: CW - 30, lineGap: 1.5 });
+  const h = Math.max(36, hText + 25);
+  ensure(h + 8);
   const y = doc.y;
-  const totalW = cols.reduce((s, c) => s + c.width, 0);
-  const textH = Math.max(...values.map((v, i) =>
-    doc.fontSize(7.5).font('Helvetica').heightOfString(String(v), { width: cols[i].width - 8 })
-  ));
-  const rowH = Math.max(textH + 8, 16);
-  if (alt) doc.rect(ML, y, totalW, rowH).fill(C.slate100);
-  doc.rect(ML, y, totalW, rowH).strokeColor(C.slate200).lineWidth(0.5).stroke();
-  let x = ML;
-  values.forEach((v, i) => {
-    const color = (String(v).includes('CRITICAL') || String(v).includes('HIGH')) ? C.red :
-                  (String(v).includes('MEDIUM')) ? C.amber :
-                  (String(v).includes('LOW')) ? C.green : C.dark;
-    doc.fontSize(7.5).fillColor(color).font('Helvetica')
-      .text(String(v), x + 4, y + 4, { width: cols[i].width - 8 });
-    x += cols[i].width;
-  });
-  doc.y = y + rowH;
+  doc.save().rect(ML, y, CW, h).fill(bg).rect(ML, y, 3, h).fill(color);
+  doc.font('Helvetica-Bold').fontSize(7).fillColor(color).text(label.toUpperCase(), ML + 11, y + 6, { width: CW - 22 });
+  doc.font('Helvetica').fontSize(8).fillColor(C.ink).text(String(text), ML + 11, y + 17, { width: CW - 24, lineGap: 1.5 });
+  doc.restore(); doc.y = y + h + 8;
 }
-
-function diagramBox(x, y, w, h, label, color = C.accent, textColor = C.white) {
-  const savedY = doc.y;
-  doc.save();
-  doc.roundedRect(x, y, w, h, 4).fill(color);
-  doc.fontSize(7).fillColor(textColor).font('Helvetica-Bold');
-  const textW = doc.widthOfString(label);
-  doc.text(label, x + (w - Math.min(textW, w - 8)) / 2, y + (h - 8) / 2, { width: w - 8, align: 'center', lineBreak: false });
-  doc.restore();
-  doc.y = savedY;
-  doc.font('Helvetica').fontSize(9).fillColor(C.dark);
-}
-
-function diagramArrow(x1, y1, x2, y2) {
-  doc.save();
-  doc.moveTo(x1, y1).lineTo(x2, y2).strokeColor(C.mid).lineWidth(1).stroke();
-  // arrowhead
-  const angle = Math.atan2(y2 - y1, x2 - x1);
-  const aLen = 6;
-  doc.moveTo(x2, y2)
-    .lineTo(x2 - aLen * Math.cos(angle - 0.4), y2 - aLen * Math.sin(angle - 0.4))
-    .lineTo(x2 - aLen * Math.cos(angle + 0.4), y2 - aLen * Math.sin(angle + 0.4))
-    .fill(C.mid);
-  doc.restore();
-}
-
-function diagramCaption(text) {
-  doc.moveDown(0.3);
-  doc.fontSize(7.5).fillColor(C.mid).font('Helvetica-Oblique')
-    .text(text, ML, doc.y, { width: CW, align: 'center' });
-  doc.moveDown(0.5);
-  doc.font('Helvetica').fontSize(9).fillColor(C.dark);
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// COVER PAGE
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderCover() {
-  // Background
-  doc.rect(0, 0, PW, PH).fill(C.black);
-  
-  // Top accent line
-  doc.rect(0, 0, PW, 4).fill(C.accent);
-  
-  // Logo area
-  doc.fontSize(42).fillColor(C.white).font('Helvetica-Bold')
-    .text('STAYVEO', ML + 20, 180, { width: CW - 40 });
-  
-  doc.moveDown(0.3);
-  doc.fontSize(12).fillColor(C.accent).font('Helvetica-Bold')
-    .text('PREMIUM STUDENT LIVING SUITE', ML + 20, doc.y, { width: CW - 40, characterSpacing: 4 });
-  
-  // Divider
-  doc.moveDown(2);
-  doc.moveTo(ML + 20, doc.y).lineTo(ML + 180, doc.y).strokeColor(C.accent).lineWidth(2).stroke();
-  
-  doc.moveDown(2);
-  doc.fontSize(22).fillColor(C.white).font('Helvetica-Bold')
-    .text('System & Security', ML + 20, doc.y, { width: CW - 40 });
-  doc.fontSize(22).fillColor(C.accent).font('Helvetica-Bold')
-    .text('Architecture', ML + 20, doc.y, { width: CW - 40 });
-  
-  doc.moveDown(1.5);
-  doc.fontSize(10).fillColor(C.faint).font('Helvetica')
-    .text('Production Architecture, Security Model,\nScalability Strategy & Migration Plan', ML + 20, doc.y, { width: CW - 40, lineGap: 4 });
-  
-  // Info table at bottom
-  const infoY = PH - 220;
-  const infoData = [
-    ['VERSION', `v${VERSION}`],
-    ['DATE', DATE],
-    ['STATUS', 'Active Development'],
-    ['MATURITY', 'Pre-Production'],
-    ['CLASSIFICATION', 'Confidential — Internal'],
-    ['PREPARED FOR', 'StayVeo Engineering'],
-  ];
-  
-  infoData.forEach(([label, value], i) => {
-    const y = infoY + i * 22;
-    doc.fontSize(7).fillColor(C.light).font('Helvetica-Bold')
-      .text(label, ML + 20, y, { width: 120 });
-    doc.fontSize(8.5).fillColor(C.white).font('Helvetica')
-      .text(value, ML + 140, y, { width: CW - 160 });
-  });
-  
-  // Bottom accent bar
-  doc.rect(0, PH - 4, PW, 4).fill(C.accent);
-  
-  pageNum = 0;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// TABLE OF CONTENTS
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderTOCPlaceholder() {
-  newPage();
-  doc.fontSize(20).fillColor(C.dark).font('Helvetica-Bold')
-    .text('Table of Contents', ML, MT + 10, { width: CW });
-  doc.moveDown(1.5);
-  doc.fontSize(8.5).fillColor(C.mid).font('Helvetica')
-    .text('Page numbers are populated after final rendering.', ML, doc.y, { width: CW });
-  doc.moveDown(1);
-  
-  const sections = [
-    'Executive Summary', 'Architecture Overview', 'Users & Actors', 'DNS Architecture',
-    'CDN / Edge Architecture', 'WAF & DDoS Protection', 'Load Balancing',
-    'Backend Infrastructure', 'Authentication Architecture', 'OTP Architecture',
-    'Session / JWT / Cookie Architecture', 'Authorization Architecture', 'RBAC Model',
-    'Ownership Model', 'API Security', 'Redis / Caching', 'Database Architecture',
-    'Database Security / RLS', 'Storage Security', 'Secrets Management',
-    'Logging & Monitoring', 'Backup & Disaster Recovery', 'Threat Model',
-    'Security Testing', 'Scaling Strategy', 'Cost Strategy',
-    'Current Architecture', 'Target Architecture', 'Migration Plan',
-    'Architecture Decision Records', 'Failure Scenarios',
-    'Security Gap Register', 'Maturity Assessment', 'Request Lifecycle',
-    'Security Principles', 'Glossary', 'Final Recommendations',
-  ];
-  
-  sections.forEach((title, i) => {
+function table(columns, rows, options = {}) {
+  const widths = columns.map((c) => c.width);
+  const full = widths.reduce((a, b) => a + b, 0);
+  const drawHeader = () => {
+    ensure(23);
     const y = doc.y;
-    doc.fontSize(9).fillColor(C.accent).font('Helvetica-Bold')
-      .text(`${i + 1}.`, ML, y, { width: 24 });
-    doc.fontSize(9).fillColor(C.dark).font('Helvetica')
-      .text(title, ML + 24, y, { width: CW - 40 });
-    doc.y = y + 16;
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// EXECUTIVE SUMMARY
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderExecutiveSummary() {
-  newPage();
-  doc.fontSize(18).fillColor(C.dark).font('Helvetica-Bold')
-    .text('Executive Summary', ML, MT + 10, { width: CW });
-  doc.moveDown(1);
-  
-  para('StayVeo is a student-living marketplace connecting students with PG (Paying Guest) accommodation, tiffin (meal subscription) services, and roommate matching. The platform serves two primary user classes — Students and Providers — each with dedicated onboarding flows, dashboards, and feature sets.');
-  
-  para('This document captures the current technical architecture as implemented in the repository, identifies security gaps, and provides a phased roadmap toward production readiness. Every component is classified by its implementation status: CURRENT, PARTIAL, PLANNED, RECOMMENDED, or NOT IMPLEMENTED.');
-  
-  subsection('Technology Stack (Current)');
-  
-  const stackCols = [
-    { label: 'LAYER', width: 100 },
-    { label: 'TECHNOLOGY', width: 180 },
-    { label: 'STATUS', width: 90 },
-    { label: 'NOTES', width: CW - 370 },
-  ];
-  tableHeader(stackCols);
-  [
-    ['Frontend', 'React 19 + Vite 8', 'CURRENT', 'SPA with react-router-dom v7'],
-    ['Styling', 'Vanilla CSS', 'CURRENT', 'No framework (Tailwind, etc.)'],
-    ['Backend', 'Fastify 5 + TypeScript', 'CURRENT', 'Node.js 20, tsx for dev'],
-    ['ORM', 'Prisma 6', 'CURRENT', 'Typed schema, migrations'],
-    ['Database', 'PostgreSQL (Supabase)', 'CURRENT', 'Supabase-hosted Postgres'],
-    ['Auth (Frontend)', 'Supabase Auth SDK', 'PARTIAL', 'Session used for display name only'],
-    ['Auth (Backend)', 'Header-based (x-user-id)', 'CURRENT', 'No JWT/session verification'],
-    ['Storage', 'Supabase Storage', 'CURRENT', 'pg-images, KYC buckets'],
-    ['Validation', 'Zod', 'CURRENT', 'Schema validation on some routes'],
-    ['Payment', 'Mock Provider', 'CURRENT', 'Razorpay adapter stubbed'],
-    ['Maps', 'Mapbox GL', 'CURRENT', 'PG/tiffin location display'],
-    ['Notifications', 'In-app only', 'PARTIAL', 'In-memory queue, no push'],
-  ].forEach((row, i) => tableRow(stackCols, row, i % 2 === 1));
-  
-  doc.moveDown(1);
-  callout('danger', 'CRITICAL FINDING: The backend has NO authentication middleware. All API routes trust the x-user-id and x-provider-phone headers sent by the frontend without cryptographic verification. Any client can impersonate any user by sending arbitrary headers. This is the #1 security gap requiring immediate remediation before production deployment.');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 1 — ARCHITECTURE OVERVIEW
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderSection1() {
-  newPage();
-  sectionTitle(1, 'Architecture Overview');
-  
-  para('StayVeo follows a classic Single-Page Application (SPA) architecture with a separate API backend. The frontend is a React application served by Vite during development (and as static files in production). The backend is a Fastify API server that communicates with a Supabase-hosted PostgreSQL database via Prisma ORM.');
-  
-  subsection('System Purpose');
-  para('StayVeo is a marketplace for student accommodation and food services in Indian cities. It enables:');
-  bullet('Students to discover, compare, and book PG accommodations');
-  bullet('Students to subscribe to tiffin (meal) services from verified providers');
-  bullet('Students to find compatible roommates via a matching/swiping system');
-  bullet('Providers to onboard their PG or tiffin businesses and manage day-to-day operations');
-  bullet('Providers to track deliveries, customers, payments, and menu planning');
-  
-  subsection('High-Level Architecture Diagram');
-  
-  // Draw the architecture diagram
-  const dY = doc.y + 10;
-  const boxW = 110; const boxH = 28;
-  
-  // Client layer
-  diagramBox(ML + 70, dY, boxW + 30, boxH, 'React SPA (Vite)', C.indigo);
-  diagramBox(ML + 230, dY, boxW + 30, boxH, 'Supabase Auth SDK', C.purple);
-  
-  // Arrow down
-  diagramArrow(ML + 135, dY + boxH, ML + 135, dY + boxH + 20);
-  diagramArrow(ML + 295, dY + boxH, ML + 295, dY + boxH + 20);
-  
-  // API layer  
-  const apiY = dY + boxH + 20;
-  diagramBox(ML + 30, apiY, boxW + 100, boxH, 'Fastify API Server (Port 3000)', C.accent);
-  diagramBox(ML + 230, apiY, boxW + 30, boxH, 'Supabase Platform', C.teal);
-  
-  // Arrow down
-  diagramArrow(ML + 130, apiY + boxH, ML + 130, apiY + boxH + 20);
-  diagramArrow(ML + 295, apiY + boxH, ML + 295, apiY + boxH + 20);
-  
-  // Data layer
-  const dbY = apiY + boxH + 20;
-  diagramBox(ML + 30, dbY, boxW, boxH, 'Prisma ORM', C.dark);
-  diagramBox(ML + 170, dbY, boxW + 30, boxH, 'PostgreSQL (Supabase)', C.green);
-  diagramBox(ML + 330, dbY, boxW, boxH, 'Supabase Storage', C.teal);
-  
-  // Arrows
-  diagramArrow(ML + 30 + boxW, dbY + boxH/2, ML + 170, dbY + boxH/2);
-  
-  doc.y = dbY + boxH + 10;
-  diagramCaption('Figure 1.1 — Current StayVeo Architecture (Simplified)');
-  
-  subsection('Layer Classification');
-  
-  const layerCols = [
-    { label: 'LAYER', width: 120 },
-    { label: 'DESCRIPTION', width: 220 },
-    { label: 'STATUS', width: CW - 340 },
-  ];
-  tableHeader(layerCols);
-  [
-    ['Client Layer', 'React SPA served by Vite dev server / static files', 'CURRENT'],
-    ['Edge Layer', 'CDN, WAF, DDoS protection', 'NOT IMPLEMENTED'],
-    ['Network Layer', 'DNS, TLS, load balancing', 'NOT IMPLEMENTED'],
-    ['Application Layer', 'Fastify API with controllers/services/repos', 'CURRENT'],
-    ['Authentication Layer', 'Header-based identity (no verification)', 'PARTIAL — INSECURE'],
-    ['Authorization Layer', 'Provider ownership checks in service code', 'PARTIAL'],
-    ['Data Layer', 'PostgreSQL via Prisma + Supabase direct queries', 'CURRENT'],
-    ['Storage Layer', 'Supabase Storage (pg-images, KYC documents)', 'CURRENT'],
-    ['Caching Layer', 'No cache layer exists', 'NOT IMPLEMENTED'],
-    ['Observability Layer', 'Pino logger only (stdout)', 'PARTIAL'],
-    ['Security Layer', 'CORS, Zod validation, error handler', 'PARTIAL'],
-  ].forEach((row, i) => tableRow(layerCols, row, i % 2 === 1));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTION 2 — USERS & ACTORS
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderSection2() {
-  newPage();
-  sectionTitle(2, 'Users & Actors');
-  
-  para('The system currently supports two user roles defined in the UserRole enum: STUDENT and PROVIDER. There is no ADMIN role in the database schema.');
-  
-  const actorCols = [
-    { label: 'ACTOR', width: 80 },
-    { label: 'RESPONSIBILITIES', width: 160 },
-    { label: 'TRUST LEVEL', width: 80 },
-    { label: 'SECURITY RISKS', width: CW - 320 },
-  ];
-  tableHeader(actorCols);
-  [
-    ['Student', 'Browse PGs, reserve tiffins, manage profile, save listings', 'Low (untrusted client)', 'IDOR on user resources, header spoofing'],
-    ['Provider (PG)', 'Onboard PG, manage rooms, handle bookings, view earnings', 'Low (untrusted client)', 'Cross-provider data access, listing manipulation'],
-    ['Provider (Tiffin)', 'Onboard kitchen, manage menu/deliveries/customers', 'Low (untrusted client)', 'Kitchen ID manipulation, menu tampering'],
-    ['Backend API', 'Business logic, data validation, database access', 'High (server-side)', 'Service-role key exposure, injection'],
-    ['Supabase', 'PostgreSQL hosting, auth, storage, real-time', 'High (managed service)', 'Credential leak, RLS bypass'],
-    ['SMS/OTP Provider', 'OTP delivery for phone verification', 'Medium (external)', 'OTP brute force, SMS interception'],
-  ].forEach((row, i) => tableRow(actorCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  callout('warn', 'There is no Admin role or admin panel in the current codebase. All administrative operations (e.g., kitchen verification) must be performed directly in the database. An ADMIN role is RECOMMENDED for production.');
-
-  subsection('Identity Chain (Current)');
-  para('The current identity resolution differs between Student and Provider flows:');
-  subsubsection('Student Flow');
-  bullet('Frontend calls /api/v1/auth/send-otp with phone number');
-  bullet('Backend creates a User row (role=STUDENT) if not exists — OTP is DUMMY (accepts any value)');
-  bullet('Frontend stores userId in localStorage and sends it as x-user-id header');
-  bullet('Backend trusts x-user-id header without verification');
-  
-  subsubsection('Provider (Tiffin) Flow');
-  bullet('Provider onboarding uses x-provider-phone header to identify the provider');
-  bullet('Backend resolves ProviderProfile from phone, verifies otpVerified flag');
-  bullet('Kitchen is resolved via ownerId FK from ProviderProfile.id');
-  bullet('Ownership check: only the kitchen\'s owner profile can modify it');
-  
-  callout('danger', 'Both flows trust client-supplied headers. A malicious client can send any phone number or user ID to access arbitrary accounts.');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 3-7: Infrastructure (DNS, CDN, WAF, LB, Backend)
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderInfrastructureSections() {
-  // SECTION 3 — DNS
-  newPage();
-  sectionTitle(3, 'DNS Architecture');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. The application currently runs on localhost (dev) and Microsoft Dev Tunnels / Cloudflare Quick Tunnels for mobile testing. No production DNS is configured.');
-  
-  para('The current frontend .env shows API endpoints on Dev Tunnels (zjdd8mbz-3000.inc1.devtunnels.ms). Supabase provides its own domain (zjlwzophfxnbpezgdddp.supabase.co) for database and storage.');
-  
-  subsection('Recommended Production DNS');
-  bullet('stayveo.com — Frontend (React SPA static files)');
-  bullet('api.stayveo.com — Backend API (Fastify)');
-  bullet('admin.stayveo.com — Admin panel (when built)');
-  bullet('All domains must use HTTPS with valid TLS certificates');
-  bullet('DNS should be behind a CDN (Cloudflare) to hide origin IP addresses');
-  
-  subsection('Why DNS Matters');
-  para('DNS is the entry point for every request. Exposing the origin server\'s IP address directly allows attackers to bypass CDN/WAF protections. Using a CDN like Cloudflare as a reverse proxy hides the origin and provides DDoS protection at the DNS level.');
-  
-  // SECTION 4 — CDN
-  newPage();
-  sectionTitle(4, 'CDN / Edge Architecture');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. Static assets are served directly from the Vite dev server or the origin. No CDN is configured.');
-  
-  subsection('What Should Be Cached');
-  bullet('Static JS/CSS bundles (immutable, cache indefinitely with content hashes)');
-  bullet('Public images (PG photos, kitchen logos) — long cache TTL');
-  bullet('Fonts, icons, public assets');
-  
-  subsection('What Should NOT Be Cached');
-  bullet('API responses containing user-specific data');
-  bullet('Authentication endpoints');
-  bullet('Provider dashboard data');
-  bullet('Payment/reservation endpoints');
-  
-  subsection('Recommended Architecture');
-  para('Use Cloudflare Free plan or Vercel/Netlify edge for the React SPA. API server should be proxied through a CDN with cache disabled for /api/* routes.');
-  
-  // SECTION 5 — WAF
-  newPage();
-  sectionTitle(5, 'WAF & DDoS Protection');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. No WAF, rate limiting, or DDoS protection is currently in place.');
-  
-  para('A Web Application Firewall (WAF) inspects incoming HTTP requests and blocks malicious payloads before they reach the application server.');
-  
-  subsection('Why WAF Should Be Before Application Servers');
-  para('Placing the WAF before the backend means attacks are blocked at the edge, reducing load on application servers and preventing exploit payloads from ever reaching business logic.');
-  
-  subsection('Recommended Timeline');
-  para('WAF is NOT needed immediately during development. It should be introduced when the application receives real user traffic (Stage 2 scaling). Cloudflare Free provides basic WAF rules and DDoS protection at no cost.');
-  
-  // SECTION 6 — Load Balancing
-  newPage();
-  sectionTitle(6, 'Load Balancing');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. The application runs as a single Fastify process. There is no load balancer, no horizontal scaling.');
-  
-  para('A load balancer distributes incoming API requests across multiple backend server instances, providing redundancy and increased throughput.');
-  
-  subsection('Component Clarification');
-  const lbCols = [
-    { label: 'COMPONENT', width: 100 },
-    { label: 'PURPOSE', width: 200 },
-    { label: 'EXAMPLE', width: CW - 300 },
-  ];
-  tableHeader(lbCols);
-  [
-    ['CDN', 'Cache static assets at edge locations globally', 'Cloudflare, CloudFront'],
-    ['WAF', 'Filter malicious HTTP requests', 'Cloudflare WAF, AWS WAF'],
-    ['Reverse Proxy', 'Terminate TLS, route to backend', 'Nginx, Caddy'],
-    ['Load Balancer', 'Distribute traffic across multiple servers', 'Nginx, HAProxy, ALB'],
-    ['API Gateway', 'Rate limit, auth, routing, throttle', 'Kong, AWS API Gateway'],
-  ].forEach((row, i) => tableRow(lbCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  para('Load balancing is NOT needed until StayVeo has enough traffic to exceed a single server\'s capacity. For early production, a single server with PM2 cluster mode is sufficient.');
-  
-  // SECTION 7 — Backend Infrastructure
-  newPage();
-  sectionTitle(7, 'Backend Infrastructure');
-  
-  para('The backend is a Fastify 5 API server written in TypeScript, using tsx for development hot-reloading. It follows a layered architecture pattern.');
-  
-  subsection('Architecture Pattern');
-  para('Routes → Controller → Service → Repository → Prisma → PostgreSQL');
-  
-  bullet('Routes (tiffin.routes.ts, auth.routes.ts, etc.): Register HTTP endpoints with Fastify');
-  bullet('Controllers: Extract request data, call services, format responses');
-  bullet('Services: Business logic, validation, orchestration');
-  bullet('Repositories: Database access via Prisma (used in some modules)');
-  bullet('Prisma: ORM generating typed queries from schema.prisma');
-  
-  subsection('Registered API Modules');
-  const modCols = [
-    { label: 'MODULE', width: 120 },
-    { label: 'PREFIX', width: 150 },
-    { label: 'FILES', width: CW - 270 },
-  ];
-  tableHeader(modCols);
-  [
-    ['Auth', '/api/v1/auth', 'auth.routes/controller/service/repo'],
-    ['Users', '/api/v1/users', 'user.routes/controller/service'],
-    ['Student', '/api/v1/student', 'student.routes/controller/service'],
-    ['Provider', '/api/v1/provider', 'provider.routes/controller/service'],
-    ['PG', '/api/v1/pg', 'pg.routes/controller/service'],
-    ['Tiffin', '/api/v1/tiffin', 'tiffin.routes + 6 service files'],
-    ['Tiffin Provider', '/api/v1/tiffin/provider/*', 'tiffin-provider.controller/service'],
-    ['Bookings', '/api/v1/bookings', 'booking.routes/controller/service'],
-    ['Payments', '/api/v1/payments', 'payment.routes/controller/service'],
-    ['Notifications', '/api/v1/notifications', '17 files (full pipeline)'],
-    ['Room Listings', '/api/provider/room-listings', 'room-listing.routes'],
-    ['Media', '/api/v1/media', 'media.routes'],
-    ['Saved', '/api/v1/saved', 'saved.routes'],
-    ['Colleges', '/api/v1/colleges', 'college.routes'],
-  ].forEach((row, i) => tableRow(modCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  callout('warn', 'No authentication middleware exists. Every route is publicly accessible to any client that provides the expected headers. The global error handler catches Prisma and Zod errors but does not enforce auth.');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 8-10: Authentication, OTP, Session/JWT
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderAuthSections() {
-  newPage();
-  sectionTitle(8, 'Authentication Architecture');
-  
-  callout('danger', 'CRITICAL: The backend currently has NO authentication middleware. There is no JWT verification, no session validation, no Supabase Auth token checking on the server side. All routes are open.');
-  
-  subsection('Current Authentication State');
-  para('The application has TWO separate authentication paths that do NOT share a verified identity:');
-  
-  subsubsection('Path 1: Student Auth (Dummy OTP)');
-  bullet('POST /api/v1/auth/send-otp — accepts any phone, creates User if not exists');
-  bullet('POST /api/v1/auth/verify-otp — accepts ANY OTP value (dummy mode)');
-  bullet('No JWT/session is created — userId stored in localStorage');
-  bullet('Subsequent requests send x-user-id header — backend trusts it blindly');
-  
-  subsubsection('Path 2: Provider Auth (Supabase Auth)');
-  bullet('Frontend uses Supabase Auth SDK for phone OTP (real Supabase OTP)');
-  bullet('Provider profile created via /api/provider/verify-otp');
-  bullet('Subsequent requests send x-provider-phone header — backend trusts it');
-  bullet('The resolveOwner() function verifies otpVerified flag on ProviderProfile');
-  
-  callout('info', 'Authentication = "Who are you?" — The current system accepts identity claims without cryptographic proof.');
-  
-  subsection('Recommended Architecture');
-  para('Use Supabase Auth as the single source of identity for ALL users. The backend should verify the Supabase JWT access token on every request.');
-  
-  numberedItem(1, 'Frontend authenticates via Supabase Auth (phone OTP)');
-  numberedItem(2, 'Supabase issues JWT access token + refresh token');
-  numberedItem(3, 'Frontend includes JWT in Authorization: Bearer <token> header');
-  numberedItem(4, 'Backend middleware verifies JWT signature using Supabase JWT secret');
-  numberedItem(5, 'Verified auth.uid() maps to public.users via user_id');
-  numberedItem(6, 'Backend passes verified user to route handlers');
-  
-  // SECTION 9 — OTP
-  newPage();
-  sectionTitle(9, 'OTP Architecture');
-  
-  subsection('Current OTP State');
-  
-  callout('danger', 'Student OTP is DUMMY — the auth.service.ts comment reads: "OTP is DUMMY — any value is accepted". No rate limiting, no CAPTCHA, no attempt tracking exists for this endpoint.');
-  
-  subsubsection('Student OTP Flow (Current — INSECURE)');
-  bullet('Frontend sends phone number to /api/v1/auth/send-otp');
-  bullet('Backend creates User row — no OTP is actually generated or sent');
-  bullet('Frontend sends any value to /api/v1/auth/verify-otp');
-  bullet('Backend returns user data regardless of OTP value');
-  
-  subsubsection('Provider OTP Flow (Current — Supabase)');
-  bullet('Provider login uses supabase.auth.signInWithOtp({ phone })');
-  bullet('Supabase generates and delivers the OTP (via configured SMS provider)');
-  bullet('Supabase verifies the OTP and creates a session');
-  bullet('Backend separately verifies otpVerified on ProviderProfile after a /verify-otp call');
-  
-  subsection('Recommended OTP Architecture');
-  bullet('Use Supabase Auth phone OTP for ALL users (students + providers)');
-  bullet('Configure Send SMS Hook to route OTP delivery through 2Factor.in or similar Indian SMS provider');
-  bullet('Rate limit: max 3 OTP requests per phone per 5 minutes');
-  bullet('Attempt limit: max 5 verification attempts per OTP');
-  bullet('OTP expiry: 5 minutes (Supabase default)');
-  bullet('CAPTCHA: Enable hCaptcha on Supabase Auth for abuse prevention');
-  
-  // SECTION 10 — Session/JWT/Cookie
-  newPage();
-  sectionTitle(10, 'Session / JWT / Cookie Architecture');
-  
-  subsection('Current Session State');
-  
-  callout('warn', 'There are no server-side sessions, no JWTs verified by the backend, no secure cookies. User identity is stored in localStorage (userId, phone) and sent as custom headers.');
-  
-  subsubsection('What Currently Exists');
-  bullet('Supabase Auth client stores tokens in localStorage (sb-<ref>-auth-token)');
-  bullet('Student userId stored in localStorage — sent as x-user-id header');
-  bullet('Provider phone stored in localStorage — sent as x-provider-phone header');
-  bullet('No HttpOnly cookies are set by the backend');
-  bullet('No CSRF protection is needed (no cookies = no CSRF)');
-  bullet('No token rotation or refresh mechanism on the backend');
-  
-  subsection('Key Conceptual Clarifications');
-  
-  const conceptCols = [
-    { label: 'CONCEPT', width: 100 },
-    { label: 'DEFINITION', width: 200 },
-    { label: 'STAYVEO STATUS', width: CW - 300 },
-  ];
-  tableHeader(conceptCols);
-  [
-    ['JWT', 'Signed token containing user claims', 'Used by Supabase client only, not verified by backend'],
-    ['Session', 'Server-side record linking user to state', 'NOT IMPLEMENTED'],
-    ['Cookie', 'Browser-stored value sent with every request', 'NOT USED by backend'],
-    ['Redis Session', 'Session stored in Redis for scaling', 'NOT IMPLEMENTED'],
-    ['Access Token', 'Short-lived JWT for API authorization', 'Supabase issues these, backend ignores them'],
-    ['Refresh Token', 'Long-lived token to renew access tokens', 'Handled by Supabase client only'],
-  ].forEach((row, i) => tableRow(conceptCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  callout('tip', 'RECOMMENDED: After implementing Supabase JWT verification on the backend, configure the frontend to send the Supabase access token as Authorization: Bearer <token>. This eliminates the need for custom x-user-id headers and provides cryptographic identity verification.');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 11-14: Authorization, RBAC, Ownership, API Security
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderAuthzSections() {
-  newPage();
-  sectionTitle(11, 'Authorization Architecture');
-  
-  para('Authorization determines what an authenticated user is allowed to do. It is separate from authentication (which determines who the user is).');
-  
-  subsection('Current Authorization State');
-  callout('warn', 'Authorization is PARTIAL. Some provider routes enforce ownership checks, but there is no middleware-level authorization. Student routes have minimal or no authorization checks.');
-  
-  subsubsection('Provider Ownership (Tiffin — Implemented)');
-  para('The tiffin-provider.service.ts contains a resolveOwner() function that:');
-  bullet('Resolves ProviderProfile from x-provider-phone header');
-  bullet('Verifies otpVerified flag on the profile');
-  bullet('Optionally matches x-user-id against profile.userId');
-  bullet('Resolves TiffinKitchen via ownerId FK');
-  bullet('All operations are scoped to the resolved kitchen');
-  
-  subsubsection('Student Routes (Minimal Authorization)');
-  para('Most student routes accept x-user-id without verification. There is no check that the userId corresponds to an authenticated session.');
-  
-  // SECTION 12 — RBAC
-  newPage();
-  sectionTitle(12, 'RBAC Model');
-  
-  subsection('Current Roles');
-  para('The database defines two roles via the UserRole enum: STUDENT and PROVIDER. There is no ADMIN role.');
-  
-  const rbacCols = [
-    { label: 'ROLE', width: 80 },
-    { label: 'CAN ACCESS', width: 200 },
-    { label: 'ENFORCED?', width: CW - 280 },
-  ];
-  tableHeader(rbacCols);
-  [
-    ['STUDENT', 'PG listings, tiffin discovery, reservations, own profile', 'NO — any user ID is accepted'],
-    ['PROVIDER', 'Own kitchen/PG, own customers, own deliveries, own reports', 'PARTIAL — phone-based ownership'],
-    ['ADMIN', 'Kitchen verification, user management, system config', 'NOT IMPLEMENTED — role does not exist'],
-  ].forEach((row, i) => tableRow(rbacCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  subsection('Recommended RBAC Model');
-  para('For StayVeo\'s current complexity, a simple Role + Resource Ownership model is more appropriate than full ABAC (Attribute-Based Access Control). Recommended roles:');
-  bullet('STUDENT — access own resources, public listings');
-  bullet('PROVIDER — access own kitchen/PG resources');
-  bullet('ADMIN — access all resources, verification, user management');
-  
-  // SECTION 13 — Ownership
-  newPage();
-  sectionTitle(13, 'Ownership Model');
-  
-  subsection('Actual Database Ownership Chain');
-  para('Based on the Prisma schema, the ownership hierarchy is:');
-  
-  // Draw ownership diagram
-  const oy = doc.y + 5;
-  diagramBox(ML + 150, oy, 160, 24, 'User (users table)', C.dark);
-  diagramArrow(ML + 190, oy + 24, ML + 120, oy + 50);
-  diagramArrow(ML + 270, oy + 24, ML + 340, oy + 50);
-  
-  diagramBox(ML + 40, oy + 50, 160, 24, 'StudentProfile', C.indigo);
-  diagramBox(ML + 260, oy + 50, 160, 24, 'ProviderProfile', C.accent);
-  
-  diagramArrow(ML + 340, oy + 74, ML + 340, oy + 100);
-  diagramBox(ML + 260, oy + 100, 160, 24, 'TiffinKitchen (ownerId)', C.green);
-  
-  diagramArrow(ML + 340, oy + 124, ML + 300, oy + 150);
-  diagramArrow(ML + 340, oy + 124, ML + 380, oy + 150);
-  
-  diagramBox(ML + 210, oy + 150, 120, 24, 'WeeklyMenus', C.teal);
-  diagramBox(ML + 350, oy + 150, 120, 24, 'Subscriptions', C.teal);
-  
-  doc.y = oy + 190;
-  diagramCaption('Figure 13.1 — Resource Ownership Chain');
-  
-  subsection('IDOR Prevention');
-  para('Insecure Direct Object Reference (IDOR) occurs when a user can access another user\'s resources by changing an ID in the API request. The current tiffin provider routes prevent IDOR by resolving the kitchen from the authenticated provider\'s profile rather than accepting a kitchen ID from the request body. This is a correct pattern.');
-  
-  callout('success', 'The tiffin-provider.service.ts resolveOwner() pattern is a good ownership enforcement example. However, it relies on trusting the x-provider-phone header. Once backend authentication is added, this pattern should resolve ownership from the verified JWT identity.');
-  
-  // SECTION 14 — API Security
-  newPage();
-  sectionTitle(14, 'API Security');
-  
-  subsection('Current API Security Controls');
-  
-  const apiSecCols = [
-    { label: 'CONTROL', width: 120 },
-    { label: 'STATUS', width: 90 },
-    { label: 'DETAILS', width: CW - 210 },
-  ];
-  tableHeader(apiSecCols);
-  [
-    ['HTTPS/TLS', 'PARTIAL', 'Dev tunnels use HTTPS; no production TLS configured'],
-    ['Authentication', 'NOT IMPLEMENTED', 'No JWT/session verification middleware'],
-    ['Authorization', 'PARTIAL', 'Provider ownership in service layer only'],
-    ['Input Validation', 'PARTIAL', 'Zod on some routes; manual in tiffin-provider'],
-    ['Rate Limiting', 'NOT IMPLEMENTED', 'No rate limiting on any endpoint'],
-    ['Request Size', 'NOT CONFIGURED', 'Fastify defaults apply (~1MB)'],
-    ['CORS', 'CURRENT', 'Configured in app.ts; allows localhost + tunnels'],
-    ['CSRF', 'N/A', 'No cookies used, so no CSRF risk currently'],
-    ['Security Headers', 'NOT IMPLEMENTED', 'No helmet/security headers plugin'],
-    ['SQL Injection', 'LOW RISK', 'Prisma parameterizes queries; raw SQL in tiffin.repository.ts uses Prisma.sql tagged templates'],
-    ['Error Handling', 'CURRENT', 'Global handler masks Prisma/Zod errors'],
-    ['API Versioning', 'CURRENT', '/api/v1 prefix on all routes'],
-    ['Idempotency', 'PARTIAL', 'TiffinPayment has idempotencyKey field'],
-    ['Logging', 'PARTIAL', 'Pino logger (stdout only, no persistent storage)'],
-  ].forEach((row, i) => tableRow(apiSecCols, row, i % 2 === 1));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 15-19: Redis, Database, RLS, Storage, Secrets
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderDataSections() {
-  newPage();
-  sectionTitle(15, 'Redis / Caching Architecture');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. No Redis, Memcached, or any caching layer exists in the current codebase.');
-  
-  para('Redis is an in-memory data store commonly used for caching, session storage, rate limiting, and queuing. StayVeo does not currently need Redis — it should be introduced when specific bottlenecks are identified.');
-  
-  subsection('When StayVeo Should Add Redis');
-  bullet('Rate Limiting — when auth endpoints need brute-force protection (Phase 9)');
-  bullet('Session Store — if server-side sessions are preferred over JWT (Optional)');
-  bullet('Cache — public tiffin listings, kitchen menus (when query latency becomes a bottleneck)');
-  bullet('Queue — replace in-memory notification queue with durable queue (when reliability matters)');
-  
-  subsection('What to Cache vs. Not Cache');
-  const cacheCols = [
-    { label: 'DATA', width: 160 },
-    { label: 'CACHE?', width: 60 },
-    { label: 'REASON', width: CW - 220 },
-  ];
-  tableHeader(cacheCols);
-  [
-    ['Public tiffin listing results', 'YES', 'Read-heavy, changes infrequently (TTL: 5 min)'],
-    ['Today\'s menu for a kitchen', 'YES', 'Read-heavy, changes daily (TTL: 1 hour)'],
-    ['College list', 'YES', 'Static data (TTL: 24 hours)'],
-    ['User profile data', 'NO', 'Private, user-specific, changes frequently'],
-    ['Subscription details', 'NO', 'Sensitive, must be real-time accurate'],
-    ['Payment status', 'NO', 'Financial data, must be real-time'],
-    ['Delivery logs', 'NO', 'Frequently mutated, provider-specific'],
-  ].forEach((row, i) => tableRow(cacheCols, row, i % 2 === 1));
-  
-  // SECTION 16 — Database Architecture
-  newPage();
-  sectionTitle(16, 'Database Architecture');
-  
-  para('StayVeo uses PostgreSQL hosted on Supabase. The database schema is managed via Prisma ORM with 1312 lines of schema definition across 40+ models.');
-  
-  subsection('Database Connection Architecture');
-  bullet('DATABASE_URL: Supabase session-mode pooler (port 5432)');
-  bullet('DIRECT_URL: Same connection (used for Prisma migrations)');
-  bullet('Prisma Client: Singleton pattern with globalThis caching for hot-reload');
-  bullet('Connection logging: Error-level only');
-  
-  subsection('Major Entity Groups');
-  const entityCols = [
-    { label: 'GROUP', width: 100 },
-    { label: 'TABLES', width: 200 },
-    { label: 'RELATIONS', width: CW - 300 },
-  ];
-  tableHeader(entityCols);
-  [
-    ['Identity', 'users, student_profiles', 'User → StudentProfile (1:1)'],
-    ['Provider Core', 'provider_profiles, providers, provider_services', 'User → ProviderProfile (1:1)'],
-    ['PG Module', 'pg_details, room_listings, pg_rooms', 'ProviderProfile → RoomListing (1:N)'],
-    ['Tiffin Kitchen', 'tiffin_kitchens, kitchen_images, meal_timings', 'ProviderProfile → Kitchen (1:1)'],
-    ['Tiffin Menu', 'weekly_menus, menu_histories', 'Kitchen → Menu (1:N), unique day+meal'],
-    ['Tiffin Plans', 'subscription_plans', 'Kitchen → Plans (1:N)'],
-    ['Tiffin Subscriptions', 'customer_subscriptions, subscription_days', 'Kitchen → Subscription (1:N)'],
-    ['Tiffin Meals', 'meal_logs, meal_deliveries', 'Subscription → MealLog (1:N)'],
-    ['Payments', 'tiffin_payments, payments, receipts', 'Subscription → Payment (1:N)'],
-    ['Notifications', 'notifications, templates, preferences', 'User → Notification (1:N)'],
-    ['Bookings', 'bookings, visit_requests', 'User → Booking (1:N)'],
-    ['Discovery', 'tiffin_services, colleges, saved_listings', 'Legacy + current listings'],
-  ].forEach((row, i) => tableRow(entityCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  subsection('Key Database Patterns');
-  bullet('UUID primary keys: All tables use gen_random_uuid() for IDs');
-  bullet('Soft deletes: TiffinKitchen has deletedAt; most tables use hard deletes');
-  bullet('Timestamps: created_at (auto), updated_at (Prisma @updatedAt)');
-  bullet('Unique constraints: User.phone_number, Kitchen.ownerId, Menu day+meal+kitchen');
-  bullet('Cascading deletes: Kitchen → Menus, Plans, Subscriptions');
-  bullet('Indexed columns: Kitchen lat/lng, subscription status+endDate, meal logs');
-  
-  // SECTION 17 — RLS
-  newPage();
-  sectionTitle(17, 'Database Security / RLS');
-  
-  callout('warn', 'STATUS: NOT VERIFIED. Row Level Security (RLS) status could not be confirmed without direct database access. The Prisma schema does not define RLS policies (Prisma does not manage RLS). The Supabase migrations directory exists but was not inspected for RLS SQL.');
-  
-  subsection('Current State');
-  para('The backend connects to PostgreSQL using a connection string that likely uses the postgres role (service role), which bypasses RLS. All access control is therefore enforced at the application layer (Fastify services), not at the database layer.');
-  
-  subsection('RLS Design Considerations');
-  callout('tip', 'IMPORTANT: RLS policies should be designed AFTER authentication identity mapping is finalized. RLS policies depend on auth.uid() matching a user record, which requires the backend to connect with a per-user role or use Supabase\'s auth context — not the service role.');
-  
-  para('If the backend uses the service role (which bypasses RLS), then RLS only protects against direct Supabase client access from the frontend. Since the frontend uses the Supabase anon key for storage and real-time, RLS on storage.objects is critical.');
-  
-  // SECTION 18 — Storage
-  newPage();
-  sectionTitle(18, 'Storage Security');
-  
-  subsection('Current Storage Implementation');
-  
-  statusBadge('Supabase Storage', 'CURRENT');
-  statusBadge('File upload from frontend', 'CURRENT');
-  statusBadge('Signed upload URLs for KYC', 'CURRENT');
-  statusBadge('Storage RLS policies', 'NOT VERIFIED');
-  
-  doc.moveDown(0.5);
-  
-  subsubsection('Storage Buckets');
-  bullet('pg-images — PG listing photos (public bucket, uploaded from frontend)');
-  bullet('provider-kyc-documents — KYC documents (private bucket, signed upload URLs from backend)');
-  
-  subsubsection('Upload Flows');
-  para('PG Images: Frontend → Supabase Storage (direct upload with anon key)');
-  para('KYC Documents: Frontend → Backend (request signed URL) → Backend → Supabase (create signed URL) → Frontend → Supabase Storage (upload with signed URL)');
-  
-  callout('success', 'The KYC upload flow correctly uses server-side signed URLs, preventing unauthorized uploads. The path includes the provider ID, ensuring document ownership. File type validation accepts only JPEG, PNG, and PDF.');
-  
-  callout('warn', 'PG image uploads go directly from the frontend to Supabase Storage using the anon key. Without proper RLS policies on the pg-images bucket, any authenticated user could potentially upload to or overwrite files in other providers\' directories.');
-  
-  // SECTION 19 — Secrets
-  newPage();
-  sectionTitle(19, 'Secrets Management');
-  
-  callout('danger', 'Secrets are stored in plaintext .env files in the repository. The .env files are present in the working directory (and may be committed to git). This is acceptable for local development but MUST NOT be deployed to production.');
-  
-  subsection('Secret Classification');
-  const secretCols = [
-    { label: 'SECRET', width: 160 },
-    { label: 'EXPOSURE', width: 100 },
-    { label: 'RISK', width: CW - 260 },
-  ];
-  tableHeader(secretCols);
-  [
-    ['DATABASE_URL (password)', 'Backend .env', 'Full database access if leaked'],
-    ['SUPABASE_SERVICE_ROLE_KEY', 'Backend .env', 'Bypasses all RLS, full admin access'],
-    ['VITE_SUPABASE_ANON_KEY', 'Frontend .env + bundle', 'Safe — designed for public use with RLS'],
-    ['VITE_MAPBOX_TOKEN', 'Frontend .env + bundle', 'Low — maps API with domain restrictions'],
-    ['CLOUDINARY_API_SECRET', 'Backend .env', 'Can manipulate/delete all Cloudinary assets'],
-  ].forEach((row, i) => tableRow(secretCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  para('NOTE: Actual secret values are intentionally excluded from this document. The above table describes the types and risks, not the values.');
-  
-  subsection('Recommendations');
-  bullet('Move production secrets to environment variables set by the hosting platform');
-  bullet('Never commit .env files to git (verify .gitignore)');
-  bullet('Rotate DATABASE_URL password periodically');
-  bullet('Rotate SUPABASE_SERVICE_ROLE_KEY if it has been exposed');
-  bullet('Use separate Supabase projects for development and production');
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 20-22: Monitoring, Backup, Threat Model
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderOpsSections() {
-  newPage();
-  sectionTitle(20, 'Logging & Monitoring');
-  
-  callout('info', 'STATUS: PARTIAL. Fastify uses Pino logger with pino-pretty for development. No persistent log storage, no metrics collection, no alerting, no tracing.');
-  
-  subsection('Current Logging');
-  bullet('Pino logger configured in buildApp() — debug level in dev, info in production');
-  bullet('pino-pretty for colorized console output in development');
-  bullet('Unhandled errors logged via console.error in global error handler');
-  bullet('No structured log shipping to external service');
-  
-  subsection('Recommended Observability Stack');
-  const obsCols = [
-    { label: 'COMPONENT', width: 100 },
-    { label: 'TOOL', width: 140 },
-    { label: 'WHEN NEEDED', width: CW - 240 },
-  ];
-  tableHeader(obsCols);
-  [
-    ['Logs', 'Pino → Loki / CloudWatch / Datadog', 'Before production launch'],
-    ['Metrics', 'Prometheus + Grafana / Datadog', 'When traffic grows beyond dev testing'],
-    ['Tracing', 'OpenTelemetry → Jaeger / Tempo', 'When debugging cross-service latency'],
-    ['Uptime', 'UptimeRobot / Better Stack', 'Immediately at production launch'],
-    ['Alerts', 'PagerDuty / Slack webhooks', 'When 24/7 reliability is required'],
-    ['Error Tracking', 'Sentry', 'Before production launch (frontend + backend)'],
-  ].forEach((row, i) => tableRow(obsCols, row, i % 2 === 1));
-  
-  // SECTION 21 — Backup
-  newPage();
-  sectionTitle(21, 'Backup & Disaster Recovery');
-  
-  callout('info', 'STATUS: RELYING ON SUPABASE. Supabase provides automatic daily backups on paid plans and point-in-time recovery (PITR) on Pro+ plans. No custom backup strategy is configured.');
-  
-  subsection('Supabase Backup Capabilities');
-  bullet('Free plan: No automatic backups');
-  bullet('Pro plan ($25/mo): Daily backups, 7-day retention');
-  bullet('Pro plan with PITR add-on: Point-in-time recovery');
-  
-  subsection('Recovery Objectives');
-  const drCols = [
-    { label: 'METRIC', width: 120 },
-    { label: 'DEFINITION', width: 200 },
-    { label: 'TARGET', width: CW - 320 },
-  ];
-  tableHeader(drCols);
-  [
-    ['RPO', 'Maximum acceptable data loss', '24 hours (daily backup) → 1 hour (PITR)'],
-    ['RTO', 'Maximum acceptable downtime', '4 hours (manual restore) → 1 hour (automated)'],
-  ].forEach((row, i) => tableRow(drCols, row, i % 2 === 1));
-  
-  // SECTION 22 — Threat Model
-  newPage();
-  sectionTitle(22, 'Threat Model');
-  
-  para('This threat model is based on analysis of the actual StayVeo codebase and identifies realistic attack vectors relevant to this application.');
-  
-  const threatCols = [
-    { label: 'THREAT', width: 95 },
-    { label: 'VECTOR', width: 115 },
-    { label: 'IMPACT', width: 55 },
-    { label: 'LIKELIHOOD', width: 55 },
-    { label: 'MITIGATION', width: CW - 320 },
-  ];
-  tableHeader(threatCols);
-  [
-    ['Account Takeover', 'Send arbitrary x-user-id header', 'CRITICAL', 'HIGH', 'Add JWT verification middleware'],
-    ['Provider Impersonation', 'Send arbitrary x-provider-phone', 'CRITICAL', 'HIGH', 'Verify Supabase JWT, map to provider'],
-    ['OTP Brute Force', 'Dummy OTP accepts any value', 'HIGH', 'HIGH', 'Replace with Supabase Auth OTP'],
-    ['IDOR on Student', 'Change userId in saved/bookings', 'HIGH', 'HIGH', 'Verify userId from JWT, not header'],
-    ['Data Leakage', 'Error messages expose DB codes', 'MEDIUM', 'MEDIUM', 'Sanitize error responses (partially done)'],
-    ['SQL Injection', 'Malformed input in raw queries', 'HIGH', 'LOW', 'Prisma.sql templates (currently used correctly)'],
-    ['XSS', 'Inject script in menu items/names', 'MEDIUM', 'LOW', 'React auto-escapes; validate input length'],
-    ['DDoS', 'Flood API endpoints', 'HIGH', 'MEDIUM', 'Add rate limiting + CDN/WAF'],
-    ['Malicious Upload', 'Upload non-image to KYC bucket', 'MEDIUM', 'LOW', 'Backend validates content type (current)'],
-    ['Secret Leakage', '.env committed to git', 'CRITICAL', 'MEDIUM', 'Verify .gitignore, rotate exposed keys'],
-    ['Session Theft', 'Steal localStorage userId', 'HIGH', 'MEDIUM', 'Replace with HttpOnly cookie or JWT'],
-    ['Privilege Escalation', 'Student accesses provider routes', 'HIGH', 'HIGH', 'Add role-based middleware'],
-  ].forEach((row, i) => tableRow(threatCols, row, i % 2 === 1));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 23-26: Testing, Scaling, Cost, Current Architecture
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderStrategySections() {
-  newPage();
-  sectionTitle(23, 'Security Testing Strategy');
-  
-  callout('info', 'STATUS: NOT IMPLEMENTED. The repository contains no test files — no unit tests, integration tests, or security tests.');
-  
-  subsection('Recommended Testing Checklist');
-  numberedItem(1, 'Authentication Tests: Verify JWT validation rejects invalid/expired tokens');
-  numberedItem(2, 'Authorization Tests: Verify student cannot access provider routes and vice versa');
-  numberedItem(3, 'IDOR Tests: Verify user A cannot access user B\'s resources by changing IDs');
-  numberedItem(4, 'Ownership Tests: Verify provider A cannot modify provider B\'s kitchen');
-  numberedItem(5, 'Input Validation: Test boundary values, special characters, oversized payloads');
-  numberedItem(6, 'Rate Limiting: Verify OTP endpoint blocks after threshold');
-  numberedItem(7, 'RLS Tests: Verify database policies enforce row-level access');
-  numberedItem(8, 'Dependency Scanning: npm audit, Snyk, or GitHub Dependabot');
-  numberedItem(9, 'Secret Scanning: Ensure no secrets in committed code (git-secrets, truffleHog)');
-  
-  // SECTION 24 — Scaling
-  newPage();
-  sectionTitle(24, 'Scaling Strategy');
-  
-  subsection('Stage 1: Development / MVP (Current)');
-  bullet('Single Fastify server process');
-  bullet('Supabase Free/Pro plan');
-  bullet('Dev Tunnels for mobile testing');
-  bullet('No CDN, no WAF, no load balancer — NOT NEEDED YET');
-  
-  subsection('Stage 2: Early Production (0–1,000 users)');
-  bullet('Deploy to Railway / Render / Fly.io (single container)');
-  bullet('Add CDN for frontend (Vercel / Cloudflare Pages)');
-  bullet('Add Sentry for error tracking');
-  bullet('Add UptimeRobot for health monitoring');
-  bullet('Supabase Pro plan for daily backups');
-  
-  subsection('Stage 3: Growing (1,000–10,000 users)');
-  bullet('PM2 cluster mode (multi-process on single machine)');
-  bullet('Add Redis for rate limiting and caching');
-  bullet('Add Cloudflare WAF (free tier)');
-  bullet('Consider read replica for heavy query patterns');
-  
-  subsection('Stage 4: Scale (10,000+ users)');
-  bullet('Kubernetes / ECS with multiple API replicas behind ALB');
-  bullet('Managed Redis (Upstash / ElastiCache)');
-  bullet('Full observability stack (Datadog / Grafana Cloud)');
-  bullet('Database connection pooling tuning');
-  bullet('Consider dedicated PostgreSQL if Supabase limits are hit');
-  
-  callout('tip', 'PRINCIPLE: Scale only when a measured bottleneck justifies the complexity and cost. Do not pre-optimize for traffic you do not have.');
-  
-  // SECTION 25 — Cost
-  newPage();
-  sectionTitle(25, 'Cost Strategy');
-  
-  const costCols = [
-    { label: 'COMPONENT', width: 100 },
-    { label: 'DEV (FREE)', width: 90 },
-    { label: 'SMALL PROD', width: 100 },
-    { label: 'GROWING', width: CW - 290 },
-  ];
-  tableHeader(costCols);
-  [
-    ['Frontend Host', 'Vite dev', 'Vercel Free', 'Vercel Pro ($20/mo)'],
-    ['Backend Host', 'localhost', 'Railway ($5/mo)', 'Railway/Fly ($20-50/mo)'],
-    ['Database', 'Supabase Free', 'Supabase Pro ($25/mo)', 'Supabase Pro + PITR'],
-    ['CDN', 'None', 'Cloudflare Free', 'Cloudflare Free'],
-    ['WAF', 'None', 'Cloudflare Free', 'Cloudflare Pro ($20/mo)'],
-    ['Redis', 'None', 'None', 'Upstash Free → $10/mo'],
-    ['Monitoring', 'None', 'UptimeRobot Free', 'Sentry + Better Stack'],
-    ['SMS/OTP', 'None (dummy)', '2Factor.in (~₹0.15/SMS)', '2Factor.in'],
-    ['Storage', 'Supabase Free', 'Supabase Pro (incl.)', 'Supabase Pro'],
-    ['TOTAL', '$0', '~$55/mo', '~$120-200/mo'],
-  ].forEach((row, i) => tableRow(costCols, row, i % 2 === 1));
-  
-  // SECTION 26 — Current Architecture
-  newPage();
-  sectionTitle(26, 'Current Architecture Snapshot');
-  
-  para('This section captures the exact state of the StayVeo architecture as of the repository inspection date. All classifications are based on codebase analysis.');
-  
-  subsection('Current Security Posture');
-  
-  const postureCols = [
-    { label: 'AREA', width: 160 },
-    { label: 'STATUS', width: 100 },
-    { label: 'DETAIL', width: CW - 260 },
-  ];
-  tableHeader(postureCols);
-  [
-    ['Backend Auth Middleware', 'NOT IMPLEMENTED', 'No JWT/session checking on any route'],
-    ['OTP Verification', 'DUMMY (Student)', 'Accepts any OTP value for students'],
-    ['OTP Verification', 'SUPABASE (Provider)', 'Real Supabase OTP for providers'],
-    ['Provider Ownership', 'IMPLEMENTED', 'resolveOwner() in tiffin-provider.service.ts'],
-    ['Student Authorization', 'NOT IMPLEMENTED', 'x-user-id header trusted blindly'],
-    ['CORS', 'IMPLEMENTED', 'Configured with allowed origins'],
-    ['Input Validation', 'PARTIAL', 'Zod on auth; manual in tiffin service'],
-    ['Error Handling', 'IMPLEMENTED', 'Global handler with Prisma/Zod/generic'],
-    ['Rate Limiting', 'NOT IMPLEMENTED', 'No rate limiting anywhere'],
-    ['Security Headers', 'NOT IMPLEMENTED', 'No helmet or custom headers'],
-    ['RLS Policies', 'NOT VERIFIED', 'Cannot confirm without DB access'],
-    ['Storage Security', 'PARTIAL', 'KYC: signed URLs; PG images: anon upload'],
-    ['Logging', 'PARTIAL', 'Pino stdout only, no persistence'],
-    ['Tests', 'NOT IMPLEMENTED', 'No test files in repository'],
-  ].forEach((row, i) => tableRow(postureCols, row, i % 2 === 1));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// SECTIONS 27-28: Target Architecture, Migration Plan
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderTargetAndMigration() {
-  newPage();
-  sectionTitle(27, 'Target Architecture');
-  
-  para('The target architecture adds security, observability, and scalability layers while preserving the existing application structure.');
-  
-  subsection('Target Architecture Diagram');
-  
-  const ty = doc.y + 5;
-  const bw = 100; const bh = 22;
-  
-  // Layer 1: Users
-  diagramBox(ML + 150, ty, 160, bh, 'Users (Browser / Mobile)', C.dark);
-  diagramArrow(ML + 230, ty + bh, ML + 230, ty + bh + 15);
-  
-  // Layer 2: DNS/CDN
-  diagramBox(ML + 100, ty + bh + 15, 260, bh, 'DNS → Cloudflare CDN + WAF', C.indigo);
-  diagramArrow(ML + 230, ty + 2*bh + 15, ML + 230, ty + 2*bh + 30);
-  
-  // Layer 3: LB
-  diagramBox(ML + 130, ty + 2*bh + 30, 200, bh, 'Load Balancer (future)', C.purple);
-  diagramArrow(ML + 230, ty + 3*bh + 30, ML + 230, ty + 3*bh + 45);
-  
-  // Layer 4: API
-  diagramBox(ML + 80, ty + 3*bh + 45, 300, bh, 'Fastify API × N + Auth Middleware', C.accent);
-  diagramArrow(ML + 150, ty + 4*bh + 45, ML + 100, ty + 4*bh + 60);
-  diagramArrow(ML + 230, ty + 4*bh + 45, ML + 230, ty + 4*bh + 60);
-  diagramArrow(ML + 310, ty + 4*bh + 45, ML + 360, ty + 4*bh + 60);
-  
-  // Layer 5: Services
-  diagramBox(ML + 20, ty + 4*bh + 60, bw, bh, 'Redis Cache', C.red);
-  diagramBox(ML + 140, ty + 4*bh + 60, 140, bh, 'PostgreSQL + RLS', C.green);
-  diagramBox(ML + 300, ty + 4*bh + 60, 120, bh, 'Supabase Storage', C.teal);
-  
-  // Monitoring
-  diagramBox(ML + 340, ty + bh + 15, bw, bh, 'Monitoring', C.amber);
-  
-  doc.y = ty + 5*bh + 95;
-  diagramCaption('Figure 27.1 — Target Production Architecture');
-  
-  // SECTION 28 — Migration Plan
-  newPage();
-  sectionTitle(28, 'Migration Plan');
-  
-  para('This phased roadmap prioritizes security-critical dependencies first. Each phase can be completed independently, with clear rollback strategies.');
-  
-  const phases = [
-    { phase: 0, name: 'Architecture & Inventory', tasks: 'Document current state, classify all routes, map identity chain', deps: 'None', priority: 'IMMEDIATE' },
-    { phase: 1, name: 'Identity / Authentication', tasks: 'Unify auth on Supabase Auth for all users, replace dummy OTP, add JWT middleware', deps: 'None', priority: 'CRITICAL' },
-    { phase: 2, name: 'Backend Auth Middleware', tasks: 'Create Fastify auth plugin that verifies Supabase JWT on all /api/v1/* routes', deps: 'Phase 1', priority: 'CRITICAL' },
-    { phase: 3, name: 'Authorization / RBAC', tasks: 'Add role-based route guards, separate student/provider/admin access', deps: 'Phase 2', priority: 'HIGH' },
-    { phase: 4, name: 'Ownership Enforcement', tasks: 'Refactor resolveOwner() to use JWT identity, apply to all resource routes', deps: 'Phase 2-3', priority: 'HIGH' },
-    { phase: 5, name: 'Database Constraints', tasks: 'Audit FK constraints, add missing indexes, enforce data integrity', deps: 'None', priority: 'MEDIUM' },
-    { phase: 6, name: 'RLS Policies', tasks: 'Design and apply RLS for Supabase client access (storage, real-time)', deps: 'Phase 1', priority: 'MEDIUM' },
-    { phase: 7, name: 'Storage Security', tasks: 'Add RLS to pg-images bucket, validate uploads server-side', deps: 'Phase 6', priority: 'MEDIUM' },
-    { phase: 8, name: 'API Security Hardening', tasks: 'Add helmet, request size limits, security headers, CORS tightening', deps: 'Phase 2', priority: 'HIGH' },
-    { phase: 9, name: 'Rate Limiting + Redis', tasks: 'Add Redis, rate limit auth/OTP endpoints, add brute-force protection', deps: 'Phase 2', priority: 'HIGH' },
-    { phase: 10, name: 'Observability', tasks: 'Add Sentry, structured logging, uptime monitoring, basic alerts', deps: 'None', priority: 'MEDIUM' },
-    { phase: 11, name: 'CDN / WAF', tasks: 'Deploy frontend to Vercel/CF Pages, proxy API through Cloudflare', deps: 'None', priority: 'LOW' },
-    { phase: 12, name: 'Load Balancing', tasks: 'Add reverse proxy, PM2 cluster, then container orchestration', deps: 'Phase 8-10', priority: 'LOW' },
-    { phase: 13, name: 'Backup / DR', tasks: 'Upgrade to Supabase Pro, enable PITR, test restore procedure', deps: 'None', priority: 'MEDIUM' },
-  ];
-  
-  const phaseCols = [
-    { label: '#', width: 28 },
-    { label: 'PHASE', width: 120 },
-    { label: 'KEY TASKS', width: 230 },
-    { label: 'PRIORITY', width: CW - 378 },
-  ];
-  tableHeader(phaseCols);
-  phases.forEach((p, i) => tableRow(phaseCols, [p.phase, p.name, p.tasks, p.priority], i % 2 === 1));
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// ADRs, Failure Scenarios, Gap Register, Maturity, etc.
-// ═══════════════════════════════════════════════════════════════════════
-
-function renderRemainingSections() {
-  // ADRs
-  newPage();
-  sectionTitle(29, 'Architecture Decision Records');
-  
-  const adrs = [
-    { id: 'ADR-001', title: 'Supabase as Backend Infrastructure', context: 'Need managed PostgreSQL, auth, and storage without ops overhead', decision: 'Use Supabase for database, auth, and file storage', reason: 'Reduces operational complexity; free tier supports MVP; includes auth and storage', alternatives: 'Self-hosted PostgreSQL, Firebase, PlanetScale', consequence: 'Vendor lock-in to Supabase; must work within Supabase connection limits' },
-    { id: 'ADR-002', title: 'Phone OTP as Primary Authentication', context: 'Indian student users prefer phone-based auth over email/password', decision: 'Use phone OTP for all user authentication', reason: 'Higher conversion rate; matches Indian market expectations (Paytm, GPay pattern)', alternatives: 'Email/password, Google OAuth, Magic links', consequence: 'SMS cost per login; requires reliable SMS delivery in India' },
-    { id: 'ADR-003', title: 'Separate Authentication from Authorization', context: 'System has multiple user types with different permissions', decision: 'Auth middleware verifies identity; separate checks enforce permissions', reason: 'Clean separation of concerns; easier to test and audit', alternatives: 'Combined auth+authz middleware', consequence: 'Requires two middleware layers; but simpler individual logic' },
-    { id: 'ADR-004', title: 'Server-Side Ownership Enforcement', context: 'Providers must not access other providers\' kitchens', decision: 'Resolve owner from verified identity, not from request parameters', reason: 'Prevents IDOR attacks; client cannot manipulate ownership', alternatives: 'Trust client-provided kitchenId (insecure)', consequence: 'Extra database lookup per request (acceptable cost)' },
-    { id: 'ADR-005', title: 'RLS After Identity Mapping', context: 'RLS policies depend on knowing which database user maps to which auth identity', decision: 'Implement RLS only after auth middleware maps JWT to user rows', reason: 'RLS without proper auth context is ineffective or creates false security', alternatives: 'Implement RLS immediately without backend auth', consequence: 'RLS is delayed; but when implemented, it works correctly' },
-    { id: 'ADR-006', title: 'Redis Optional Initially', context: 'Early-stage product with low traffic', decision: 'Do not add Redis until a specific bottleneck is identified', reason: 'Avoids premature complexity and cost; in-memory solutions work for early traffic', alternatives: 'Add Redis from day 1', consequence: 'Rate limiting relies on in-process counters initially (acceptable for dev)' },
-  ];
-  
-  adrs.forEach(adr => {
-    ensureSpace(100);
-    subsubsection(`${adr.id}: ${adr.title}`);
-    bullet(`Context: ${adr.context}`);
-    bullet(`Decision: ${adr.decision}`);
-    bullet(`Reason: ${adr.reason}`);
-    bullet(`Alternatives: ${adr.alternatives}`);
-    bullet(`Consequence: ${adr.consequence}`);
-    doc.moveDown(0.3);
-  });
-  
-  // Failure Scenarios
-  newPage();
-  sectionTitle(30, 'Failure Scenarios');
-  
-  const failCols = [
-    { label: 'FAILURE', width: 100 },
-    { label: 'DETECTION', width: 100 },
-    { label: 'USER IMPACT', width: 120 },
-    { label: 'RECOVERY', width: CW - 320 },
-  ];
-  tableHeader(failCols);
-  [
-    ['API Server Crash', 'Health check fails', 'All API calls fail, app unusable', 'Auto-restart (PM2/container), no data loss'],
-    ['Database Down', 'Prisma connection error', 'All reads/writes fail', 'Supabase auto-recovery; check status page'],
-    ['Redis Down', 'Connection timeout', 'Cache miss → DB fallback; rate limits reset', 'Degrade gracefully; restart Redis'],
-    ['SMS Provider Down', 'OTP delivery fails', 'New users cannot sign up', 'Fallback SMS provider; notify support'],
-    ['Supabase Storage Down', 'Upload/download 5xx', 'Images not loading, KYC upload fails', 'Retry with backoff; Supabase status page'],
-    ['CDN Down', 'Static assets 5xx', 'Frontend not loading', 'DNS failover to origin; rare with Cloudflare'],
-    ['10x Traffic Spike', 'CPU/memory spike', 'Slow responses, timeouts', 'Scale out API servers; enable rate limiting'],
-    ['Auth Service Down', 'JWT verification fails', 'Cannot authenticate new requests', 'Cache valid tokens briefly; fallback mode'],
-  ].forEach((row, i) => tableRow(failCols, row, i % 2 === 1));
-  
-  // Security Gap Register
-  newPage();
-  sectionTitle(31, 'Security Gap Register');
-  
-  const gapCols = [
-    { label: 'ID', width: 35 },
-    { label: 'GAP', width: 140 },
-    { label: 'SEVERITY', width: 60 },
-    { label: 'CURRENT STATE', width: 100 },
-    { label: 'FIX', width: CW - 335 },
-  ];
-  tableHeader(gapCols);
-  [
-    ['SG-01', 'No backend auth middleware', 'CRITICAL', 'x-user-id header trusted', 'Add JWT verification middleware'],
-    ['SG-02', 'Dummy OTP (accepts any)', 'CRITICAL', 'auth.service.ts dummy mode', 'Use Supabase Auth OTP'],
-    ['SG-03', 'No rate limiting', 'HIGH', 'All endpoints unlimited', 'Add rate limiter (Redis-backed)'],
-    ['SG-04', 'No security headers', 'HIGH', 'No helmet/HSTS/CSP', 'Add @fastify/helmet plugin'],
-    ['SG-05', 'Secrets in .env files', 'HIGH', 'Plaintext in working dir', 'Use platform env vars'],
-    ['SG-06', 'No automated tests', 'HIGH', 'Zero test coverage', 'Add auth/authz/IDOR tests'],
-    ['SG-07', 'No ADMIN role', 'MEDIUM', 'Admin ops require DB access', 'Add ADMIN role and panel'],
-    ['SG-08', 'PG image upload auth', 'MEDIUM', 'Anon key upload to Storage', 'Add RLS or signed URLs'],
-    ['SG-09', 'No log persistence', 'MEDIUM', 'Pino to stdout only', 'Ship logs to external service'],
-    ['SG-10', 'No backup verification', 'MEDIUM', 'Rely on Supabase free tier', 'Upgrade + test restore'],
-  ].forEach((row, i) => tableRow(gapCols, row, i % 2 === 1));
-  
-  // Maturity Assessment
-  newPage();
-  sectionTitle(32, 'Architecture Maturity Assessment');
-  
-  para('Scoring: 0 = Not implemented  |  1 = Basic  |  2 = Partial  |  3 = Good  |  4 = Production Ready  |  5 = Mature');
-  doc.moveDown(0.3);
-  
-  const matCols = [
-    { label: 'AREA', width: 140 },
-    { label: 'SCORE', width: 50 },
-    { label: 'JUSTIFICATION', width: CW - 190 },
-  ];
-  tableHeader(matCols);
-  [
-    ['Authentication', '1/5', 'Supabase Auth exists for providers but not enforced server-side; dummy OTP for students'],
-    ['Authorization', '2/5', 'Provider ownership checks exist; no role-based middleware; student routes unprotected'],
-    ['API Security', '2/5', 'CORS configured; Zod validation on some routes; no rate limits or security headers'],
-    ['Database Security', '2/5', 'Prisma prevents SQL injection; FK constraints and unique indexes; RLS unverified'],
-    ['RLS', '0/5', 'Not verified; likely not enforced due to service-role connection'],
-    ['Storage Security', '2/5', 'KYC uses signed URLs (good); PG images use anon upload (needs RLS)'],
-    ['Secrets Management', '1/5', 'Secrets in .env files; no rotation; no vault'],
-    ['Observability', '1/5', 'Pino logger to stdout; no metrics, tracing, or alerting'],
-    ['Scalability', '1/5', 'Single server; no clustering, caching, or load balancing'],
-    ['Backup / DR', '1/5', 'Relying on Supabase free tier; no tested restore procedure'],
-    ['Testing', '0/5', 'No test files in repository'],
-    ['Error Handling', '3/5', 'Comprehensive global handler for Prisma/Zod/generic errors'],
-  ].forEach((row, i) => tableRow(matCols, row, i % 2 === 1));
-  
-  doc.moveDown(0.5);
-  callout('info', 'OVERALL MATURITY: Pre-Production (Early Development). The application architecture is sound for an MVP, but significant security hardening is required before handling real user data and payments.');
-  
-  // Request Lifecycle
-  newPage();
-  sectionTitle(33, 'Request Lifecycle Examples');
-  
-  subsection('Example 1: Student Opens Tiffin Listing');
-  numberedItem(1, 'Browser navigates to /tiffin → React SPA renders TiffinListing component');
-  numberedItem(2, 'Component calls API: GET /api/v1/tiffin (via frontend client.js)');
-  numberedItem(3, 'Request hits Fastify server on port 3000');
-  numberedItem(4, 'tiffin.routes.ts → tiffinController.list');
-  numberedItem(5, 'tiffin.service.ts → tiffinRepository.findFiltered()');
-  numberedItem(6, 'Repository executes raw SQL CTE via prisma.$queryRaw (with Haversine distance)');
-  numberedItem(7, 'PostgreSQL returns rows via Supabase session pooler');
-  numberedItem(8, 'Response: { success: true, data: { items: [...], pagination: {...} } }');
-  numberedItem(9, 'React renders listing cards');
-  
-  doc.moveDown(0.5);
-  subsection('Example 2: Provider Publishes Menu');
-  numberedItem(1, 'Provider clicks "Publish Menu" on /provider/tiffin/menu');
-  numberedItem(2, 'Frontend calls PUT /api/v1/tiffin/provider/menu with merged menu data');
-  numberedItem(3, 'x-provider-phone and x-user-id headers are sent');
-  numberedItem(4, 'tiffin-provider.controller.ts → saveMenu()');
-  numberedItem(5, 'resolveOwner() resolves ProviderProfile from phone, verifies otpVerified');
-  numberedItem(6, 'Kitchen resolved via ownerId FK (ownership enforced)');
-  numberedItem(7, 'Existing menus pre-fetched in single findMany query');
-  numberedItem(8, 'Transaction: create history records + upsert menu items atomically');
-  numberedItem(9, 'Response returns updated menu; frontend shows success toast');
-  
-  // Security Principles
-  newPage();
-  sectionTitle(34, 'Security Principles');
-  
-  const principles = [
-    ['Zero Trust', 'Never trust any request by default. Verify every identity, every time, regardless of network location.'],
-    ['Least Privilege', 'Grant only the minimum permissions needed. Students should not access provider routes; providers should not access other providers\' data.'],
-    ['Defense in Depth', 'Layer multiple security controls (WAF → auth → authorization → validation → RLS). If one fails, others still protect.'],
-    ['Secure by Default', 'New routes should require authentication by default. An opt-out (public) annotation should be explicit.'],
-    ['Fail Closed', 'If authentication fails, deny access. Never fall through to an open/public state.'],
-    ['Never Trust Client Input', 'All input from the browser is untrusted. Validate, sanitize, and escape everything server-side.'],
-    ['Never Trust Client Identity', 'The client cannot prove who it is via custom headers alone. Use cryptographic tokens (JWT) verified server-side.'],
-    ['Secrets Never in Frontend', 'Service-role keys, database passwords, and API secrets must never appear in client-side JavaScript bundles.'],
-    ['Minimize Attack Surface', 'Remove unnecessary routes, disable debug endpoints in production, hide server version headers.'],
-  ];
-  
-  principles.forEach(([title, desc]) => {
-    ensureSpace(40);
-    doc.fontSize(9).fillColor(C.accent).font('Helvetica-Bold')
-      .text(`▸ ${title}`, ML, doc.y, { width: CW });
-    doc.fontSize(8.5).fillColor(C.dark).font('Helvetica')
-      .text(`  ${desc}`, ML + 8, doc.y, { width: CW - 16, lineGap: 2 });
-    doc.moveDown(0.4);
-  });
-  
-  // Glossary
-  newPage();
-  sectionTitle(35, 'Glossary');
-  
-  const glossary = [
-    ['DNS', 'Domain Name System — translates domain names (stayveo.com) to IP addresses'],
-    ['CDN', 'Content Delivery Network — caches static files at edge locations worldwide for faster delivery'],
-    ['WAF', 'Web Application Firewall — inspects and filters malicious HTTP traffic before it reaches the server'],
-    ['DDoS', 'Distributed Denial of Service — attack that overwhelms a server with massive traffic'],
-    ['Load Balancer', 'Distributes incoming requests across multiple server instances'],
-    ['Reverse Proxy', 'Server that forwards requests to backend servers; hides origin details'],
-    ['API Gateway', 'Entry point that handles routing, rate limiting, and authentication for APIs'],
-    ['Authentication', 'Verifying WHO a user is (identity proof)'],
-    ['Authorization', 'Verifying WHAT a user is allowed to do (permission check)'],
-    ['RBAC', 'Role-Based Access Control — permissions assigned to roles (STUDENT, PROVIDER)'],
-    ['JWT', 'JSON Web Token — digitally signed token containing user identity claims'],
-    ['RLS', 'Row Level Security — PostgreSQL feature that restricts which rows a user can access'],
-    ['ORM', 'Object-Relational Mapping — library that maps database tables to code objects (Prisma)'],
-    ['Prisma', 'Type-safe ORM for Node.js/TypeScript that generates database queries from a schema'],
-    ['TLS', 'Transport Layer Security — encrypts data in transit (HTTPS)'],
-    ['CORS', 'Cross-Origin Resource Sharing — controls which domains can call the API'],
-    ['CSRF', 'Cross-Site Request Forgery — attack that tricks a browser into making unwanted requests'],
-    ['XSS', 'Cross-Site Scripting — attack that injects malicious scripts into web pages'],
-    ['IDOR', 'Insecure Direct Object Reference — accessing resources by manipulating IDs in requests'],
-    ['Rate Limiting', 'Restricting how many requests a client can make in a time period'],
-    ['SAST', 'Static Application Security Testing — analyzing source code for vulnerabilities'],
-    ['DAST', 'Dynamic Application Security Testing — testing a running application for vulnerabilities'],
-    ['RPO', 'Recovery Point Objective — maximum acceptable data loss in a disaster'],
-    ['RTO', 'Recovery Time Objective — maximum acceptable downtime after a failure'],
-  ];
-  
-  const glossCols = [
-    { label: 'TERM', width: 100 },
-    { label: 'DEFINITION', width: CW - 100 },
-  ];
-  tableHeader(glossCols);
-  glossary.forEach((row, i) => tableRow(glossCols, row, i % 2 === 1));
-  
-  // Final Recommendations
-  newPage();
-  sectionTitle(36, 'Final Recommendations');
-  
-  doc.fontSize(14).fillColor(C.dark).font('Helvetica-Bold')
-    .text('What Should We Implement First?', ML, doc.y, { width: CW });
-  doc.moveDown(0.8);
-  
-  para('The following roadmap is ordered by security criticality and dependency chain. Each item builds on the previous one.', { size: 9.5 });
-  doc.moveDown(0.3);
-  
-  const recItems = [
-    { priority: '🔴 P0', item: 'Replace dummy OTP with Supabase Auth phone OTP for all users', reason: 'Anyone can impersonate any user currently' },
-    { priority: '🔴 P0', item: 'Add JWT verification middleware to all API routes', reason: 'No authentication exists on the backend' },
-    { priority: '🟠 P1', item: 'Add role-based route guards (STUDENT vs PROVIDER)', reason: 'Students can call provider endpoints and vice versa' },
-    { priority: '🟠 P1', item: 'Refactor identity resolution to use JWT (not headers)', reason: 'Headers can be spoofed by any HTTP client' },
-    { priority: '🟠 P1', item: 'Add rate limiting on auth/OTP endpoints', reason: 'Prevent brute-force and abuse' },
-    { priority: '🟡 P2', item: 'Add security headers (helmet) and tighten CORS', reason: 'Basic web security hygiene' },
-    { priority: '🟡 P2', item: 'Add Sentry error tracking (frontend + backend)', reason: 'Production visibility into errors' },
-    { priority: '🟡 P2', item: 'Write auth/authorization integration tests', reason: 'Prevent security regression' },
-    { priority: '🟢 P3', item: 'Add RLS to Supabase Storage buckets', reason: 'Protect uploaded files from unauthorized access' },
-    { priority: '🟢 P3', item: 'Deploy to production hosting with proper domain', reason: 'Eliminate dev tunnel dependency' },
-    { priority: '🔵 P4', item: 'Add Redis for caching and rate limiting', reason: 'Performance and security at scale' },
-    { priority: '🔵 P4', item: 'Set up CDN + WAF (Cloudflare)', reason: 'Edge protection and performance' },
-  ];
-  
-  recItems.forEach((item, i) => {
-    ensureSpace(36);
+    doc.rect(ML, y, full, 20).fill(C.navy);
+    let x = ML;
+    columns.forEach((c, i) => {
+      doc.font('Helvetica-Bold').fontSize(options.headerSize || 7).fillColor(C.paper)
+        .text(c.label, x + 4, y + 5, { width: widths[i] - 8 });
+      x += widths[i];
+    });
+    doc.y = y + 20;
+  };
+  drawHeader();
+  rows.forEach((row, ri) => {
+    const vals = row.map((v) => String(v ?? '—'));
+    const hs = vals.map((v, i) => doc.font('Helvetica').fontSize(options.size || 7.1)
+      .heightOfString(v, { width: widths[i] - 8, lineGap: 1.3 }));
+    const rh = Math.max(options.minRowHeight || 17, Math.max(...hs) + 8);
+    if (doc.y + rh > PH - MB - 18) { addPage(); drawHeader(); }
     const y = doc.y;
-    const bgColor = i % 2 === 0 ? C.white : C.slate100;
-    doc.rect(ML, y, CW, 28).fill(bgColor);
-    doc.fontSize(8).fillColor(C.dark).font('Helvetica-Bold')
-      .text(`${item.priority}  ${item.item}`, ML + 8, y + 4, { width: CW - 16 });
-    doc.fontSize(7.5).fillColor(C.mid).font('Helvetica')
-      .text(item.reason, ML + 40, y + 16, { width: CW - 48 });
-    doc.y = y + 30;
+    if (ri % 2) doc.rect(ML, y, full, rh).fill(C.wash);
+    doc.rect(ML, y, full, rh).strokeColor(C.line).lineWidth(.45).stroke();
+    let x = ML;
+    vals.forEach((v, i) => {
+      doc.font(i === 0 && options.firstBold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(options.size || 7.1).fillColor(C.ink)
+        .text(v, x + 4, y + 4, { width: widths[i] - 8, lineGap: 1.3 });
+      x += widths[i];
+    });
+    doc.y = y + rh;
   });
-  
-  doc.moveDown(1);
-  callout('danger', 'DO NOT deploy to production with real user data until at minimum P0 items (JWT authentication middleware + real OTP) are completed. The current codebase allows any HTTP client to impersonate any user.');
-  
-  // Final page — document end
-  doc.moveDown(2);
-  doc.fontSize(9).fillColor(C.mid).font('Helvetica-Oblique')
-    .text('— End of Document —', ML, doc.y, { width: CW, align: 'center' });
+  doc.moveDown(.35);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// MAIN — Assemble and generate
-// ═══════════════════════════════════════════════════════════════════════
+const chapters = [
+  {
+    title: 'Document Control', blocks: [
+      ['p', 'This is a source-oriented technical handover for developers who need to operate, debug, and change StayVeo without relying on undocumented knowledge. It is based on repository inspection, not on intended architecture.'],
+      ['table', [['Item', 120], ['Verified value', CW - 120]], [
+        ['Current audit date', AUDIT_DATE], ['Repository HEAD', COMMIT], ['Worktree state', 'Dirty before this documentation task; unrelated modifications preserved'],
+        ['Frontend', 'React + Vite single-page application'], ['Backend', 'Fastify 5 + TypeScript API'], ['Database', 'PostgreSQL via Prisma 6'],
+        ['Session store', 'Redis via ioredis'], ['Authentication', 'Email/password + email OTP; HttpOnly cookie sessions'],
+        ['Payments', 'Razorpay integration; webhook endpoint and persisted payment lifecycle'], ['Storage', 'Supabase Storage client and signed KYC URL flow'],
+        ['Deployment evidence', 'Frontend Wrangler config + Render API origin constant; no backend deploy manifest found in repository'],
+      ]],
+      ['callout', 'The previous reference PDF documents an earlier frontend-focused snapshot and includes architecture claims that no longer match current source. Where it conflicts, current source wins.', 'warning'],
+    ]
+  },
+  {
+    title: 'How to Read This Document', blocks: [
+      ['p', 'The reference PDF uses progressive phases: overview first, then entry points, execution, routing, dependencies, domain workflows, risks, and recommendations. This edition keeps that handover style but expands the audit to the actual frontend, API, auth/session, database, payment, Tiffin, storage, deployment, and operations code.'],
+      ['bullets', [
+        'A file path is repository-relative unless explicitly labelled as an absolute output path.',
+        'VERIFIED means direct source/config evidence was inspected. NOT VERIFIED means the repository lacks evidence or the external system is not accessible here.',
+        'This document captures the audited worktree on 2026-10-01; HEAD is 346beb8, but tracked/untracked source changes existed in the worktree.',
+        'No live production database, Redis instance, cloud account, payment dashboard, or Render deployment was queried. Runtime claims are limited to code/config evidence.',
+      ]],
+    ]
+  },
+  {
+    title: 'Current System Overview', blocks: [
+      ['p', 'StayVeo is a student-oriented marketplace for PG accommodation, Tiffin meal subscriptions, and related provider-managed services. A React SPA calls a separate Fastify API; the API owns persistence/business logic through Prisma and PostgreSQL, and relies on Redis for authentication sessions and provider dashboard caching.'],
+      ['code', 'Browser (React/Vite or deployed static SPA)\n  -> fetch client, credentials: include\n  -> Fastify API (Render origin configured in src/config/api.js)\n  -> route preHandler / validation / controller / domain service\n  -> Prisma Client -> PostgreSQL\n  -> Redis for sessions + small dashboard cache\n  -> Razorpay / Resend / Supabase Storage / Mapbox as applicable'],
+      ['table', [['Surface', 105], ['Observed implementation', CW - 105]], [
+        ['Student app', 'Manual React Router route table in src/App.jsx; AuthContext mirrors /auth/me identity; screens call API services.'],
+        ['Provider app', 'PG and Tiffin areas use distinct layouts; provider endpoints authenticate with provider cookie and ownership derives from session.'],
+        ['API', 'Fastify route groups registered in backend/src/app.ts; /api/v1 plus legacy /api/provider paths.'],
+        ['Persistence', 'Prisma schema at backend/prisma/schema.prisma; SQL migrations at backend/prisma/migrations/.'],
+        ['External services', 'Resend email OTP, Razorpay orders/webhooks, Supabase Storage/Realtime, Mapbox maps.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Technology Stack Analysis', blocks: [
+      ['table', [['Layer', 100], ['Current dependencies / configuration', 200], ['Source', CW - 300]], [
+        ['Frontend', 'React 19, React DOM 19, React Router DOM 7, Vite 8', 'package.json, src/main.jsx, src/App.jsx'],
+        ['Frontend integrations', '@supabase/supabase-js, mapbox-gl, react-map-gl, lucide-react', 'package.json, src/lib/supabase.js, map components'],
+        ['API server', 'Node, Fastify 5, TypeScript, tsx', 'backend/package.json, backend/src/server.ts'],
+        ['Backend plugins', '@fastify/cookie, cors, rate-limit, sensible, fastify-plugin', 'backend/src/app.ts and backend/src/plugins/'],
+        ['Persistence', 'Prisma 6 + @prisma/client; PostgreSQL', 'backend/prisma/schema.prisma, backend/src/plugins/prisma.ts'],
+        ['Runtime data', 'ioredis 6', 'backend/src/plugins/redis.ts'],
+        ['Auth/email', 'bcryptjs, crypto, Resend SDK', 'auth.service.ts, otp.utils.ts, email.service.ts'],
+        ['Validation', 'Zod', 'module *.schema.ts and service parsing'],
+        ['Payments', 'Razorpay API/signature integration', 'razorpay.client.ts, payment services'],
+        ['Frontend deploy', 'Wrangler 4 + Cloudflare Pages-style asset config', 'wrangler.jsonc; package.json deploy command'],
+      ]],
+      ['callout', 'The manifests contain no Jest/Vitest/Playwright test script. The architecture package test command is a placeholder that exits with failure. Do not describe test coverage as implemented without adding actual test artifacts.', 'warning'],
+    ]
+  },
+  {
+    title: 'Repository Architecture', blocks: [
+      ['table', [['Path', 175], ['Role and notable contents', CW - 175]], [
+        ['src/', 'React SPA: App.jsx/main.jsx; pages/, components/, api/, context/, services/, stores/, hooks/, realtime/, lib/, config/.'],
+        ['backend/src/', 'Fastify application, plugins, auth hooks, common utilities, domain modules and controllers/services/repositories.'],
+        ['backend/prisma/', 'Prisma schema, migration history and generated-client inputs.'],
+        ['supabase/migrations/', 'Supabase SQL migration for provider KYC storage policy/config.'],
+        ['docs/architecture/', 'Architecture PDF generator (this file), local package manifest, and older generated/docs artifacts.'],
+        ['wrangler.jsonc', 'Cloudflare asset deployment configuration with SPA fallback.'],
+        ['vite.config.js', 'Vite dev server, allowed tunnel host patterns and /api proxy target.'],
+      ]],
+      ['bullets', [
+        'Root scripts: npm run dev, build, lint, preview, deploy.',
+        'Backend scripts: npm run dev, build (Prisma generate + tsc), start, db:generate, db:push, db:migrate, db:studio.',
+        'Backend entry is backend/src/server.ts; Fastify composition lives in backend/src/app.ts.',
+        'The root README is the Vite scaffold README and is not a reliable operational runbook.',
+      ]],
+    ]
+  },
+  {
+    title: 'System Architecture and Request Lifecycle', blocks: [
+      ['code', 'Browser route/component\n  -> src/api/client.js request() (fetch; credentials: include)\n  -> Fastify module route registered in backend/src/app.ts\n  -> rate limit / cookie parsing / route preHandler\n  -> controller parses Zod schema and derives actor from request auth\n  -> domain service\n  -> Prisma repository/query (or service-level Prisma)\n  -> PostgreSQL transaction/records\n  -> response envelope { success, data, message }\n  -> page/context/store updates UI'],
+      ['table', [['Layer', 110], ['Implementation', 220], ['Audit note', CW - 330]], [
+        ['Bootstrap', 'src/main.jsx', 'StrictMode wraps AuthProvider > ProviderProvider > ToastProvider > App.'],
+        ['Routing', 'src/App.jsx', 'BrowserRouter + explicit Routes; many student/provider chunks lazy-loaded.'],
+        ['Transport', 'src/api/client.js', 'Native fetch, parses JSON, credentials include, throws ApiRequestError.'],
+        ['API composition', 'backend/src/app.ts', 'CORS, rate-limit, sensible, cookie, Prisma, Redis, routes, 404.'],
+        ['Data layer', 'backend/src/plugins/prisma.ts; backend/src/common/db/prisma.ts', 'Fastify decoration and singleton access both exist; check imports before changing.'],
+        ['Errors/logs', 'backend/src/errors/handler.ts; Fastify Pino logger', 'Global handler formats errors; production info vs dev debug/pino-pretty.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Frontend Bootstrap and State', blocks: [
+      ['code', 'index.html -> src/main.jsx -> StrictMode -> AuthProvider -> ProviderProvider -> ToastProvider -> App -> BrowserRouter -> route match'],
+      ['table', [['Concern', 130], ['Current owner', 190], ['Behavior / dependencies', CW - 320]], [
+        ['Authentication mirror', 'src/context/AuthContext.jsx', 'On mount calls getAuthMe(); browser stores some profile convenience values in localStorage, but session token is HttpOnly cookie and not read from JS.'],
+        ['Provider context', 'src/context/ProviderContext.jsx', 'Provider session/profile state; provider API calls use provider session cookie.'],
+        ['Notifications', 'src/stores/notificationStore.ts + src/hooks/useRealtimeNotifications.ts', 'useSyncExternalStore; DB-backed REST bootstrap plus Supabase Realtime subscription.'],
+        ['Toasts', 'src/context/ToastContext.jsx', 'Global transient UI feedback.'],
+        ['API config', 'src/config/api.js', 'VITE_API_URL / VITE_PROVIDER_URL or hard-coded Render API origin defaults.'],
+      ]],
+      ['callout', 'localStorage is used as a convenience cache for profile/onboarding/portal preferences in multiple frontend modules; it is not the authenticated session source. Treat it as untrusted UI state.', 'info'],
+    ]
+  },
+  {
+    title: 'Routing Architecture and Route Map', blocks: [
+      ['p', 'Routes are explicitly declared in src/App.jsx. Public/student/provider grouping is convention and layout composition rather than a universal authorization boundary: no global route guard is applied to all pages. API authorization is the security boundary.'],
+      ['table', [['Route group', 125], ['Paths / component families', 205], ['Layout / access notes', CW - 330]], [
+        ['Entry/auth', '/', '/role-select, /auth, /forgot-password, /college-select, /onboarding; eager entry components; no student bottom nav.'],
+        ['Student marketplace', '/home, /search, /room/:id, /booking/:id, /dashboard, /profile, /saved, /notifications, /support', 'React pages; student navigation shown on most routes; API endpoints provide actual access control.'],
+        ['Tiffin student', '/tiffin, /tiffin/:id, /tiffin/:id/reservation (+ payment/success)', 'Student marketplace pages in src/pages; tiffin API module.'],
+        ['Provider auth/onboarding', '/provider/login, /provider/select, /provider/pg/onboarding, /provider/verify', 'Not wrapped in provider dashboard layout. /provider/onboarding redirects to PG onboarding.'],
+        ['PG provider', '/provider/dashboard, /provider/bookings, /provider/add-property, /provider/listing/*, /provider/services/*, /provider/manage-beds, /provider/calendar, /provider/earnings, /provider/settings/*', 'ProviderLayout; imports pages/provider/*.jsx.'],
+        ['Tiffin provider', '/provider/tiffin/onboarding and /provider/tiffin/{dashboard,customers,deliveries,menu,reports,settings}', 'TiffinProviderLayout for dashboard routes; onboarding is a separate route.'],
+        ['Legacy/dead route status', '/broker/* suppression check exists in AppContent but route declarations were not found', 'Likely historical code path; verify before removing.'],
+      ]],
+      ['callout', 'Current route table has no catch-all NotFound route. A route match may render no page content for unknown paths while the shell remains.', 'warning'],
+    ]
+  },
+  {
+    title: 'API Architecture and Route Registration', blocks: [
+      ['p', 'backend/src/app.ts registers domain route plugins under /api/v1 and separately mounts legacy/provider onboarding routes. A direct API inventory is appended in Appendix A from current route declarations. The code-level shape is Fastify routes -> controller -> service -> Prisma; not every module has a separate repository layer.'],
+      ['table', [['Mount prefix', 155], ['Route source', 175], ['Domain', CW - 330]], [
+        ['/api/v1/auth', 'modules/auth/auth.routes.ts', 'Email/password OTP, reset, logout, /me'],
+        ['/api/v1/provider', 'modules/provider/provider.routes.ts', 'Provider session, profile, dashboard'],
+        ['/api/provider', 'modules/provider/provider.routes.ts', 'Provider OTP/onboarding, identity/KYC, bank details'],
+        ['/api/v1/tiffin', 'modules/tiffin/tiffin.routes.ts', 'Public discovery, student subscription/payment, provider subroutes'],
+        ['/api/v1/bookings', 'modules/bookings/booking.routes.ts', 'Booking create/list/status/detail'],
+        ['/api/v1/payments', 'modules/payments/payment.routes.ts', 'Razorpay order/payment verification/webhook and provider views'],
+        ['/api/v1/room-listings', 'modules/room-listings/room-listing.routes.ts', 'Public room listings; provider mutations mounted separately'],
+        ['/api/v1/*', 'users/student/services/PG/media/documents/visits/colleges/saved/notifications/profile-views', 'See API appendix for exact declared route paths.'],
+      ]],
+      ['bullets', [
+        'Success envelope is built with common/utils/response.ts (sendSuccess/sendCreated).',
+        'Global rate limit is 100 requests/minute; auth, booking, payment and Tiffin write routes add local limits.',
+        'CORS allows no-origin calls, configured FRONTEND_URL, stayveo.com, stayveo.pages.dev and local origins; dev also allows tunnel patterns.',
+        'Security headers set in app.ts onSend: nosniff, frame deny, XSS legacy header, referrer policy and permissions policy. CSP/HSTS are not set by that hook.',
+      ]],
+    ]
+  },
+  {
+    title: 'Authentication — Student and Email/Password', blocks: [
+      ['code', 'src/pages/AuthScreen.jsx\n -> src/api/client.js startAuth()/verifyOtp()\n -> POST /api/v1/auth/start, POST /api/v1/auth/verify-otp\n -> auth.routes.ts -> auth.controller.ts -> auth.service.ts\n -> User + EmailAuthChallenge (Prisma) + Resend email\n -> createSession(Redis) -> Set-Cookie stayveo_session'],
+      ['bullets', [
+        'Auth service validates Zod inputs, normalizes email/role, uses bcryptjs for password hashes and password comparison.',
+        'OTP values are generated and hashed using backend/src/common/utils/otp.utils.ts; OTP expiry is 5 minutes and challenge records are in email_auth_challenges.',
+        'Email delivery is via backend/src/common/utils/email.service.ts and RESEND_API_KEY. A missing key/send failure prevents completing the mail flow; no alternate provider is configured in repository.',
+        'OTP verification creates/loads the user, marks challenge use, and creates a server-side session. New/incomplete profile setup uses an encrypted short-lived handoff cookie, not an authenticated session.',
+        'GET /auth/me is optional-auth and returns the current user when the session cookie validates; auth UI hydrates from that response.',
+      ]],
+      ['callout', 'Do not treat x-user-id, localStorage userId, or phone headers as proof of identity. Several compatibility headers remain permitted by CORS/client code, but protected APIs must derive authority from validated session state.', 'danger'],
+    ]
+  },
+  {
+    title: 'Authentication — Provider, Password Reset, Logout', blocks: [
+      ['code', 'ProviderLogin.jsx -> provider API client -> POST /api/provider/send-otp -> verify-otp\n -> provider.routes.ts onboarding handlers -> provider.service.ts\n -> Provider/User/ProviderProfile lookup -> createProviderSession(Redis)\n -> Set-Cookie stayveo_provider_session\n\nForgot password -> /api/v1/auth/forgot-password -> email_auth_challenges\n -> verify-password-reset -> short-lived reset token -> reset-password\n -> bcrypt hash update + student/provider session invalidation'],
+      ['table', [['Flow', 115], ['Verified behavior', 200], ['Important source paths', CW - 315]], [
+        ['Provider registration', 'POST /api/provider/send-otp then /verify-otp. Provider session cookie differs from student cookie; select type/onboarding continues behind provider auth.', 'backend/src/modules/provider/provider.routes.ts; provider.service.ts; provider-session.ts'],
+        ['Provider guard', 'authenticateProvider validates Redis session, reloads users/provider_profiles from DB, enforces role and profile/provider-type consistency.', 'backend/src/common/hooks/authenticate-provider.ts'],
+        ['Forgot/reset', 'Email challenges in DB; attempt counter key password-reset:verify:{email}; reset token hash and expiresAt are persisted; resend email through Resend.', 'backend/src/modules/auth/auth.service.ts; auth.repository.ts'],
+        ['Student logout', 'POST /api/v1/auth/logout deletes student session mapping/session and clears student cookie; provider logout is separate.', 'auth.controller.ts; session.ts'],
+        ['Provider logout', 'POST /api/provider/logout deletes provider session and clears provider cookie.', 'provider.controller.ts; provider-session.ts'],
+        ['Reset invalidation', 'Password reset invalidates the active student session and all tracked provider sessions for that account.', 'auth.service.ts; session.ts; provider-session.ts'],
+      ]],
+    ]
+  },
+  {
+    title: 'Session and Cookie Architecture', blocks: [
+      ['table', [['Cookie / artifact', 140], ['Lifetime and flags', 145], ['Purpose / backing data', CW - 285]], [
+        ['stayveo_session', '30 days; HttpOnly; Secure in production; SameSite configurable by SESSION_SAME_SITE, default none in prod/lax outside; path /.', 'Redis single active student session (session:{id}); mapping user_session:{userId}.'],
+        ['stayveo_provider_session', '30 days; HttpOnly; Secure in production; SameSite configurable by PROVIDER_SESSION_SAME_SITE then SESSION_SAME_SITE; path /.', 'Redis provider session (provider:session:{id}); provider:user_sessions:{userId} set; legacy mapping key provider:user_session:{userId}.'],
+        ['stayveo_profile_setup', '15 minutes; inherited HttpOnly/Secure/SameSite/path flags.', 'AES-256-GCM encrypted token from SESSION_SECRET (or fallback JWT_SECRET); profile completion handoff only, not API auth.'],
+      ]],
+      ['bullets', [
+        'Session IDs are 32 random bytes encoded base64url (43 chars). Student and provider session payloads include userId, role, timestamps; provider payload also has providerType/providerId.',
+        'Student creation atomically revokes the previous session for that user. Provider sessions intentionally allow multiple devices and maintain a Redis set index.',
+        'Activity touch updates lastSeenAt/lastActivityAt but preserves fixed Redis TTL (KEEPTTL); it is not sliding expiry.',
+        'Cookies have no explicit Domain attribute in the option objects. Browser cookie domain is host-scoped; frontend/backend cross-site deployment depends on Secure + SameSite=None + credentials CORS.',
+        'No JWT bearer token is used as the primary API session. SESSION_SECRET is used for profile handoff encryption; the Redis session ID is opaque.',
+      ]],
+      ['callout', 'Redis outage is an authentication outage: provider auth catches session-store failures and returns 503; student auth route middleware/session access also cannot establish identity. There is no fail-open authenticated fallback.', 'warning'],
+    ]
+  },
+  {
+    title: 'Redis Architecture and Key Registry', blocks: [
+      ['p', 'Redis is initialized once by backend/src/plugins/redis.ts using REDIS_URL (localhost:6379 outside production fallback; required in production). ioredis retries each request up to three times; connect/error events are logged; Fastify onClose quits/disconnects. Redis is both the session store and a small dashboard cache—not the source of truth for users/payments/bookings.'],
+      ['table', [['Key pattern', 160], ['Writer / reader / expiry', 195], ['Classification and failure behavior', CW - 355]], [
+        ['session:{sessionId}', 'createSession / getSession / touchSession; 30 days; JSON SessionData.', 'Student authentication authority; Redis loss makes protected student requests unavailable.'],
+        ['user_session:{userId}', 'create/delete/invalidate scripts; 30 days; opaque current session ID.', 'Student single-session pointer; reset/logout deletes associated record atomically.'],
+        ['provider:session:{sessionId}', 'create/get/touch/delete provider session; 30 days; JSON provider session.', 'Provider authentication authority; multiple sessions supported.'],
+        ['provider:user_sessions:{userId}', 'Provider session scripts; Redis Set of session IDs, cleaned when deleting/invalidation.', 'Provider session index; used for reset-all and stale-member cleanup.'],
+        ['provider:user_session:{userId}', 'Legacy compatibility pointer read/deleted by provider session Lua scripts.', 'Legacy migration compatibility; do not depend on it for normal current sessions.'],
+        ['provider:dashboard:pg:{providerId}', 'Dashboard service read/write; 120-second cache; nonfinancial PG metrics.', 'Cache only; source remains PostgreSQL. Cache helper logs and degrades to DB on read/write failure.'],
+        ['provider:dashboard:tiffin:{providerId}', 'Key helper is defined; usage/invalidation must be verified against specific Tiffin call sites before reliance.', 'Potential cache namespace; no claim of active reader/writer without call-site evidence.'],
+        ['password-reset:verify:{email}', 'Auth service INCR + first-count EXPIRE; 10-minute TTL; attempt counter.', 'Abuse/rate-control temporary state; database challenge remains reset authority.'],
+      ]],
+      ['callout', 'Current Redis code does not show OTP storage: EmailAuthChallenge rows store otpHash and expiresAt in PostgreSQL. Global Fastify rate limiting is configured by the plugin and is not documented here as Redis-backed unless the limiter store is explicitly supplied.', 'info'],
+    ]
+  },
+  {
+    title: 'Authorization and Ownership Model', blocks: [
+      ['table', [['Resource / route family', 150], ['Identity / scope enforcement', 190], ['Security status', CW - 340]], [
+        ['Student private routes', 'authenticate reads stayveo_session -> Redis -> reloads User from Prisma; requireAuthenticated rejects absent identity.', 'Server-side actor binding enforced where hook is applied.'],
+        ['Provider routes', 'authenticateProvider reads separate provider cookie, validates Redis payload, reloads User + ProviderProfile and checks role/profile/type.', 'Strong session/profile validation; each service still needs tenant scope.'],
+        ['Tiffin provider', 'Authenticated provider identity is passed to resolveOwner; kitchen/profile is derived from current provider/user and customer queries are scoped by kitchenId.', 'Phone is private provider-customer data; only provider customer endpoints should return it.'],
+        ['Bookings', 'Provider routes use provider auth; list-by-current-provider resolves current profile; client-supplied providerId paths still require service check.', 'Audit service ownership for each ID-addressed mutation before changing.'],
+        ['Public listing/search', 'Public routes return listing/service fields by explicit query select/serialization.', 'Phone must not be added to public listing DTOs.'],
+      ]],
+      ['bullets', [
+        'Roles present in schema: STUDENT and PROVIDER; no ADMIN role was found.',
+        'Frontend route visibility is not authorization. Backend route hooks and service ownership queries are the security control.',
+        'CORS allow-list is not identity validation and does not prevent direct clients from calling API routes.',
+        'RLS policies are not represented in Prisma; only one Supabase SQL migration was found for KYC storage. Do not claim comprehensive database RLS.',
+      ]],
+    ]
+  },
+  {
+    title: 'Database Architecture and Migration Practice', blocks: [
+      ['p', 'Prisma schema source is backend/prisma/schema.prisma (currently roughly 1.5K lines). Runtime client is backend/src/plugins/prisma.ts with singleton access via backend/src/common/db/prisma.ts. Migrations are sequential SQL under backend/prisma/migrations/. The source schema is the model/field dictionary below; migration SQL is the database-change history.'],
+      ['bullets', [
+        'Development workflow exposed by package scripts: npm run db:migrate (prisma migrate dev), db:generate, db:push and db:studio in backend/.',
+        'Prefer reviewed SQL migration in a production workflow; db:push changes schema without migration history and is not a production release plan.',
+        'The current worktree contains migration 20261001000000_room_listing_contact_number; do not assume it has been deployed to production.',
+        'Use Prisma transactions in source where present; do not infer a database FK from a scalar field unless a Prisma @relation and migration constraint exist.',
+        'No seed script was found in the inspected package scripts; no test script is configured for the app/backend manifests.',
+      ]],
+      ['callout', 'The generated dictionary documents Prisma declarations. Migration-level existence of every FK/index must be verified against the corresponding SQL before schema changes; Prisma schema alone is not proof that a production database has been migrated.', 'warning'],
+    ]
+  },
+  {
+    title: 'Entity Relationship and Domain Map', blocks: [
+      ['code', 'User (users)\n  -> StudentProfile (student_profiles, userId unique)\n  -> ProviderProfile (provider_profiles, userId unique)\n       -> RoomListing (provider_id) -> bed / availability data\n       -> TiffinKitchen (owner/provider relation)\n            -> TiffinSubscriptionPlan -> TiffinCustomerSubscription\n                 -> TiffinSubscriptionDay / MealLog -> MealDelivery\n                 -> TiffinPayment -> Invoice / Refund\n  -> Booking (userId/providerId/roomId scalars; inspect FK declarations separately)\n       -> Payment -> Receipt\n  -> Notification / preferences / email challenges'],
+      ['p', 'The following appendix is generated directly from Prisma model and enum blocks. It lists model table mappings, scalar/relation fields, defaults, uniqueness, indexes and relation actions. Unmodeled database policies, triggers, check constraints, or production drift are not inferable from the Prisma file and are called out as not verified.'],
+    ]
+  },
+  {
+    title: 'Student Domain', blocks: [
+      ['p', 'Student identity is `User` with role STUDENT; profile data is a separate 1:1 StudentProfile. Email/password auth stores passwordHash on User. Tiffin subscriptions use customerId pointing to the User identity, which contains phone_number; this is the source for authorized customer-phone views.'],
+      ['table', [['Concern', 135], ['Files / tables', 195], ['Change impact', CW - 330]], [
+        ['Profile onboarding', 'src/pages/StudentOnboarding.jsx -> src/api/client.js createStudentProfile -> POST /api/v1/student/profile -> student.controller/service/repository -> StudentProfile.', 'Profile DTO, student_profiles model, profile completion handoff cookie.'],
+        ['Profile fetch/update', 'GET/PUT /api/v1/student/profile; authenticate hook; student_profiles + users.', 'Update response/context hydration and student-facing screens.'],
+        ['Saved listings', 'src/api/client.js saved functions -> /api/v1/saved -> saved service/repository -> SavedListing.', 'User ownership and room listing IDs.'],
+        ['Student contact', 'users.phone_number; StudentProfile has no phone field.', 'Do not duplicate phone storage in StudentProfile.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Provider Domain and Onboarding', blocks: [
+      ['p', 'Provider account identity is User(role=PROVIDER) plus ProviderProfile. Current provider OTP login is email/password-based, and provider type is stored in profile/session. KYC and provider-business details live in separate profile/service models; the database keeps property/service data even when signup flow changes.'],
+      ['table', [['Workflow', 130], ['Files and state', 200], ['Change dependencies', CW - 330]], [
+        ['Signup/OTP', 'src/pages/provider/ProviderLogin.jsx; backend/src/modules/provider/provider.routes.ts; provider.controller.ts; provider.service.ts.', 'provider user/profile, Redis provider session, email challenge and Resend.'],
+        ['PG onboarding', 'src/pages/provider/PGProviderOnboarding.jsx; POST /api/provider/pg-onboarding; provider service/repository.', 'ProviderProfile onboarding state/KYC identity fields; existing property form remains in ProviderCreateListing/RoomListingForm.'],
+        ['Tiffin onboarding', 'src/pages/tiffin-provider/TiffinOnboarding.jsx; /api/v1/tiffin/provider/onboarding.', 'Out-of-scope to refactor in the prior product task; documentation records current paths only.'],
+        ['Bank data', 'src/pages/provider/ProviderBankDetails.jsx; provider-bank-details module.', 'Encrypted sensitive fields; BANK_DETAILS_ENCRYPTION_KEY or SESSION_SECRET fallback.'],
+        ['Dashboard', 'ProviderDashboard.jsx -> provider API -> provider dashboard service -> ProviderProfile/RoomListing/Booking/Payment data + Redis cache.', 'Cache invalidation and financial fields; do not cache authoritative revenue.'],
+      ]],
+      ['callout', 'No forced re-onboarding is performed by the documentation task. Provider account, property/service creation, and KYC remain separate concepts in schema/routes; do not drop property fields from database or create a second provider model.', 'info'],
+    ]
+  },
+  {
+    title: 'PG Listings, Location and Property Creation', blocks: [
+      ['p', 'Property/location fields belong to property records such as RoomListing (and legacy PGDetails), not a global provider coordinate unless a specific older Provider model still carries location fields. Listing forms are in src/pages/provider/ProviderCreateListing.jsx and RoomListingForm.jsx; map picker is src/components/maps/LocationPicker.jsx. Student map renderer is src/components/maps/RoomDetailMap.jsx.'],
+      ['bullets', [
+        'Backend property endpoints are mounted under /api/provider/room-listings and handled by backend/src/modules/room-listings/*.',
+        'Property create/edit schemas define required/optional details and coordinates; inspect room-listing.schema.ts and repository/service before changing validation.',
+        'Student listing/detail queries must return the stored property latitude/longitude; never use a hardcoded default coordinate as production marker.',
+        'Current worktree contains edits to map and listing files and an untracked/changed migration adding room_listing_contact_number; audit those deltas against the database before deploying.',
+        'No map API token value is documented; frontend reads VITE_MAPBOX_TOKEN in map components.',
+      ]],
+      ['table', [['Change', 145], ['Primary path', 190], ['Verify', CW - 335]], [
+        ['Add/edit property fields', 'ProviderCreateListing.jsx, RoomListingForm.jsx, room-listing.schema.ts/service/repository, schema.prisma + migration.', 'Create and update payloads, persisted values, provider list, student detail.'],
+        ['Property location', 'LocationPicker.jsx, RoomDetailMap.jsx, room-listing schema/service/repository.', 'Coordinates in DB and map marker on student room detail.'],
+        ['Booking fee source', 'payment.service.ts authoritativeReservationFee() reads RoomListing reservationFee then legacy PGDetails fallback.', 'Ensure change preserves server-side authoritative pricing.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Tiffin Domain and Student Subscription', blocks: [
+      ['code', 'Student Tiffin page / src/api/tiffinStudent.js or tiffinReservation.js\n -> /api/v1/tiffin discovery/reservation/payment/verify\n -> tiffin.controller.ts -> tiffin-student.service.ts / tiffin-reservation.service.ts\n -> TiffinKitchen -> Plan -> TiffinCustomerSubscription\n -> SubscriptionDays + TiffinMealLog -> delivery state\n -> TiffinPayment / Invoice / Refund'],
+      ['table', [['Lifecycle', 130], ['Current model/service concepts', 205], ['Important persistence', CW - 335]], [
+        ['Kitchen', 'TiffinKitchen with owner/provider identity, public fields, availability, address/location, pricing/status.', 'tiffin_kitchens; images, meal timings, menus, plans.'],
+        ['Reservation', 'Pending subscription row is reservation; payment verification activates/confirm state.', 'TiffinCustomerSubscription with PENDING/ACTIVE etc.'],
+        ['Meal entitlement', 'Subscription days and per-meal logs; skip/pause/resume/renew routes.', 'TiffinSubscriptionDay, pause log, skip, renewal log, TiffinMealLog.'],
+        ['Delivery', 'Provider delivery routes update meal/delivery state; optional OTP/detail record.', 'TiffinMealDelivery unique by mealLogId.'],
+        ['Money', 'TiffinPayment stores fee split/snapshot; renewal service uses transactions and audit logs.', 'tiffin_payments, tiffin_invoices, tiffin_refunds, payment_audit_logs.'],
+      ]],
+      ['callout', 'There is a payment adapter abstraction and a `PAYMENT_MODE` switch in Tiffin payment code. Read `tiffin/payment-provider.ts` and `tiffin-payment.service.ts` before assuming every environment uses the same live/test gateway behavior.', 'warning'],
+    ]
+  },
+  {
+    title: 'Tiffin Provider Customers and PII Boundary', blocks: [
+      ['p', 'The current provider Customers page is src/pages/tiffin-provider/TiffinCustomers.jsx. It calls the Tiffin provider API client for `/provider/customers`, which is mounted as GET /api/v1/tiffin/provider/customers and guarded by authenticateProvider. Controller resolves authenticated provider phone/user identity and calls tiffinProviderService.listCustomers.'],
+      ['code', 'Provider cookie -> authenticateProvider -> request.providerAuth.userId/profileId\n -> resolveOwner(authenticated phone, userId) -> own kitchen\n -> own TiffinCustomerSubscription rows (customerId)\n -> users by customerId -> users.phone_number\n -> DTO item.phone -> Phone table column'],
+      ['bullets', [
+        'Phone data source is User.phone_number (`users.phone_number`), linked by TiffinCustomerSubscription.customerId -> User.id. The customer subscription is scoped by the resolved kitchenId.',
+        'The page displays a Phone column and uses `customer.phone || "Not available"`; backend absence should serialize an empty/missing phone safely.',
+        'Provider A/B separation must be enforced by the backend kitchen scope, not by hiding UI or passing a client-selected kitchen ID.',
+        'Do not add student phone to public Tiffin listing/search/detail endpoints or student-facing responses.',
+        'Customer detail also resolves user by customerId; apply the same kitchen ownership constraint before returning PII.',
+      ]],
+      ['callout', 'The provider customer list is authorized private data. Any response-shape change must be checked against listCustomers(), the provider controller, `src/api/tiffinProvider.js`, both customer list/detail screens, and provider A/B authorization.', 'danger'],
+    ]
+  },
+  {
+    title: 'Booking and Inventory Architecture', blocks: [
+      ['p', 'Booking creation starts at src/pages/BookingFlow.jsx and src/api/booking.js, then POST /api/v1/bookings -> booking.controller.ts -> booking.service.ts -> booking.repository.ts. The service builds a Booking row and includes selected listing/price context. Payment intent is a separate step through /api/v1/payments.'],
+      ['table', [['Stage', 110], ['Source / persisted data', 210], ['Audit note', CW - 320]], [
+        ['Create request', 'BookingFlow.jsx; booking API client; POST /bookings; Booking service.', 'Student identity should be session-derived where protected; verify route middleware because booking route file has create/list routes without a declared auth preHandler in the inspected excerpt.'],
+        ['Pricing snapshot', 'Booking fields monthlyRent/securityDeposit/reservationFee/platformFee/charges/price; payment service reloads authoritative room reservation fee.', 'Do not treat frontend price as authority.'],
+        ['Payment intent', 'POST /payments; payment.service.ts transaction creates payment/order and audit record.', 'Gateway order and DB payment are separate side effects.'],
+        ['Confirmation', 'POST /payments/:paymentId/verify or webhook path; lifecycle/status update; notification/receipt flows.', 'Do not infer exact inventory decrement behavior without a dedicated inventory mutation in current service/repository.'],
+        ['Provider view', 'ProviderBookings.jsx -> bookings provider endpoints -> provider-scoped query.', 'Student phone/email sourced from User/customer relation/booking snapshot depending query; preserve existing PG behavior.'],
+      ]],
+      ['callout', 'Concurrency protection must be described from the actual transaction/unique constraints. No claim of row locking or guaranteed bed allocation should be made solely because booking creation uses a transaction.', 'warning'],
+    ]
+  },
+  {
+    title: 'Payment Architecture and Financial Calculation', blocks: [
+      ['table', [['Product / function', 150], ['Server calculation', 190], ['Persisted values', CW - 340]], [
+        ['PG calculatePgPayment(reservationFee)', 'Base = authoritative DB reservationFee; platformFee fixed at 99; bearer STUDENT; ownerAmount = base; studentPayable = base + 99.', 'Payment reservationFee/platformFee/ownerAmount/studentPayable/pricingSnapshot; audit log.'],
+        ['Tiffin calculateTiffinPayment(input)', 'Monthly first payment: fee 99 for one meal/day, 199 for two; monthly renewal: 49/99; other plans fee 0. First-payment commission bearer OWNER; renewal bearer STUDENT.', 'TiffinPayment baseAmount/platformFee/commissionBearer/ownerAmount/totalAmount snapshot.'],
+        ['Razorpay order', 'razorpayClient creates server order from payable amount in paise.', 'providerOrderId, gateway, status/lifecycle; order failure may leave an initiated DB row for recovery.'],
+        ['Verification', 'Client signature verification and webhook signature verification use Razorpay client secret; order/payment IDs bound to records.', 'Payment/TiffinPayment lifecycle, audit, booking/subscription activation, notifications/receipt.'],
+      ]],
+      ['bullets', [
+        'PG calculation: backend/src/modules/payments/payment-calculator.ts::calculatePgPayment; orchestration in payment.service.ts::createPgPaymentIntent.',
+        'Tiffin calculation: same calculator module::calculateTiffinPayment; write flow in tiffin-payment.service.ts::createPendingPayment and verification path.',
+        'Webhook endpoint POST /api/v1/payments/webhooks/razorpay captures raw body in payment.routes.ts; PaymentWebhookEvent unique eventId supports duplicate event recognition; handler stores received/processed/failed status and signatureVerified.',
+        'No live Razorpay credentials or dashboard state were inspected. Env key names include key_id, key_secret and webhook secret read by service/client; values intentionally excluded.',
+      ]],
+      ['callout', 'Before changing fees, update only the server calculator and validate PG + Tiffin payment snapshots, client amount display, audit log, webhook verification and receipts. Never derive provider payout from a frontend display formula.', 'danger'],
+    ]
+  },
+  {
+    title: 'Notifications and Realtime', blocks: [
+      ['code', 'Domain event -> notification.queue.ts (queueMicrotask) -> notification.event-handler.ts\n -> notification.service.ts -> preference/template/factory -> repository\n -> notifications table + notification logs/retry/dead-letter records\n\nFrontend REST bootstrap -> useRealtimeNotifications -> notificationStore\nSupabase Realtime subscription -> src/realtime/notifications.ts -> store upsert'],
+      ['bullets', [
+        'Notification event pipeline is process-memory queued, not a durable Redis queue. A process crash can lose an event before persistence.',
+        'In-app notification rows are persisted in PostgreSQL. Dispatcher records delivery/log status; retry/dead-letter models exist but a durable scheduler/worker process was not found.',
+        'Frontend subscribes to `notifications` table changes by Supabase Realtime channel scoped in channel name to `notifications:user:{userId}`; actual Supabase row policy must be verified separately.',
+        'Primary files: backend/src/modules/notifications/notification.{queue,event-handler,service,dispatcher,repository}.ts; src/hooks/useRealtimeNotifications.ts; src/realtime/notifications.ts; src/stores/notificationStore.ts.',
+      ]],
+    ]
+  },
+  {
+    title: 'Storage and Upload Security', blocks: [
+      ['table', [['Flow', 145], ['Implementation', 210], ['Trust boundary', CW - 355]], [
+        ['PG listing images', 'Frontend Supabase client/storage helper; public listing image references.', 'Bucket access policy is separate from backend auth; inspect Supabase SQL policy before relying on ownership.'],
+        ['Provider KYC documents', 'Tiffin/provider onboarding requests signed upload URL from backend and uploads to configured Supabase storage bucket.', 'Backend requires provider authentication and service role key; bucket path/allowlist and expiration in module.'],
+        ['General media', 'backend/src/modules/media/* and frontend storage utilities.', 'Route authentication and provider ownership must be checked for each operation.'],
+        ['Documents', 'backend/src/modules/documents/*.', 'Document model / storage pointer; sensitive data should not be exposed by public route.'],
+      ]],
+      ['bullets', [
+        'Frontend Supabase configuration reads VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in src/lib/supabase.js.',
+        'Backend private storage calls use SUPABASE_URL or VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_KYC_BUCKET (with code default).',
+        'One Supabase migration exists at supabase/migrations/20260817000000_create_provider_kyc_documents.sql; do not assume it describes every bucket policy.',
+      ]],
+    ]
+  },
+  {
+    title: 'Maps and Location Data', blocks: [
+      ['table', [['Concern', 130], ['Files', 185], ['Data flow', CW - 315]], [
+        ['Property pin', 'src/components/maps/LocationPicker.jsx', 'Mapbox token -> click/current-location interaction -> room/property latitude and longitude form values.'],
+        ['Student property map', 'src/components/maps/RoomDetailMap.jsx', 'Room/listing coordinates loaded from API -> Mapbox marker.'],
+        ['Tiffin service location', 'src/components/tiffin/ExactLocation.jsx; TiffinKitchen schema', 'Kitchen address/coordinates and delivery radius are service-level data.'],
+        ['Distance', 'src/utils/calculateDistance.ts; src/hooks/useDistanceFromCollege.ts; backend/src/common/utils/geo.ts', 'Distance calculation should be confirmed independently when changing discovery filters.'],
+      ]],
+      ['callout', 'VITE_MAPBOX_TOKEN is client-visible by design and should be scoped/restricted at the Mapbox account. It is not a server secret. Production coordinates must come from property/kitchen records, never a test constant.', 'warning'],
+    ]
+  },
+  {
+    title: 'Environment Variable Registry', blocks: [
+      ['table', [['Variable', 170], ['Files / purpose', 205], ['Classification / effect', CW - 375]], [
+        ['DATABASE_URL', 'backend/prisma/schema.prisma; Prisma connection.', 'Secret. Database connection/rotation affects API persistence.'],
+        ['DIRECT_URL', 'Prisma schema and backend/common/db/prisma.ts.', 'Secret. Direct DB access/migrations; fallback to DATABASE_URL in client helper.'],
+        ['REDIS_URL', 'backend/src/plugins/redis.ts.', 'Secret. Required in production; sessions/cache unavailable on outage.'],
+        ['SESSION_SECRET / JWT_SECRET', 'session.ts.', 'Secret. SESSION_SECRET primary; JWT_SECRET compatibility fallback for handoff encryption. Rotating invalidates ability to decrypt existing setup handoffs.'],
+        ['SESSION_SAME_SITE / PROVIDER_SESSION_SAME_SITE', 'session.ts; provider-session.ts.', 'Cookie security config; must align with cross-origin frontend and HTTPS.'],
+        ['RESEND_API_KEY', 'common/utils/email.service.ts.', 'Secret. Email OTP/password reset delivery.'],
+        ['RAZORPAY names', 'key_id, key_secret, webhook-secret settings referenced by payment client/service.', 'Secrets except key_id (publishable identifier). Rotation affects order/payment verification/webhooks.'],
+        ['FRONTEND_URL, NODE_ENV, PORT, HOST', 'backend app/server.', 'Deployment origins, cookie flags, bind address and logging.'],
+        ['BANK_DETAILS_ENCRYPTION_KEY', 'common/utils/sensitive-data.ts.', 'Secret; SESSION_SECRET fallback. Rotation can affect existing encrypted bank data; inspect migration/crypto versioning first.'],
+        ['SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KYC_BUCKET', 'Tiffin provider storage service.', 'Service role key is highly sensitive; signed KYC upload flow.'],
+        ['VITE_API_URL, VITE_PROVIDER_URL', 'src/config/api.js.', 'Frontend build-time API origin; included in browser bundle.'],
+        ['VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY', 'src/lib/supabase.js.', 'Public frontend configuration; security depends on Supabase policies.'],
+        ['VITE_MAPBOX_TOKEN', 'map picker/detail/exact location components.', 'Client-visible token; restrict domains/scopes.'],
+        ['BACKEND_PROXY_URL, VITE_ALLOWED_HOSTS', 'vite.config.js.', 'Local/dev server proxy and host allow list.'],
+        ['VITE_REALTIME_DEBUG', 'src/realtime/debug.ts.', 'Frontend debug logging toggle.'],
+        ['PAYMENT_MODE, key_id, key_secret', 'Tiffin payment adapter/reservation/renewal.', 'Environment mode + Razorpay credentials; no credential values reproduced.'],
+      ]],
+      ['callout', 'The full environment registry is a code-reference inventory, not proof that every variable is configured in production. Secret values are intentionally omitted.', 'info'],
+    ]
+  },
+  {
+    title: 'Deployment and Runtime Configuration', blocks: [
+      ['table', [['Area', 135], ['Repository evidence', 210], ['Known limitation', CW - 345]], [
+        ['Frontend origin', 'wrangler.jsonc declares name stayveo, compatibility date, SPA not-found handling. Root `npm run deploy` builds then runs wrangler deploy.', 'No custom domain/Cloudflare account deployment state is in repository.'],
+        ['Backend origin', 'src/config/api.js defaults API origin to https://stayveo.onrender.com.', 'No render.yaml, Dockerfile, Procfile or CI deployment workflow found in repo scan. Render is evidenced by API URL, not a checked deployment descriptor.'],
+        ['Development', 'npm run dev invokes Vite; vite.config.js proxies /api to BACKEND_PROXY_URL or Render origin.', 'Proxy secure=false; allowed tunnel hosts are in configuration.'],
+        ['API health', 'GET /health in backend/src/app.ts; backend listens on PORT default 3000, HOST default 0.0.0.0.', 'Health route returns static API healthy timestamp; it does not prove database/Redis readiness.'],
+        ['Database / Redis', 'PostgreSQL via Prisma env URLs; Redis via REDIS_URL.', 'External managed endpoints/backup/HA plans not verifiable in repository.'],
+        ['Webhook', 'POST /api/v1/payments/webhooks/razorpay.', 'Production configured Razorpay webhook URL not in checked config.'],
+      ]],
+      ['code', 'Frontend: npm run build -> wrangler deploy\nBackend dev: cd backend && npm run dev\nBackend build: cd backend && npm run build\nBackend runtime: cd backend && npm start\nDB migration (dev): cd backend && npm run db:migrate\nHealth: GET /health'],
+    ]
+  },
+  {
+    title: 'Security Review and Verified Gaps', blocks: [
+      ['table', [['Area / severity', 125], ['Evidence and current control', 220], ['Risk / recommendation', CW - 345]], [
+        ['Session security — implemented', 'Opaque random ID, Redis server state, HttpOnly cookies, role/profile DB revalidation; separate student/provider cookies.', 'Preserve SameSite/Secure/CORS alignment and test resets/logout/cross-origin behavior.'],
+        ['CORS — partial', 'Origin allowlist in app.ts; credentials true; headers include legacy identity names.', 'CORS does not authorize callers; minimize allowed origins/headers and maintain server actor derivation.'],
+        ['CSRF — not verified', 'SameSite defaults and cookie credentials; no explicit CSRF token/header check found in inspected files.', 'Review mutating cookie-auth routes under deployed cross-site topology.'],
+        ['Security headers — partial', 'X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy.', 'CSP/HSTS not set in app hook; edge may add them but not repo-verified.'],
+        ['PII — sensitive', 'Student phone stored on User and exposed to scoped provider customer functions.', 'Keep response restricted to authenticated kitchen owner; test provider A vs B at backend.'],
+        ['Webhook verification — implemented in code', 'Raw body capture; signature verification; PaymentWebhookEvent unique eventId and status.', 'Test invalid signature/retry/duplicate events and secrets at deployment.'],
+        ['RLS — not verified', 'Prisma does not express policies; one Supabase storage migration found.', 'Inspect live SQL/RLS configuration before asserting client data isolation.'],
+        ['Automated tests — gap', 'No unit/API/e2e test files surfaced and scripts absent.', 'Add auth, ownership, payments, subscription, migration and race tests before claiming coverage.'],
+        ['Secrets — deployment not verified', 'Code consumes env secrets; no secret values included.', 'Confirm deploy secrets managed outside repo, rotate exposure if discovered.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Transactions, Idempotency and Concurrency', blocks: [
+      ['bullets', [
+        'Student/provider session create/delete/touch uses Redis Lua scripts for atomic state changes.',
+        'Payment intent and verification paths use Prisma $transaction blocks; Payment has unique transactionId, idempotencyKey, order/payment provider identifiers.',
+        'PaymentWebhookEvent.eventId is unique; event processing persists RECEIVED/PROCESSED/FAILED status. This is database deduplication, not a blanket exactly-once guarantee for external side effects.',
+        'Tiffin renewal creation/completion and payment activation use transaction blocks; subscription day and meal log uniqueness prevent duplicate date/category rows where declared.',
+        'Booking route/service does not prove inventory row-locking; check availability mutation and constraint design before promising race-free allocation.',
+        'External Razorpay calls cannot be rolled back by a PostgreSQL transaction. Recovery must inspect initiated/pending rows and gateway order state.',
+      ]],
+      ['callout', 'Before editing transactional code, record which writes happen before and after external calls, and how retries behave. A database transaction is not a payment-gateway transaction.', 'warning'],
+    ]
+  },
+  {
+    title: 'State Machines and Lifecycle Fields', blocks: [
+      ['p', 'Enums are generated into the database appendix. The principal observed enums include UserRole, BookingStatus, VisitStatus, PaymentType/Status/LifecycleState, TiffinSubscriptionStatus, TiffinPaymentStatus, KitchenStatus/VerificationStatus, MealLogStatus, DeliveryType and complaint/subscription-day states. Some lifecycle columns are free-form strings rather than enums; do not assume exhaustive transition validation.'],
+      ['table', [['Domain', 125], ['Lifecycle evidence', 210], ['Transition owners to inspect', CW - 335]], [
+        ['Auth challenge', 'EmailAuthChallenge purpose, expiresAt, verifiedAt and resetTokenHash.', 'auth.service.ts / auth.repository.ts'],
+        ['Booking', 'BookingStatus enum; create and provider status mutation route.', 'booking.service.ts/controller.ts'],
+        ['Payment', 'PaymentStatus + PaymentLifecycleState; provider order/payment IDs and verifiedAt/paidAt.', 'payment.service.ts, payment-webhook.service.ts'],
+        ['Tiffin subscription', 'TiffinSubscriptionStatus, paymentStatus, pause/resume/cancel/confirm timestamps.', 'tiffin reservation/student/renewal services'],
+        ['Meal', 'MealLogStatus; skipped/delivered/missed timestamps and optional delivery detail.', 'tiffin student/provider services'],
+        ['Provider onboarding', 'OnboardingStatus enum and provider type/verification booleans.', 'provider.service.ts and Tiffin onboarding service'],
+      ]],
+    ]
+  },
+  {
+    title: 'Failure Scenarios and Recovery', blocks: [
+      ['table', [['Failure', 130], ['Observed behavior', 205], ['Operator / developer checks', CW - 335]], [
+        ['Redis unavailable', 'Redis plugin logs and operations fail; auth hook returns 503 for provider session lookup; dashboard cache helper logs and uses DB fallback.', 'REDIS_URL, Redis health/logs, session key TTL; do not disable auth to restore service.'],
+        ['PostgreSQL unavailable', 'Prisma operations fail; global handler returns API error response.', 'DATABASE_URL/DIRECT_URL, connectivity, migration state, Prisma logs.'],
+        ['Resend unavailable', 'OTP/reset email call fails; no alternate mail provider detected.', 'RESEND_API_KEY, Resend response/log; challenge row expiry and rate limits.'],
+        ['Razorpay unavailable', 'Order creation/verification throws; initiated/pending records may remain.', 'key_id/key_secret, providerOrderId, lifecycle, payment audit and gateway dashboard.'],
+        ['Webhook delayed/duplicate', 'Unique event ID and persisted event status support duplicate recognition/reprocessing diagnosis.', 'payment_webhook_events status/errorMessage and associated payment lifecycle.'],
+        ['Cookie absent/expired', 'Protected route rejects 401; provider hook clears invalid cookie; DB user/profile still exists.', 'Browser cookie flags, CORS credentials, Redis key TTL and auth hook.'],
+        ['Realtime disconnect', 'REST bootstrap remains available; live updates pause until channel reconnects/resubscription.', 'Supabase config, row policies, channel logs, useRealtimeNotifications cleanup.'],
+        ['Storage upload fails', 'Signed upload or Supabase upload error surfaces; DB pointer may not be saved depending flow stage.', 'Supabase URL/bucket/service-role credentials, signed URL expiry, allowed content type/path.'],
+        ['Concurrent booking', 'Actual outcome depends on availability checks and database constraints; no universal locking claim made.', 'Booking service query/write ordering, DB unique/index constraints, concurrent integration test.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Observability and Error Handling', blocks: [
+      ['bullets', [
+        'Fastify Pino logger is debug in non-production (pino-pretty transport) and info in production, configured in backend/src/app.ts.',
+        'Global error handler is backend/src/errors/handler.ts; unknown errors should be inspected in server logs, while response output is sanitized by handler policy.',
+        'Redis plugin logs connect/error and shutdown issues; cache helpers emit cache hit/miss/failure diagnostics.',
+        'Frontend API client throws ApiRequestError with HTTP status, URL and parsed response details; network exhaustion includes attempted URL metadata.',
+        'Health endpoint /health reports API process status only; no liveness/readiness split or external monitoring config was found.',
+        'No Sentry, OpenTelemetry, log shipping, CI alerting, or backend health-check deployment file was found in repository configuration.',
+      ]],
+    ]
+  },
+  {
+    title: 'Testing Architecture and Confidence', blocks: [
+      ['table', [['Area', 140], ['Repository test evidence', 190], ['Required manual verification', CW - 330]], [
+        ['Frontend', 'No test/spec files surfaced by repository scan; root manifest has build/lint only.', 'npm run lint/build; test auth/onboarding, booking, responsive provider pages manually.'],
+        ['Backend', 'No test/spec files surfaced; backend package has no test command.', 'npm run build; exercise API with isolated credentials/database and inspect server logs.'],
+        ['Auth/Redis', 'No automated session/OTP tests found.', 'student/provider cookie, TTL, reset invalidation, Redis outage and session-cross-role tests.'],
+        ['Booking/payment', 'No API/webhook tests found.', 'duplicate create/verify/webhook, invalid signature, gateway timeout, authoritative amount, receipt/notification.'],
+        ['Tiffin', 'No subscription/customer ownership tests found.', 'payment activation, skip/pause/renewal, phone list/detail, provider A/B isolation.'],
+        ['DB/migration', 'Migration history present; no migration CI test found.', 'Prisma generate, deploy migrations to disposable DB, verify FK/index/data preservation.'],
+      ]],
+      ['callout', 'This PDF is documentation-only. No source tests/builds were run as part of this audit because application code is explicitly out of scope.', 'info'],
+    ]
+  },
+  {
+    title: 'File Ownership and Dependency Matrix', blocks: [
+      ['table', [['Entry file', 190], ['Layer / dependencies', 200], ['Change-risk surface', CW - 390]], [
+        ['src/App.jsx; src/main.jsx', 'Frontend router/bootstrap; layouts and contexts.', 'All route imports, nav visibility, route fallback, React provider order.'],
+        ['src/api/client.js; src/config/api.js', 'Shared fetch transport, credentials, envelope and API origins.', 'All API consumers, cookies/CORS, error handling and build-time endpoints.'],
+        ['backend/src/app.ts; server.ts', 'Fastify plugin and route composition; server lifecycle.', 'Every endpoint, CORS, rate limit, cookies, security headers and startup.'],
+        ['backend/src/common/auth/session.ts; provider-session.ts', 'Redis session authority, Lua scripts, cookie options.', 'Every protected API, login/reset/logout, same-site/deployment.'],
+        ['backend/src/modules/payments/payment-calculator.ts', 'Shared server-side PG/Tiffin money split formulas.', 'Payment snapshots, displayed totals, owner proceeds, audit and refunds.'],
+        ['backend/src/modules/bookings/*', 'Booking API/business logic, persistence, receipt.', 'Payments, provider bookings, inventory/availability, notifications.'],
+        ['backend/src/modules/tiffin/*', 'Subscription, kitchen, provider portal, payment and meals.', 'Student Tiffin, customer PII, plans, meal schedule, gateway events.'],
+        ['backend/prisma/schema.prisma + migrations/', 'Database model and deployed schema evolution.', 'Every Prisma query/DTO/migration/data conversion.'],
+        ['backend/src/modules/notifications/* + src/realtime/*', 'Persisted notification pipeline + Supabase realtime reader.', 'Booking/payment/Tiffin event UX, preferences, unread counts and RLS.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Change Impact Map', blocks: [
+      ['table', [['If this changes', 145], ['Dependencies affected', 195], ['Minimum verification', CW - 340]], [
+        ['Session model/TTL', 'Auth services/controllers, both hooks, cookies, AuthContext, provider/tiffin/customer APIs, Redis keys.', 'Login, parallel devices, reset, logout, cookie transport, expiry and Redis outage.'],
+        ['User/Provider identity schema', 'Auth, onboarding, customer phone, bank/KYC, listing ownership, bookings, Tiffin owner resolution.', 'Migrations + role/session/profile consistency + phone visibility/private endpoints.'],
+        ['Booking/payment amount', 'Booking flow, payment calculator/service, UI checkout, webhook, receipt, earnings, notifications.', 'Authoritative DB amount, gateway order, signature, duplicate webhook, fee ledger.'],
+        ['RoomListing coordinates/fields', 'Provider form/map, Zod DTO, API/repository, student detail map/search, payment fee source.', 'Create/edit/read persistence and saved-coordinate map marker.'],
+        ['Tiffin subscription relation', 'Reservation/payment activation, customers, phone privacy, meal logs/days/delivery, renewals/refunds.', 'Provider A/B scope, student actor, duplicate subscription and meal entitlement.'],
+        ['Notification event', 'Queue/event handler/template/factory/repository, Supabase Realtime listener, UI store/pages.', 'Persisted row, preference, duplicate event behavior, unread count and realtime update.'],
+        ['API response field', 'Controller/service serializer, frontend API client and all UI consumers.', 'Null/undefined compatibility, role privacy, error envelope.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Architectural Invariants', blocks: [
+      ['table', [['Invariant', 190], ['Status', 90], ['Evidence / caveat', CW - 280]], [
+        ['Authenticated identity comes from server session, not arbitrary request identity.', 'ENFORCED where hooks applied', 'Redis-backed hooks attach request.user; route coverage must still be inspected per endpoint.'],
+        ['A Tiffin provider only receives own-kitchen customers/phone.', 'ENFORCED in scoped service path', 'resolveOwner + kitchenId query; retain cross-provider API tests.'],
+        ['Student and provider sessions are distinct cookies/stores.', 'ENFORCED', 'stayveo_session vs stayveo_provider_session.'],
+        ['Database is source of truth for accounts, bookings, payments and subscriptions.', 'ENFORCED by design/code', 'Redis holds session/cache, not canonical business rows.'],
+        ['Server recalculates PG payable from database reservation fee.', 'ENFORCED', 'authoritativeReservationFee + calculatePgPayment.'],
+        ['Webhook processing is exactly once.', 'PARTIAL', 'Unique eventId and event status deduplicate; external side effects/retries still need review.'],
+        ['Provider route group automatically protects every provider endpoint.', 'NOT ENFORCED globally', 'Some route groups declare auth hooks; audit each module, especially public/shared reads.'],
+        ['All PostgreSQL access is protected by RLS.', 'NOT VERIFIED', 'No complete RLS migration/policy set found in repository scan.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Production Runbook', blocks: [
+      ['table', [['Operation', 155], ['Command / check', 200], ['Safety note', CW - 355]], [
+        ['Build frontend', 'npm run build', 'Requires VITE_* build configuration; inspect dist output.'],
+        ['Lint frontend', 'npm run lint', 'ESLint over repository; not a substitute for tests.'],
+        ['Build backend', 'cd backend && npm run build', 'Runs prisma generate then tsc.'],
+        ['Run backend locally', 'cd backend && npm run dev', 'Requires DATABASE_URL, Redis, and email/payment env as exercised.'],
+        ['Inspect Prisma models', 'cd backend && npm run db:studio', 'Connects to configured database; protect access to production.'],
+        ['Apply migration in development', 'cd backend && npm run db:migrate', 'Review migration and data impact first; production deployment process not defined in repo.'],
+        ['Check API', 'GET /health', 'Does not validate DB, Redis, email or payment readiness.'],
+        ['Deploy frontend', 'npm run deploy', 'Build + wrangler deploy; requires configured Cloudflare account/env.'],
+      ]],
+      ['callout', 'Never run schema push, migrations, payment retries, or secret rotation against production without environment confirmation, backup/recovery plan, and an approved release process. That operational authority/configuration is not evidenced in the repository.', 'danger'],
+    ]
+  },
+  {
+    title: 'New Developer — Start Here', blocks: [
+      ['bullets', [
+        '1. Read this document’s overview, route map, auth/session and database sections before editing a shared module.',
+        '2. Frontend starts at index.html -> src/main.jsx -> src/App.jsx. Root scripts are in package.json.',
+        '3. Backend starts at backend/src/server.ts -> buildApp() in backend/src/app.ts.',
+        '4. Inspect backend/prisma/schema.prisma and the newest migration before changing persistence; use Prisma scripts in backend/package.json.',
+        '5. Understand the difference between student session, provider session, and profile setup handoff in common/auth/session.ts and provider-session.ts.',
+        '6. Follow API request() in src/api/client.js and response helpers in backend/src/common/utils/response.ts.',
+        '7. Payments and reservation flows require isolated test credentials; never test against live money without explicit environment confirmation.',
+        '8. Search using rg. Search an endpoint from UI API client into backend route/controller/service/repository/model.',
+        '9. No test suite/runbook currently exists in manifests; add appropriate tests within a separately approved source-code task.',
+        '10. Before deployment, verify the external env inventory, migration status, CORS/cookie topology, health/log access and rollback path; deployment backend config is not checked in.',
+      ]],
+      ['sub', 'FIRST FILES TO READ'],
+      ['bullets', [
+        'package.json; backend/package.json; vite.config.js; wrangler.jsonc',
+        'src/main.jsx; src/App.jsx; src/api/client.js; src/context/AuthContext.jsx',
+        'backend/src/server.ts; backend/src/app.ts; backend/src/plugins/redis.ts; backend/src/plugins/prisma.ts',
+        'backend/src/common/auth/session.ts; provider-session.ts; common/hooks/authenticate.ts; authenticate-provider.ts',
+        'backend/src/modules/auth/*; bookings/*; payments/*; provider/*; tiffin/*; notifications/*',
+        'backend/prisma/schema.prisma and the relevant migration directory',
+      ]],
+    ]
+  },
+  {
+    title: 'Troubleshooting Guide', blocks: [
+      ['table', [['Symptom', 145], ['Check in order', 235], ['Success condition', CW - 380]], [
+        ['Login unauthorized', 'Browser cookie -> credentials include in src/api/client.js -> CORS origin and allow credentials -> Redis session key/TTL -> authenticate hook -> DB User role.', 'GET /api/v1/auth/me returns current profile with a valid session.'],
+        ['Provider dashboard fails', 'stayveo_provider_session -> Redis provider:session key -> ProviderProfile matches session -> /provider/dashboard -> cache helper -> PG queries.', 'Provider identity resolved from cookie and current provider-owned records return.'],
+        ['Tiffin customer phone missing', 'GET /api/v1/tiffin/provider/customers -> tiffinProviderService.listCustomers -> customerId-to-User join/select -> User.phone_number -> DTO customer.phone -> UI fallback.', 'Valid phone in `users.phone_number`; query is kitchen-scoped and frontend displays it.'],
+        ['Cross-provider Tiffin data', 'authenticateProvider session -> resolveOwner(userId/profile) -> own kitchenId query -> customer detail query constraint.', 'Provider B returns only B kitchen records; direct API test returns no A PII.'],
+        ['Payment succeeded, booking pending', 'Gateway order/payment -> verify endpoint or webhook -> signature/event row -> payment lifecycle -> booking update -> receipt/notification.', 'Payment record reaches paid/verified terminal state and linked booking/subscription matches.'],
+        ['Map marker absent/wrong', 'Mapbox token -> listing API coordinates -> RoomListing/legacy mapping -> LocationPicker persisted values -> RoomDetailMap input.', 'Marker coordinates equal property DB values; no fallback hardcoded coordinate.'],
+        ['500 / DB error', 'Response error envelope -> Fastify Pino logs -> handler.ts -> Prisma field/table -> latest applied migration vs schema.', 'Source schema and deployed migration state match; error does not expose secret/SQL details.'],
+        ['Realtime notifications stop', 'REST notification fetch -> Supabase client env -> channel status/debug -> table policy -> cleanup/re-subscribe.', 'REST list still loads; realtime channel reconnects and scoped notification updates reach store.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Historical and Deprecated Architecture', blocks: [
+      ['table', [['Historical statement / artifact', 205], ['Current-code replacement', CW - 205]], [
+        ['Client-sent x-user-id/header identity as trusted authentication', 'Cookie + Redis session hooks. Legacy headers remain in transport/CORS compatibility; never use as authorization proof.'],
+        ['Supabase Auth as the API identity authority', 'Current auth uses app-managed email/password + OTP; Supabase JS remains for storage and Realtime integration.'],
+        ['Dummy OTP / no server authentication', 'Current service has password bcrypt, hashed challenges, Resend delivery and Redis sessions.'],
+        ['Mock-only payment architecture', 'Current backend contains Razorpay client, order/verify logic, raw-body webhook route, payment event/audit persistence; runtime mode/config still varies.'],
+        ['No Redis / no session store', 'Current Redis stores student/provider sessions and PG dashboard summary cache.'],
+        ['Vite template README as setup guide', 'Use package manifests/config listed in this document; README content is generic scaffold text.'],
+      ]],
+      ['callout', 'The supplied reference PDF is a historical frontend-only audit and includes old localStorage/header/Supabase auth assumptions. Preserve it as reference; do not copy those claims into current implementation docs.', 'warning'],
+    ]
+  },
+  {
+    title: 'Current vs Previous Architecture', blocks: [
+      ['table', [['Topic', 115], ['Previous/reference state', 165], ['Current repository state', CW - 280]], [
+        ['Trust boundary', 'Frontend routes and direct client identity headers.', 'Fastify authentication hooks validate cookies against Redis and re-read user/provider profile.'],
+        ['Email/password OTP', 'Older PDF described phone OTP and local profile auth.', 'Email/password + email OTP challenge; Resend; PostgreSQL challenge; bcrypt; role-specific session.'],
+        ['Persistence', 'Supabase client presumed to be general database API.', 'Backend Prisma/PostgreSQL is primary application persistence; Supabase is still used for storage and realtime.'],
+        ['Payments', 'Old/mock adapter statements.', 'Razorpay client and verified lifecycle exists; Tiffin adapter is mode-aware.'],
+        ['Routing', 'Earlier 43-route snapshot.', 'Current src/App.jsx has current student/PG/Tiffin route groups and layouts; exact route registry in Appendix A.'],
+        ['Document scope', 'Frontend-only audit with explicit exclusions.', 'Full repository-oriented handover with source-verified gaps and limitations.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Technical Debt and Verified Gaps', blocks: [
+      ['bullets', [
+        'No automated test suite or CI workflow was found; critical auth/payment/tenant-isolation flows have no repository test evidence.',
+        'No checked-in backend deployment manifest, Render service definition, production webhook URL, or deployment/rollback runbook was found.',
+        'Health endpoint only confirms process response and does not check PostgreSQL/Redis readiness.',
+        'Cookie-authenticated writes have no explicit CSRF token flow in inspected route configuration; review actual deployed same-site topology.',
+        'Security headers do not include CSP/HSTS in backend hook; any edge configuration is external and unverified.',
+        'Notification queue is an in-process microtask; retry/dead-letter records exist but a durable job worker/scheduler was not found.',
+        'Prisma declarations and SQL migrations require production drift verification; schema/migration presence is not evidence of live deployment.',
+        'Current route table has no explicit catch-all route; unknown frontend paths may render blank shell.',
+        'Provider/public/private route protection must be reviewed endpoint by endpoint; authenticated UI layout is not a server access control.',
+      ]],
+    ]
+  },
+  {
+    title: 'Recommendations — Evidence-Based', blocks: [
+      ['numbered', [
+        'Add automated tests for auth/session isolation, student/provider role checks, Tiffin kitchen tenant separation/phone privacy, payment calculator/order/webhook retries, and migration integrity.',
+        'Check in deployment topology and a runbook for backend host, secrets, CORS origin, cookie SameSite/Secure, health checks, webhook endpoints and rollback.',
+        'Implement readiness checks for PostgreSQL and Redis separately from liveness if operators need dependency health.',
+        'Review CSRF protections and add CSP/HSTS at the confirmed TLS termination layer; verify through deployed response headers.',
+        'Move notification event processing to a durable queue only if delivery guarantees are required; document retry worker schedule and idempotency.',
+        'Generate/verify database dictionary against both Prisma schema and applied SQL migrations during release CI.',
+        'Add explicit not-found/route guards as product behavior requires; keep API authentication as actual privacy boundary.',
+      ]],
+      ['callout', 'Recommendations are findings for future engineering work, not changes performed in this documentation-only task.', 'info'],
+    ]
+  },
+  {
+    title: 'Feature Ownership and Where to Change X', blocks: [
+      ['table', [['Ticket / task', 150], ['Primary source locations', 210], ['Dependencies / tests to plan', CW - 360]], [
+        ['Student login / OTP', 'src/pages/AuthScreen.jsx; src/api/client.js; backend/src/modules/auth/*; common/utils/otp.utils.ts; common/utils/email.service.ts.', 'EmailAuthChallenge, User, student cookie/session Redis; test wrong/expired OTP and password.'],
+        ['Provider login / onboarding', 'src/pages/provider/ProviderLogin.jsx; ProviderVerification.jsx; backend/src/modules/provider/*; common/auth/provider-session.ts.', 'ProviderProfile, provider session set, KYC, business details and type routing.'],
+        ['Session duration/cookie flags', 'backend/src/common/auth/session.ts; provider-session.ts; frontend API credentials; backend app CORS.', 'Redis TTL + cookie maxAge + cross-origin settings; run auth/expiry/reset tests.'],
+        ['PG reservation/platform fee', 'backend/src/modules/payments/payment-calculator.ts::calculatePgPayment; payment.service.ts.', 'Payment snapshot/audit, checkout amount, provider earnings and receipt.'],
+        ['PG inventory/availability', 'backend/src/modules/bookings/*; room-listings/*; relevant RoomListing/bed models.', 'Capacity checks, transactions/constraints, concurrent booking and provider bed UI.'],
+        ['Tiffin plan/renewal fee', 'payment-calculator.ts::calculateTiffinPayment; tiffin-payment.service.ts; tiffin-renewal.service.ts.', 'TiffinPayment snapshot, subscription entitlement/date/meal generation, invoice and audit.'],
+        ['Tiffin customer phone', 'tiffin-provider.service.ts listCustomers/getCustomer; controller/routes; src/api/tiffinProvider.js; TiffinCustomers.jsx/customer detail.', 'User.phone_number, subscription customerId, kitchenId ownership; test provider A/B.'],
+        ['Webhook processing', 'payment.routes.ts; payment.controller.ts; payment-webhook.service.ts; razorpay.client.ts.', 'Raw body/signature secret, PaymentWebhookEvent unique key, payment lifecycle and downstream effects.'],
+        ['Notifications', 'notification.queue/event-handler/service/dispatcher/repository; src/realtime/notifications.ts; useRealtimeNotifications.ts.', 'Notifications/template/preferences/log/retry tables and Supabase channel/RLS.'],
+        ['Database field/relation', 'backend/prisma/schema.prisma + new backend/prisma/migrations SQL + module schema/service/repository/controller + frontend DTO consumer.', 'Backfill, FK action/index, deployed migration, generated Prisma client, compatibility tests.'],
+        ['Deployment env', 'wrangler.jsonc; vite.config.js; src/config/api.js; backend/src/server.ts/app.ts; hosting dashboard outside repo.', 'Rebuild frontend for VITE_*; backend cookie/CORS; secret rotation and health/webhook checks.'],
+      ]],
+    ]
+  },
+  {
+    title: 'API Registry', blocks: [
+      ['p', 'The table below is generated from current Fastify route declarations. It records method/path/source and registered mount prefix; authentication details remain route-specific (nested hooks). Controller/service are linked in route source. Generic controller business logic is intentionally not inferred from endpoint names.'],
+      ['dynamicApi'],
+    ]
+  },
+  {
+    title: 'Redis Key Registry', blocks: [
+      ['p', 'See Phase 11 for full writer/reader/value/expiry/failure notes. This compact registry is generated from actual current key constructors and the password-reset counter code.'],
+      ['table', [['Pattern', 205], ['Purpose', 150], ['Expiry / source', CW - 355]], [
+        ['session:{id}', 'Student auth session', '30 days; PostgreSQL users remain authoritative'],
+        ['user_session:{userId}', 'Student single-session mapping', '30 days; active session pointer'],
+        ['provider:session:{id}', 'Provider auth session', '30 days; session JSON'],
+        ['provider:user_sessions:{userId}', 'Provider multi-session set', 'Session memberships; member cleanup'],
+        ['provider:user_session:{userId}', 'Legacy provider pointer', 'Compatibility key; normal current path uses set'],
+        ['provider:dashboard:pg:{providerId}', 'PG dashboard summary cache', '120 sec; PostgreSQL source'],
+        ['provider:dashboard:tiffin:{providerId}', 'Tiffin dashboard key helper', 'Call-site usage not verified in this audit'],
+        ['password-reset:verify:{email}', 'Reset verification attempt counter', '10 minutes; DB challenge is authority'],
+      ]],
+    ]
+  },
+  {
+    title: 'Environment Variable Registry', blocks: [
+      ['p', 'The exact name-to-purpose inventory appears in Phase 28. Values are never included. Build-time VITE variables are embedded in the frontend bundle; backend secrets must remain server-side.'],
+      ['code', 'Frontend build-time: VITE_API_URL, VITE_PROVIDER_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_MAPBOX_TOKEN, VITE_REALTIME_DEBUG\nBackend runtime: DATABASE_URL, DIRECT_URL, REDIS_URL, SESSION_SECRET, SESSION_SAME_SITE, PROVIDER_SESSION_SAME_SITE, RESEND_API_KEY, FRONTEND_URL, PORT, HOST, NODE_ENV, key_id, key_secret, webhook secret, BANK_DETAILS_ENCRYPTION_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KYC_BUCKET, PAYMENT_MODE\nVite dev: BACKEND_PROXY_URL, VITE_ALLOWED_HOSTS'],
+    ]
+  },
+  {
+    title: 'Database Dictionary — All Prisma Models and Fields', blocks: [
+      ['p', 'Every model below is parsed from backend/prisma/schema.prisma at PDF generation time. Scalar fields show Prisma type, physical column mapping, nullability, defaults and declared attributes. Relation fields identify model navigation properties; index/unique/map declarations are listed beneath each model. This is exhaustive for the schema text but does not claim live database migration parity.'],
+      ['dynamicDb'],
+    ]
+  },
+  {
+    title: 'Glossary', blocks: [
+      ['table', [['Term', 140], ['Meaning in this codebase', CW - 140]], [
+        ['ProviderProfile', 'User-linked provider onboarding/business identity model; distinct from legacy Provider.'],
+        ['RoomListing', 'Current PG/property listing entity used by listing forms, detail, map and fee query.'],
+        ['Redis session', 'Server-side JSON session indexed by opaque random ID and authenticated through HttpOnly cookie.'],
+        ['Profile setup cookie', 'Encrypted temporary handoff for profile completion; not a protected-route session.'],
+        ['PaymentLifecycleState', 'Detailed payment lifecycle enum separate from high-level payment status.'],
+        ['TiffinCustomerSubscription', 'Student-to-kitchen/plan relationship and lifecycle record; customerId identifies User.'],
+        ['Idempotency key', 'Unique persisted request/gateway identity to prevent duplicate payment resource creation where used.'],
+        ['RLS', 'PostgreSQL row-level security; Prisma schema itself does not define RLS policies.'],
+        ['PII', 'Personal data such as student phone/email; access should be scoped to current authorized business relationship.'],
+      ]],
+    ]
+  },
+  {
+    title: 'Documentation Verification Report',
+    blocks: [
+      [
+        'table',
+        [
+          ['Status', 110],
+          ['Verification result', CW - 110],
+        ],
+        [
+          [
+            'VERIFIED',
+            'Frontend boot/router/API transport, Fastify composition, auth/session Redis code, route registration, Prisma model/enum declarations, PG/Tiffin payment calculator, webhook event persistence, storage/env references and checked-in deployment config.',
+          ],
 
-console.log('🔨 Generating StayVeo System & Security Architecture PDF...');
+          [
+            'OUTDATED',
+            'Supplied reference PDF’s localStorage/header identity, Supabase auth authority, missing backend, no Redis and mock payment claims conflict with current implementation.',
+          ],
 
-renderCover();
-renderTOCPlaceholder();
-renderExecutiveSummary();
-renderSection1();
-renderSection2();
-renderInfrastructureSections();
-renderAuthSections();
-renderAuthzSections();
-renderDataSections();
-renderOpsSections();
-renderStrategySections();
-renderTargetAndMigration();
-renderRemainingSections();
+          [
+            'DEPRECATED / LEGACY',
+            'Client identity headers remain accepted by API transport/CORS; legacy Provider/PG schemas and provider:user_session mapping coexist with newer models/keys.',
+          ],
 
-doc.end();
+          [
+            'NOT FOUND',
+            'Automated application test suite/scripts, Render deploy manifest, checked-in CI workflow, backend container config, explicit production webhook URL, full operator backup/rollback docs.',
+          ],
 
+          [
+            'NOT VERIFIED',
+            'Live production DB migration parity/FKs/RLS, Redis production availability/TTL state, Cloudflare/Render deployment settings, external gateway/email/storage account configuration.',
+          ],
+
+          [
+            'ARCHITECTURAL GAP',
+            'No readiness health checks, durable notification worker, explicit frontend 404 route; cookie CSRF posture requires deployment-aware review.',
+          ],
+
+          [
+            'SECURITY GAP',
+            'Complete RLS/storage policy inventory and CSRF/CSP/HSTS deployment verification remain unresolved from repository evidence.',
+          ],
+
+          [
+            'TECHNICAL DEBT',
+            'No automated test suite; source schema/migrations require CI drift verification; shared legacy/current data models increase change risk.',
+          ],
+
+          [
+            'SCOPE COMPLIANCE',
+            'Only docs/architecture/generate-pdf.js and the user-designated Downloads PDF are modified by this task. Application changes and other documentation are untouched.',
+          ],
+        ],
+      ],
+
+      [
+        'callout',
+        'Original-developer independence check: a new engineer can locate primary flows, files, models, Redis keys, configuration and safe verification paths from this guide. Live infrastructure credentials, deployment dashboard settings, applied database state and external-account operations remain environment-specific and are explicitly marked NOT VERIFIED rather than guessed.',
+        'success',
+      ],
+    ],
+  }
+];
+
+function parsePrismaSchema(source) {
+    const models = [];
+    const enums = [];
+    const names = new Set();
+    for (const match of source.matchAll(/\bmodel\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
+      names.add(match[1]);
+      models.push({ name: match[1], body: match[2] });
+    }
+    for (const match of source.matchAll(/\benum\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) enums.push({ name: match[1], body: match[2] });
+    const enumNames = new Set(enums.map((item) => item.name));
+    const parsedModels = models.map((model) => {
+      const fields = [];
+      const indexes = [];
+      for (const rawLine of model.body.split('\n')) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('//')) continue;
+        if (line.startsWith('@@')) { indexes.push(line); continue; }
+        const field = line.match(/^(\w+)\s+([\w\[\]?]+)(?:\s+(.*))?$/);
+        if (!field) continue;
+        const [, name, type, attrs = ''] = field;
+        const baseType = type.replace(/[\[\]?]/g, '');
+        const relation = names.has(baseType) || enumsAsRelation(enumNames, baseType) ? attrs.match(/@relation\((.*)\)/)?.[1] : null;
+        const details = [];
+        const mapped = attrs.match(/@map\("([^"]+)"\)/);
+        if (mapped) details.push(`column ${mapped[1]}`);
+        if (type.includes('?')) details.push('nullable');
+        if (type.includes('[]')) details.push('list');
+        const def = attrs.match(/@default\((.*?)\)(?=\s|$)/);
+        if (def) details.push(`default ${def[1]}`);
+        if (attrs.includes('@id')) details.push('PK');
+        if (attrs.includes('@unique')) details.push('unique');
+        if (relation) {
+          const cols = relation.match(/fields:\s*\[([^\]]+)\]/)?.[1];
+          const refs = relation.match(/references:\s*\[([^\]]+)\]/)?.[1];
+          const del = relation.match(/onDelete:\s*(\w+)/)?.[1];
+          details.push(`relation ${baseType}${cols ? ` via ${cols.trim()}` : ''}${refs ? ` -> ${refs.trim()}` : ''}${del ? `; onDelete ${del}` : ''}`);
+        }
+        if (attrs.includes('@updatedAt')) details.push('updatedAt');
+        if (attrs.includes('@db.')) details.push(attrs.match(/@db\.\w+(?:\([^)]*\))?/)?.[0] || 'native type');
+        fields.push({ name, type, details: details.join('; ') || '—', relation: Boolean(relation) });
+      }
+      return { ...model, fields, indexes };
+    });
+    return { models: parsedModels, enums };
+  }
+function enumsAsRelation(enumNames, baseType) { return enumNames.has(baseType); }
+function modelNameMap(modelBody) {
+    return modelBody.match(/@@map\("([^"]+)"\)/)?.[1] || null;
+  }
+function renderDbAppendix() {
+    const src = fs.readFileSync(SCHEMA, 'utf8');
+    const { models, enums } = parsePrismaSchema(src);
+    subhead(`Prisma schema inventory: ${models.length} models, ${enums.length} enums`);
+    for (const m of models) {
+      ensure(45);
+      const physical = modelNameMap(m.body);
+      paragraph(`${m.name}${physical ? `  →  ${physical}` : ''}`, { bold: true, size: 9.2, color: C.navy, after: .15 });
+      if (m.indexes.length) paragraph(`Declared constraints/indexes: ${m.indexes.join('  ·  ')}`, { size: 6.7, color: C.muted, after: .2 });
+      table([
+        { label: 'FIELD', width: 118 }, { label: 'PRISMA TYPE', width: 90 }, { label: 'MAPPING / NULL / DEFAULT / RELATION', width: CW - 208 },
+      ], m.fields.map((f) => [f.name, f.type, f.details]), { size: 6.65, headerSize: 6.8, minRowHeight: 15 });
+    }
+    subhead('Enums and database values');
+    for (const e of enums) {
+      const values = e.body.split('\n').map((s) => s.trim()).filter((s) => s && !s.startsWith('//') && !s.startsWith('@@'));
+      paragraph(`${e.name}: ${values.join(', ')}`, { size: 7.2, after: .3 });
+    }
+    callout('Database scope note', 'Prisma scalar field definitions, @relation declarations, and model @@ declarations are directly parsed from schema.prisma. The source generator does not connect to a live database, execute migrations, or prove that every declared FK/index exists in the currently deployed PostgreSQL schema.', 'warning');
+  }
+
+const routeModules = [
+  ['backend/src/modules/auth/auth.routes.ts', ['/api/v1/auth']],
+  ['backend/src/modules/users/user.routes.ts', ['/api/v1/users', '/api/v1/user']],
+  ['backend/src/modules/student/student.routes.ts', ['/api/v1/student']],
+  ['backend/src/modules/provider/provider.routes.ts', ['/api/v1/provider', '/api/provider']],
+  ['backend/src/modules/services/service.routes.ts', ['/api/v1/provider/services']],
+  ['backend/src/modules/pg/pg.routes.ts', ['/api/v1/pg']],
+  ['backend/src/modules/tiffin/tiffin.routes.ts', ['/api/v1/tiffin']],
+  ['backend/src/modules/media/media.routes.ts', ['/api/v1/media']],
+  ['backend/src/modules/documents/document.routes.ts', ['/api/v1/documents']],
+  ['backend/src/modules/bookings/booking.routes.ts', ['/api/v1/bookings']],
+  ['backend/src/modules/visits/visit.routes.ts', ['/api/v1/visits']],
+  ['backend/src/modules/payments/payment.routes.ts', ['/api/v1/payments']],
+  ['backend/src/modules/profile-views/profile-view.routes.ts', ['/api/v1/profile-views']],
+  ['backend/src/modules/colleges/college.routes.ts', ['/api/v1/colleges', '/colleges']],
+  ['backend/src/modules/saved/saved.routes.ts', ['/api/v1/saved']],
+  ['backend/src/modules/notifications/notification.routes.ts', ['/api/v1/notifications']],
+  ['backend/src/modules/room-listings/room-listing.routes.ts', ['/api/v1/room-listings', '/api/provider/room-listings']],
+];
+function extractRoutes() {
+  const rows = [];
+  for (const [rel, prefixes] of routeModules) {
+    const text = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const line of text.split('\n')) {
+      const match = line.match(/\b(?:fastify|providerRoutes|protectedRoutes|sharedBookingRoutes|studentRoutes|publicRoutes)\.(get|post|put|patch|delete)(?:<[^>]*>)?\(\s*(['"])([^'"]+)\2/);
+      if (!match) continue;
+      const method = match[1].toUpperCase();
+      const local = match[3];
+      const handler = line.match(/,\s*([\w.]+)\s*\)/)?.[1] || 'see route source';
+      for (const prefix of prefixes) {
+        if (rel.includes('room-listing.routes') && prefix === '/api/provider/room-listings' && local === '/public') continue;
+        rows.push([method, `${prefix}${local === '/' ? '' : local}`, rel, handler]);
+      }
+    }
+  }
+  return rows;
+}
+function renderApiAppendix() {
+  const routes = extractRoutes();
+  paragraph(`Extracted ${routes.length} route declarations/mount combinations from route modules. Authentication is represented by nested preHandler hooks in each source file; review route-specific scope before relying on this index.`, { size: 7.8 });
+  table([
+    { label: 'METHOD', width: 48 }, { label: 'MOUNTED PATH', width: 202 }, { label: 'SOURCE FILE', width: 162 }, { label: 'HANDLER', width: CW - 412 },
+  ], routes, { size: 6.4, headerSize: 6.3, minRowHeight: 14 });
+  callout('Route inventory note', 'The parser reports textual route declarations and configured prefixes; it does not resolve every nested plugin prefix, authentication hook, schema validation, side effect, or runtime-conditional registration. Use the listed source as the canonical contract.', 'info');
+}
+
+function renderBlock(block) {
+  const [type, a, b, c] = block;
+  if (type === 'p') paragraph(a);
+  else if (type === 'bullets') a.forEach((x) => bullet(x));
+  else if (type === 'numbered') a.forEach((x, i) => bullet(`${i + 1}. ${x}`));
+  else if (type === 'code') code(a);
+  else if (type === 'callout') callout(a, b, c);
+  else if (type === 'sub') subhead(a);
+  else if (type === 'table') table(a.map(([label, width]) => ({ label, width })), b, { firstBold: true });
+  else if (type === 'dynamicDb') renderDbAppendix();
+  else if (type === 'dynamicApi') renderApiAppendix();
+}
+
+function renderToc() {
+  const tocPage = 1;
+  doc.switchToPage(tocPage);
+  doc.y = MT;
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(C.navy).text('TABLE OF CONTENTS', ML, doc.y, { width: CW });
+  doc.moveDown(.25);
+  paragraph('Progressive phases follow the supplied reference document: orientation first, deep implementation flows next, and working appendices last.', { size: 8, color: C.muted });
+  sectionPage.forEach((item) => {
+    ensure(17);
+    const y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(7.3).fillColor(C.blue).text(String(item.number).padStart(2, '0'), ML, y, { width: 24 });
+    doc.font('Helvetica').fontSize(7.5).fillColor(C.ink).text(item.title, ML + 28, y, { width: CW - 68 });
+    doc.font('Helvetica').fontSize(7.3).fillColor(C.muted).text(String(item.page), ML + CW - 28, y, { width: 28, align: 'right' });
+    doc.moveTo(ML + 28, y + 11).lineTo(ML + CW - 32, y + 11).dash(1, { space: 2 }).strokeColor(C.line).lineWidth(.4).stroke().undash();
+    doc.y = y + 14;
+  });
+}
+
+function main() {
+  fs.accessSync(SCHEMA, fs.constants.R_OK);
+  cover();
+  addPage();
+  chapters.forEach((chapter, index) => {
+    addPage();
+    chapterTitle(index + 1, chapter.title);
+    chapter.blocks.forEach(renderBlock);
+  });
+  renderToc();
+  doc.end();
+}
+
+console.log('Building StayVeo current-codebase architecture PDF...');
+main();
 stream.on('finish', () => {
   const stats = fs.statSync(OUTPUT);
-  const pages = pageNum;
-  console.log(`✅ PDF generated: ${OUTPUT}`);
-  console.log(`   Pages: ~${pages}`);
-  console.log(`   Size: ${(stats.size / 1024).toFixed(0)} KB`);
+  console.log(`PDF generated: ${OUTPUT}`);
+  console.log(`Pages: ${doc.bufferedPageRange().count}; size: ${(stats.size / 1024).toFixed(0)} KB`);
 });

@@ -1,20 +1,3 @@
-function planDurationDays(plan) {
-  const type = String(plan?.type || '').toLowerCase();
-  if (type === 'daily' || type === 'custom') return 1;
-  if (type === 'weekly') return 7;
-  if (type === 'monthly') return 30;
-  return Number(plan?.durationDays) || 1;
-}
-
-function planDisplayPrice(provider, plan) {
-  const perMealPrice = Number(provider?.perMealPrice);
-  if (Number.isFinite(perMealPrice) && perMealPrice > 0) {
-    const mealCount = String(plan?.type || '').toLowerCase() === 'daily' ? 1 : 2;
-    return Number((perMealPrice * mealCount * planDurationDays(plan)).toFixed(2));
-  }
-  return Number(plan?.price || 0);
-}
-
 export default function MealPlanSelector({ provider, selectedPlan, onSelect, onSubscribe }) {
   const plans = Object.values(provider.plans);
 
@@ -30,13 +13,11 @@ export default function MealPlanSelector({ provider, selectedPlan, onSelect, onS
       <h2>Choose your meal plan</h2>
       <div className="tiffin-plan-list">
         {plans.map((plan) => {
-          const active = selectedPlan === plan.label.toLowerCase();
-          const recommended = plan.label === 'Monthly';
+          const active = selectedPlan === plan.type;
           return (
-            <button type="button" className={`tiffin-plan ${active ? 'is-selected' : ''}`} key={plan.label} onClick={() => onSelect(plan.label.toLowerCase())} aria-pressed={active}>
-              {recommended && <span className="tiffin-recommended">RECOMMENDED</span>}
+            <button type="button" className={`tiffin-plan ${active ? 'is-selected' : ''}`} key={plan.type} onClick={() => onSelect(plan.type)} aria-pressed={active}>
               <span className="tiffin-plan-copy"><strong>{plan.label}</strong><small>{plan.detail}</small></span>
-              <span className="tiffin-plan-price"><strong>₹{planDisplayPrice(provider, plan).toLocaleString('en-IN')}</strong><small>{plan.unit}</small></span>
+              <span className="tiffin-plan-price"><strong>₹{plan.price.toLocaleString('en-IN')}</strong><small>{plan.unit}</small></span>
             </button>
           );
         })}

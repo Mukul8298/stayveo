@@ -61,6 +61,8 @@ function normalizeStudentAliases(value: unknown) {
 
 const studentProfileFields = z.object({
   fullName: z.string().min(1).max(200),
+  phone: z.string().trim().transform((value) => value.replace(/[\s().-]/g, ''))
+    .pipe(z.string().regex(/^\+?[0-9]{10,15}$/, 'Enter a valid phone number')).optional(),
   college: z.string().min(1).max(200),
   collegeId: z.string().uuid().optional(),
   collegeName: z.string().min(1).max(200).optional(),

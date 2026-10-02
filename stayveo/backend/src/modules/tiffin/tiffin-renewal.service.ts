@@ -3,16 +3,11 @@ import prisma from '../../common/db/prisma.js';
 import { tiffinPaymentService } from './tiffin-payment.service.js';
 import { paymentAuditService } from '../payments/payment-audit.service.js';
 import { tiffinPaymentActionSchema } from './tiffin-payment.schema.js';
+import { calculateTiffinPrice, tiffinPlanDurationDays } from './tiffin-pricing.js';
 
 function dateKey(value: Date | null | undefined) { return value ? value.toISOString().slice(0, 10) : null; }
 function addDays(value: Date, days: number) { const next = new Date(value); next.setUTCDate(next.getUTCDate() + days); return next; }
 function number(value: unknown) { const parsed = Number(value || 0); return Number.isFinite(parsed) ? parsed : 0; }
-function duration(plan: any) {
-  const type = String(plan.planType || '').toLowerCase();
-  if (type === 'monthly') return 30;
-  if (type === 'weekly') return 7;
-  return Number(plan.durationDays || 1);
-}
 function meals(subscription: any) { return Number(subscription.optedLunch) + Number(subscription.optedDinner); }
 function assertStudent(userId: unknown) {
   if (typeof userId !== 'string' || !userId.trim()) throw { statusCode: 401, message: 'Student authentication is required' };
@@ -22,7 +17,11 @@ function assertStudent(userId: unknown) {
 async function subscriptionForStudent(subscriptionId: string, userId: string) {
   const subscription = await prisma.tiffinCustomerSubscription.findFirst({
     where: { id: subscriptionId, customerId: userId, deletedAt: null },
-    include: { kitchen: true, plan: true, payments: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    include: {
+      kitchen: { include: { subscriptionPlans: { where: { isActive: true } } } },
+      plan: true,
+      payments: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
   });
   if (!subscription) throw { statusCode: 404, message: 'Tiffin subscription not found' };
   if (subscription.status !== TiffinSubscriptionStatus.ACTIVE && subscription.status !== TiffinSubscriptionStatus.EXPIRED) throw { statusCode: 409, message: 'This subscription cannot be renewed' };
@@ -36,11 +35,8 @@ export const tiffinRenewalService = {
     const subscription = await subscriptionForStudent(subscriptionId, customerId);
     const planType = String(subscription.plan.planType).toLowerCase();
     const mealCount = meals(subscription);
-    const configuredPrice = planType === 'monthly'
-      ? mealCount === 1 ? number(subscription.kitchen.monthlyOneMealPrice) : number(subscription.kitchen.monthlyTwoMealPrice)
-      : 0;
-    const baseAmount = configuredPrice > 0 ? configuredPrice : number(subscription.amount);
-    if (baseAmount <= 0) throw { statusCode: 400, message: 'The provider has not configured a renewal price' };
+    const quote = calculateTiffinPrice(planType, mealCount, subscription.kitchen.subscriptionPlans);
+    const baseAmount = quote.amount;
     const idempotencyKey = data.idempotencyKey || `renewal:${subscription.id}:${dateKey(subscription.endDate)}`;
 
     const payment = await prisma.$transaction((tx) => tiffinPaymentService.createPendingPayment(tx, {
@@ -74,7 +70,7 @@ export const tiffinRenewalService = {
       const existingLog = await tx.tiffinSubscriptionRenewalLog.findFirst({ where: { paymentId: paidPayment.id } });
       if (existingLog) return { subscription: current, payment: paidPayment };
 
-      const planDuration = duration(current.plan);
+      const planDuration = tiffinPlanDurationDays(current.plan.planType);
       const lunchEnd = current.lunchEndDate || current.endDate;
       const dinnerEnd = current.dinnerEndDate || current.endDate;
       const lunchSkips = current.optedLunch ? await tx.tiffinSubscriptionSkip.count({ where: { subscriptionId: current.id, mealCategory: MealCategory.LUNCH, status: 'ACTIVE', renewalApplied: false } }) : 0;
