@@ -1,7 +1,19 @@
 .faq-accordion {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+}
+
+.faq-group {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
+}
+
+.faq-category {
+  color: #08784f;
+  font-size: var(--text-sm);
+  font-weight: 800;
 }
 
 .faq-item {
@@ -23,6 +35,12 @@
   font-size: var(--text-sm);
   font-weight: 700;
   text-align: left;
+}
+
+.faq-question:focus-visible,
+.support-faq-tabs button:focus-visible {
+  outline: 2px solid #0f8d61;
+  outline-offset: 2px;
 }
 
 .faq-question svg {
@@ -53,6 +71,13 @@
   font-size: var(--text-sm);
   line-height: 1.6;
   transition: padding var(--duration-normal) var(--ease-out);
+}
+
+.faq-answer-wrap a {
+  color: #08784f;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .faq-item.is-open .faq-answer-wrap p {
